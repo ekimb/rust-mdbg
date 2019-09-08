@@ -4,25 +4,24 @@ use std::path::Path;
 use std::fs::File;
 use std::error::Error;
 use std::io::Write;
-use super::k;
-use super::reverse_node;
+use super::Kmer;
 use std::collections::HashMap;
 
-fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&[u32;k]> ) -> (&'static str,&'static str)
+fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer> ) -> (&'static str,&'static str)
 {
     let n1 = nodes_vect[id1];
     let n2 = nodes_vect[id2];
-    let rev_n1 = reverse_node(*n1);
-    let rev_n2 = reverse_node(*n2);
-    if n1[..k-1] == n2[1..k] { return ("+","+"); }
-    if n1[..k-1] == rev_n2[1..k] { return ("+","-"); }
-    if rev_n1[..k-1] == n2[1..k] { return ("-","+"); }
-    if rev_n1[..k-1] == rev_n2[1..k] { return ("-","-"); }
+    let rev_n1 = n1.reverse();
+    let rev_n2 = n2.reverse();
+    if n1.prefix() == n2.suffix() { return ("+","+"); }
+    if n1.prefix() == rev_n2.suffix() { return ("+","-"); }
+    if rev_n1.prefix() == n2.suffix() { return ("-","+"); }
+    if rev_n1.prefix() == rev_n2.suffix() { return ("-","-"); }
     panic!("unknown orientation");
 }   
 
-pub fn output_gfa(gr: &DiGraph::<[u32;k],[u32;k]>, dbg_nodes: &HashMap<[u32;k],u32>) {
-    let nodes_vect : Vec<&[u32;k]> = dbg_nodes.keys().collect();
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>) {
+    let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     let path = Path::new("graph.gfa");
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
