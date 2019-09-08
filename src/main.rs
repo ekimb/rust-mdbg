@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 mod utils;
 mod gfa_output;
+mod seq_output;
 
 mod kmer_vec;
 // mod kmer_array; // not working yet
@@ -112,7 +113,6 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
     res
 }
 
-
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of Min-Hash de Bruijn graphs")]
 struct Opt {
@@ -120,7 +120,6 @@ struct Opt {
     // short and long flags (-d, --debug) will be deduced from the field's name
     #[structopt(short, long)]
     debug: bool,
-
 
     /// Input file
     #[structopt(parse(from_os_str))]
@@ -157,7 +156,7 @@ fn main() {
     }
     else if opt.test2 {
         filename = PathBuf::from("../SRR9969842_vs_chr4.fasta");
-        if opt.k.is_none() { k = 10; }
+        if opt.k.is_none() { k = 50; }
         if opt.l.is_none() { l = 12; }
         if opt.pch.is_none() { percentage_retain_hashes = 0.01 };
     }
@@ -165,6 +164,8 @@ fn main() {
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
     if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
+
+    let debug = opt.debug;
 
     // init some useful objects
     let mut somewhat_reads : Vec<Vec<String>> = vec![];
@@ -301,7 +302,7 @@ fn main() {
 
     // create a real bidirected dbg object using petgraph
     let mut gr = DiGraph::<Kmer,Kmer>::new();
-    let mut node_indices : HashMap<Kmer,NodeIndex> = HashMap::new(); 
+    let mut node_indices : HashMap<Kmer,NodeIndex> = HashMap::new(); // bit redundant info, as nodes indices are in order of elements in dbg_nodes already; but maybe don't want to binary search inside it.
     for node in dbg_nodes.keys() { 
         let index = gr.add_node(node.clone());
         node_indices.insert(node.clone(),index);
@@ -317,7 +318,12 @@ fn main() {
         let graphml = GraphMl::new(&gr).pretty_print(true);
         std::fs::write("graph.graphml", graphml.to_string()).unwrap();
     }
+    let output_graph_filename = "graph.gfa";
 
     // gfa output
-    gfa_output::output_gfa(&gr, &dbg_nodes);
+    gfa_output::output_gfa(&gr, &dbg_nodes, output_graph_filename);
+
+    // write sequences of minimizers for each node
+    // and also read sequences corresponding to those minimizers
+    seq_output::write_minimizers_and_seq_of_kmers(output_graph_filename, &node_indices);
 }

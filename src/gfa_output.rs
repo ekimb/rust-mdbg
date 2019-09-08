@@ -20,9 +20,9 @@ fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer> ) -> (&
     panic!("unknown orientation");
 }   
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>) {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_filename :&str) {
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
-    let path = Path::new("graph.gfa");
+    let path = Path::new(output_filename);
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
         Ok(file) => file,
