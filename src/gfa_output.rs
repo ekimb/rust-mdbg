@@ -7,21 +7,83 @@ use std::io::Write;
 use super::Kmer;
 use std::collections::HashMap;
 
+use crate::utils::revcomp;
+
 fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer> ) -> (&'static str,&'static str)
 {
     let n1 = nodes_vect[id1];
     let n2 = nodes_vect[id2];
     let rev_n1 = n1.reverse();
     let rev_n2 = n2.reverse();
-    if n1.prefix() == n2.suffix() { return ("+","+"); }
-    if n1.prefix() == rev_n2.suffix() { return ("+","-"); }
-    if rev_n1.prefix() == n2.suffix() { return ("-","+"); }
-    if rev_n1.prefix() == rev_n2.suffix() { return ("-","-"); }
+    //println!("n1 {:?} n2 {:?} +/+? {}",n1.minimizers(),n2.minimizers(), n1.suffix() == n2.prefix());
+    if n1.suffix() == n2.prefix() { return ("+","+"); }
+    if n1.suffix() == rev_n2.prefix() { return ("+","-"); }
+    if rev_n1.suffix() == n2.prefix() { return ("-","+"); }
+    if rev_n1.suffix() == rev_n2.prefix() { return ("-","-"); }
     panic!("unknown orientation");
 }   
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_filename :&str) {
+// should be fairly easy to find, as both sequences should share exactly k-1 minimizers exactly in
+// common, and we even know which ones
+fn find_overlap(seq1 :&str, seq2 :&str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>) -> u32
+{
+    // strategy: find the second minimizer at position 0 of seq2, by construction of the dbg
+    /*
+    let minim = kmer1.minimizers()[1];
+    let minim_str = &int_to_minimizer[&minim];
+    println!("looking for minim {} (rc: {})",  minim_str, revcomp(minim_str));
+    let l = minim_str.len();
+
+    let pos1_plus = seq1.find(minim_str);
+    let pos1_minus = seq1.find(&revcomp(minim_str).to_string());
+
+    let pos1 = match (pos1_plus,pos1_minus) {
+        (None,None) => None,
+        (Some(x),None) => Some((x,"+")),
+        (None,Some(y)) => Some((y,"-")),
+        (Some(x),Some(y)) => Some((x,"both")) 
+    };
+    assert!(!pos1.is_none());
+
+    assert!(!pos2.is_none());
+
+    let (pos1, ori1) = pos1.unwrap();
+    let (pos2, ori2) = pos2.unwrap();
+
+// problem with this strategy: the minimizer might appear at multiple positions in pos1
+
+    println!("minim {}, seq1 {} seq2 {} min-pos1 {} min-ori1 {} min-pos2 {} min-ori2 {}",  minim_str, seq1, seq2, pos1,ori1,pos2,ori2);
+    assert!(pos2 == 0); // sanity check
+    (seq1.len() - pos1) as u32
+    */
+    
+    // with minim_shift, it's relatively trivial now
+    
+    let shift_p :(u32,u32)= minim_shift[&kmer1.normalize().0];
+    let shift_p :(usize,usize)= (shift_p.0 as usize, shift_p.1 as usize);
+    //println!("minim shift {:?}",shift_p);
+    let minim = kmer1.minimizers()[1];
+    let minim_str = &int_to_minimizer[&minim];
+    let l = minim_str.len() as usize;
+    let minim_str_rev = revcomp(&minim_str);
+    
+    let mut shift :i32 = -1;
+    if &seq1[shift_p.0..shift_p.0+l] == minim_str || 
+       &seq1[shift_p.0..shift_p.0+l] == minim_str_rev 
+    { shift = shift_p.0 as i32; }
+    if &seq1[shift_p.1..shift_p.1+l] == minim_str || 
+       &seq1[shift_p.1..shift_p.1+l] == minim_str_rev 
+    { shift = shift_p.1 as i32; }
+    
+    assert!(shift != -1);
+    assert!((shift as usize) < seq1.len());
+    (seq1.len() as u32) - (shift as u32)
+}
+
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_filename :&str, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>)  {
+    // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
+    
     let path = Path::new(output_filename);
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
@@ -30,7 +92,9 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
     write!(file, "H\tVZ:Z:1\n").expect("error writing GFA header");
 
     for node in gr.node_indices() {
-        let s_line = format!("S\t{}\t*\tLN:i:100\n",node.index());
+        let idx = node.index();
+        let seq = &kmer_seqs[nodes_vect[idx]];
+        let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
         write!(file, "{}", s_line).expect("error writing s_line");
     }
 
@@ -38,7 +102,25 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         let id1 = e.source().index();
         let id2 = e.target().index();
         let (ori1, ori2) = determine_orientation(id1,id2,&nodes_vect);
-        let l_line = format!("L\t{}\t{}\t{}\t{}\t50M\n", id1, ori1, id2, ori2);
+        
+        let mut kmer1 = nodes_vect[id1].clone();
+        let mut kmer2 = nodes_vect[id2].clone();
+        let mut seq1 = kmer_seqs[&kmer1].clone();
+        if ori1 == "-" {
+            seq1 = revcomp(&seq1);
+            kmer1 = kmer1.reverse();
+        }
+        let mut seq2 = kmer_seqs[&kmer2].clone();
+        if ori2 == "-" {
+            seq2 = revcomp(&seq2);
+            kmer2 = kmer2.reverse();
+        }
+        //println!("seq1 {} seq2 {} ori1 {} ori2 {}", seq1, seq2, ori1, ori2);
+        let overlap_length = find_overlap(&seq1, &seq2, &kmer1, &kmer2, int_to_minimizer, minim_shift);
+        //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
+        assert!((overlap_length as usize) < seq1.len() && (overlap_length as usize) < seq2.len());
+
+        let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
         write!(file, "{}", l_line).expect("error writing l_line");
     }
 }

@@ -3,7 +3,6 @@
 
 use pbr::ProgressBar;
 use bio::io::fasta;
-use std::collections::HashSet;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use fasthash::city;
@@ -14,6 +13,7 @@ use petgraph::graph::NodeIndex;
 use std::fs;
 use structopt::StructOpt;
 use std::path::PathBuf;
+use itertools::iproduct;
 
 mod utils;
 mod gfa_output;
@@ -28,23 +28,36 @@ const revcomp_aware: bool = true; // shouldn't be set to false except for strand
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
 
- 
-fn extract_minimizers(seq: &str, l :usize, percentage_retain_hashes :f64) -> Vec<String>
+
+fn extract_minimizers(seq: &str, l :usize, percentage_retain_hashes :f64, size_miniverse: u32) -> (Vec<String>, Vec<u32>)
 {
-    minhash(seq, l, percentage_retain_hashes)
-    //wk_minimizers(seq, percentage_retain_hashes) // unfinished
+    minhash(seq, l, percentage_retain_hashes, size_miniverse)
+        //wk_minimizers(seq, percentage_retain_hashes) // unfinished
 }
 
-fn minhash(seq: &str, l:usize, percentage_retain_hashes :f64) -> Vec<String>
+pub fn minhash_minimizer_decide(lmer: &str, percentage_retain_hashes :f64, size_miniverse: u32) -> bool
+{
+    let h0 = city::hash32(&lmer) % size_miniverse;
+
+    /* hash_mode == 1 {
+       if start > 0
+       {
+       h1.remove(l, seq.as_bytes()[start-1]);
+       h1.update(seq.as_bytes()[start + l-1]);
+       }
+       }*/
+
+    h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 )
+}
+
+fn minhash(seq: &str, l:usize, percentage_retain_hashes :f64, size_miniverse: u32) -> (Vec<String>, Vec<u32>)
 {
     //let hash_mode = 0; // 1: rolling (currently incompat with revcomp), 0: cityhash
     let mut res = Vec::new();
-    if seq.len() < l { return res; }
+    let mut pos :Vec<u32> = Vec::new();
+    if seq.len() < l { return (res, pos); }
 
-    let mut nl =  4f32.powf(l as f32) as u32;
-    if revcomp_aware { nl = nl / 2; }
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-    let mut h0 :u32 = 0;
     for start in 0..(&seq.len()-l+1)
     {
         let mut lmer = String::from(&seq[start..start+l]);
@@ -52,28 +65,14 @@ fn minhash(seq: &str, l:usize, percentage_retain_hashes :f64) -> Vec<String>
             let lmer_rev = utils::revcomp(&lmer);
             lmer = std::cmp::min(lmer, lmer_rev);
         }
-
-        if true
-        //if hash_mode == 0 
+        if minhash_minimizer_decide(&lmer, percentage_retain_hashes, size_miniverse)
         {
-            h0 = city::hash32(&lmer) % nl;
-        }/*
-        else if hash_mode == 1 {
-            if start > 0
-            {
-                h1.remove(l, seq.as_bytes()[start-1]);
-                h1.update(seq.as_bytes()[start + l-1]);
-            }
-        }*/
-       
-        //let considered_hash = if hash_mode == 0 { h0 }  else { h1.hash() % nl };
-        let considered_hash = h0;
-        if considered_hash < (nl as f64*percentage_retain_hashes) as u32 {
             res.push(lmer.to_string());
+            pos.push(start as u32);
             //println!("selected lmer: {} (hash {})", lmer.to_string(), considered_hash);
         }
     }
-    res
+    (res, pos)
 }
 
 // TODO finish implementing it
@@ -88,7 +87,7 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
     let mut h0 :u32 = 0;
     let nl =  4f32.powf(l as f32) as u32;
     // TODO create a set of (minimizers,positions)
-    
+
     for start in 0..(&seq.len()-w+1)
     {
         let mut min : u32 = std::u32::MAX;
@@ -111,6 +110,16 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
 
     // TODO convert the list of (minimizers,positions) to a vector of list minimizers
     res
+}
+
+// https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
+fn kproduct(seq: String, k: u32) -> Vec<String> {
+    match k {
+        0 => vec![],
+        1 => seq.chars().map(|c| c.to_string()).collect(),
+        2 => iproduct!(seq.chars(), seq.chars()).map(|(a, b)| format!("{}{}", a, b)).collect(),
+        _ => iproduct!(kproduct(seq.clone(), k - 1), seq.chars()).map(|(a, b)| format!("{}{}", a, b)).collect(),
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -146,8 +155,14 @@ fn main() {
     let mut l: usize = 12;
     let mut percentage_retain_hashes :f64 = 0.10;
 
+    let size_miniverse = match revcomp_aware
+    {
+        false => 4f32.powf(l as f32) as u32,
+        true => 4f32.powf(l as f32) as u32 / 2
+    };
+
     if !opt.reads.is_none() { filename = opt.reads.unwrap(); }
-   
+
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
         if opt.k.is_none() { k = 5; }
@@ -160,7 +175,7 @@ fn main() {
         if opt.l.is_none() { l = 12; }
         if opt.pch.is_none() { percentage_retain_hashes = 0.01 };
     }
-    
+
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
     if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
@@ -168,10 +183,28 @@ fn main() {
     let debug = opt.debug;
 
     // init some useful objects
-    let mut somewhat_reads : Vec<Vec<String>> = vec![];
-    let mut all_minimizers : HashSet<String> = HashSet::new();
     let mut nb_minimizers_per_read : f64 = 0.0;
     let mut nb_reads : u64 = 0;
+
+    // assign numbers to minimizers
+    let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
+    let mut int_to_minimizer : HashMap<u32,String> = HashMap::new();
+    let mut minim_idx : u32 = 0;
+    for lmer_direct in kproduct("ACTG".to_string(), l as u32) {
+        let mut lmer = lmer_direct;
+        if revcomp_aware {
+            let lmer_rev = utils::revcomp(&lmer);
+            lmer = std::cmp::min(lmer, lmer_rev);
+        }
+
+        if ! minhash_minimizer_decide(&lmer, percentage_retain_hashes, size_miniverse) { 
+            continue; 
+        }
+        minimizer_to_int.insert(lmer.to_string(),  minim_idx);
+        int_to_minimizer.insert(minim_idx,         lmer.to_string());
+        minim_idx += 1;
+    }
+
 
 
     // get file size for progress bar
@@ -182,58 +215,77 @@ fn main() {
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
+
+    // create a hash table containing (kmers, count)
+    // then will keep only those with count > 1
+    let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
+    let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
+    let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
+
+
     for result in reader.records() {
-	    let record = result.unwrap();
-	    let seq = record.seq();
-	
+        let record = result.unwrap();
+        let seq = record.seq();
+
         let seq_str = String::from_utf8_lossy(seq);
 
         //println!("seq: {}", seq_str);
 
-        let minimizers = extract_minimizers(&seq_str, l, percentage_retain_hashes);
-
-        somewhat_reads.push(minimizers.clone());
-        for minim in minimizers.iter() {
-            all_minimizers.insert(minim.to_string());
-        }
+        let (read_minimizers, read_minimizers_pos) = extract_minimizers(&seq_str, l, percentage_retain_hashes, size_miniverse);
 
         // stats
-        nb_minimizers_per_read += minimizers.len() as f64;
+        nb_minimizers_per_read += read_minimizers.len() as f64;
         nb_reads += 1;
         pb.add(record.seq().len() as u64 + record.id().len() as u64); // get approx size of entry
-        
-    }
-    pb.finish_print("done converting reads to minimizers");
-    nb_minimizers_per_read /= nb_reads as f64;
 
-    println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
+        // convert minimizers to their integer representation
+        let read_transformed : Vec<u32> = read_minimizers.iter().map(|minim| minimizer_to_int[minim]).collect();
 
-    // assign numbers to minimizers
-    let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
-    let mut int_to_minimizer : HashMap<u32,String> = HashMap::new();
-    let mut minim_idx : u32 = 0;
-    for minim in all_minimizers.iter() {
-        minimizer_to_int.insert(minim.to_string(), minim_idx);
-        int_to_minimizer.insert(minim_idx,         minim.to_string());
-        minim_idx += 1;
-    }
-
-    // create a hash table containing (kmers, count)
-    // then will keep only those with count > 1
-    let mut dbg_nodes : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
-    for read in somewhat_reads
-    {
-        let read_transformed : Vec<u32> = read.iter().map(|minim| minimizer_to_int[minim]).collect();
-        
         if read_transformed.len() <= k { continue; }
 
         for i in 0..(read_transformed.len()-k+1)
         {
             let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
-            if revcomp_aware { node = node.normalize(); }
-            *dbg_nodes.entry(node).or_insert(0) += 1;
-        }
+            let mut seq_reversed = false;
+            if revcomp_aware { 
+                let (node_norm, reversed) = node.normalize(); 
+                node = node_norm;
+                seq_reversed = reversed;
+            }
+            let entry = dbg_nodes.entry(node.clone()).or_insert(0);
+            *entry += 1;
+
+            // record sequences associated to solid kmers
+            if *entry == 2 
+            {
+                let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
+                if seq_reversed {
+                    seq = utils::revcomp(&seq);
+                }
+                kmer_seqs.insert(node.clone(), seq.clone());
+                let position_of_second_minimizer = match seq_reversed {
+                    true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
+                    false => read_minimizers_pos[i+1]-read_minimizers_pos[i]
+                };
+                let position_of_second_to_last_minimizer = match seq_reversed {
+                    true => read_minimizers_pos[i+1]-read_minimizers_pos[i],
+                    false => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2]
+                };
+
+                minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+
+                // some sanity checks
+                for minim in &read_minimizers[i..i+k-1]
+                {
+                    assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                }
+            }
+        }        
     }
+    pb.finish_print("done converting reads to minimizers");
+    nb_minimizers_per_read /= nb_reads as f64;
+
+    println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
 
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,c| c > &mut 1);
@@ -245,8 +297,8 @@ fn main() {
     let mut km_index : HashMap<Overlap,Vec<&Kmer>> = HashMap::new();
     for node in dbg_nodes.keys()
     {
-        let first :Overlap = node.prefix().normalize();
-        let second  :Overlap = node.suffix().normalize();
+        let first :Overlap = node.prefix().normalize().0;
+        let second  :Overlap = node.suffix().normalize().0;
         let mut insert_km = |key,val| 
         {
             match km_index.entry(key) {
@@ -261,18 +313,19 @@ fn main() {
     // create a vector of dbg edges
     for n1 in dbg_nodes.keys() 
     {
+        let rev_n1 = n1.reverse();
 
         /*
-        let maybe_insert_edge = |n1 :&[u32;k], n2 :&[u32;k]| {
-             if n1[1..] == n2[0..k-1] {
-                dbg_edges.push((n1,n2));
-             }
-        };
-        */
+           let maybe_insert_edge = |n1 :&[u32;k], n2 :&[u32;k]| {
+           if n1[1..] == n2[0..k-1] {
+           dbg_edges.push((n1,n2));
+           }
+           };
+           */
 
         // bit of a rust noob way to code this, because i'm not too familiar with types yet..
-        let key1=n1.suffix().normalize();
-        let key2=n1.prefix().normalize();
+        let key1=n1.suffix().normalize().0;
+        let key2=n1.prefix().normalize().0;
         for key in [key1,key2].iter()
         {
             if km_index.contains_key(&key)
@@ -287,10 +340,10 @@ fn main() {
                     // apparently.
                     //maybe_insert_edge(n1,n2);
                     if revcomp_aware {
-                        if n1.prefix() == n2.suffix()
-                          || n1.prefix() == rev_n2.suffix()
-                          || n1.suffix() == rev_n2.prefix() {
-                            dbg_edges.push((n1,n2));
+                        if n1.suffix() == rev_n2.prefix()
+                            || rev_n1.suffix() == n2.prefix()
+                                || rev_n1.suffix() == rev_n2.prefix() {
+                                    dbg_edges.push((n1,n2));
                         }
 
                     }
@@ -313,17 +366,19 @@ fn main() {
 
     // graphml output
     if false
-    //if true
-    {
-        let graphml = GraphMl::new(&gr).pretty_print(true);
-        std::fs::write("graph.graphml", graphml.to_string()).unwrap();
-    }
+        //if true
+        {
+            let graphml = GraphMl::new(&gr).pretty_print(true);
+            std::fs::write("graph.graphml", graphml.to_string()).unwrap();
+        }
     let output_graph_filename = "graph.gfa";
 
     // gfa output
-    gfa_output::output_gfa(&gr, &dbg_nodes, output_graph_filename);
+    println!("writing GFA..");
+    gfa_output::output_gfa(&gr, &dbg_nodes, output_graph_filename, &kmer_seqs, &int_to_minimizer, &minim_shift);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
-    seq_output::write_minimizers_and_seq_of_kmers(output_graph_filename, &node_indices);
+    println!("writing sequences..");
+    seq_output::write_minimizers_and_seq_of_kmers(output_graph_filename, &node_indices, &kmer_seqs, k, l);
 }

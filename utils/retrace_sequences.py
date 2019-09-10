@@ -1,10 +1,18 @@
 import sys
 if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.argv[1]:
-    exit("input: [origin.gfa] [origin.sequences] [target.gfa]\n will propagate info from [origin.sequences] to [target].sequences")
+    exit("input: [origin.sequences] [target.gfa]\n will propagate info from [origin.sequences] to [target].sequences")
 
 # read [origin.sequences] file
 d_minims = dict()
+k, l = 0, 0
 for line in open(sys.argv[1]):
+    # ignore #'s lines except for getting the k value
+    if line.startswith('#'):
+        if line.startswith('# k = '):
+            k = int(line.split()[-1])
+        if line.startswith('# l = '):
+            l = int(line.split()[-1])
+        continue
     spl = line.split()
     id = spl[0]
     minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
@@ -12,7 +20,6 @@ for line in open(sys.argv[1]):
 
 def chain_minimizers(info):
     chain = []
-    k = len(d_minims[next(iter(d_minims))])
     for (pos, id, ori) in info:
         ms = d_minims[id]
         if len(chain) > 0:
@@ -32,13 +39,15 @@ def chain_minimizers(info):
                     exit("unexpected element to chain")
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
-            chain += [ms[-1]]
+            chain += ms[k-1:]
         else:
             chain = ms
     return chain
 
 output_filename = '.'.join(sys.argv[2].split('.')[:-1])+".sequences"
 output = open(output_filename,'w')
+output.write("# k = %d\n" % k)
+output.write("# l = %d\n" % l)
 def process_unitig(name, info):
     #print("new chain",name,len(info))
     minims = chain_minimizers(info)
