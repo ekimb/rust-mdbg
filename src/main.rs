@@ -277,7 +277,7 @@ fn main() {
                 // some sanity checks
                 for minim in &read_minimizers[i..i+k-1]
                 {
-                    assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                    debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
                 }
             }
         }        

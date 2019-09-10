@@ -25,7 +25,7 @@ fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer> ) -> (&
 
 // should be fairly easy to find, as both sequences should share exactly k-1 minimizers exactly in
 // common, and we even know which ones
-fn find_overlap(seq1 :&str, seq2 :&str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>) -> u32
+fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>) -> u32
 {
     // strategy: find the second minimizer at position 0 of seq2, by construction of the dbg
     /*
@@ -68,12 +68,23 @@ fn find_overlap(seq1 :&str, seq2 :&str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minim
     let minim_str_rev = revcomp(&minim_str);
     
     let mut shift :i32 = -1;
-    if &seq1[shift_p.0..shift_p.0+l] == minim_str || 
-       &seq1[shift_p.0..shift_p.0+l] == minim_str_rev 
-    { shift = shift_p.0 as i32; }
-    if &seq1[shift_p.1..shift_p.1+l] == minim_str || 
-       &seq1[shift_p.1..shift_p.1+l] == minim_str_rev 
-    { shift = shift_p.1 as i32; }
+    if ori1 == "+" 
+    {
+        if &seq1[shift_p.0..shift_p.0+l] == minim_str || 
+            &seq1[shift_p.0..shift_p.0+l] == minim_str_rev 
+            { 
+                shift = shift_p.0 as i32; 
+                //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
+            }
+    }
+    else
+    {
+        if &seq1[shift_p.1..shift_p.1+l] == minim_str || 
+            &seq1[shift_p.1..shift_p.1+l] == minim_str_rev 
+            { 
+                shift = shift_p.1 as i32;
+            }
+    }
     
     assert!(shift != -1);
     assert!((shift as usize) < seq1.len());
@@ -116,7 +127,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             kmer2 = kmer2.reverse();
         }
         //println!("seq1 {} seq2 {} ori1 {} ori2 {}", seq1, seq2, ori1, ori2);
-        let overlap_length = find_overlap(&seq1, &seq2, &kmer1, &kmer2, int_to_minimizer, minim_shift);
+        let overlap_length = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift);
         //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
         assert!((overlap_length as usize) < seq1.len() && (overlap_length as usize) < seq2.len());
 
