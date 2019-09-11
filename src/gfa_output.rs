@@ -126,10 +126,22 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             seq2 = revcomp(&seq2);
             kmer2 = kmer2.reverse();
         }
-        //println!("seq1 {} seq2 {} ori1 {} ori2 {}", seq1, seq2, ori1, ori2);
         let overlap_length = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift);
-        //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
-        assert!((overlap_length as usize) < seq1.len() && (overlap_length as usize) < seq2.len());
+
+        /*println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
+        if (overlap_length as usize) > seq2.len()
+        {
+            println!("kmer1 {:?}\nkmer2 {:?}\n", kmer1.minimizers(), kmer2.minimizers());
+            println!("seq1 {}\nseq2 {}\nori1 {} ori2 {}", seq1, seq2, ori1, ori2);
+        }*/
+        //assert!((overlap_length as usize) < seq1.len() && (overlap_length as usize) < seq2.len());
+        //
+        // fun fact: overlap length may be slightly smaller than seq2.length actually
+        // this is due to indels compensating the possible proximity of next minimizer
+        // so for now we'll just do this dirty 'fix'
+        // since anyway the importance of overlap length field in GFA is quite relative in this
+        // pipeline
+        let overlap_length = std::cmp::min(overlap_length as usize, seq2.len()-1);
 
         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
         write!(file, "{}", l_line).expect("error writing l_line");

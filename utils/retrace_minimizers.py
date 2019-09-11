@@ -14,34 +14,48 @@ for line in open(sys.argv[1]):
             l = int(line.split()[-1])
         continue
     spl = line.split()
-    id = spl[0]
+    node_id = spl[0]
     minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
-    d_minims[id] = minims
+    d_minims[node_id] = minims
 
-def chain_minimizers(info):
+def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     chain = []
-    for (pos, id, ori) in info:
-        ms = d_minims[id]
+    for (chain_number,(pos, node_id, ori)) in enumerate(info):
+        ms = d_minims[node_id]
         if len(chain) > 0:
             if chain[-(k-1):] == ms[:k-1]:
                 pass
             elif chain[-(k-1):] == ms[::-1][:k-1]:
                 ms = ms[::-1]
             else:
-                chain = chain[::-1]
-                if chain[-(k-1):] == ms[:k-1]:
-                    pass
-                elif chain[-(k-1):] == ms[::-1][:k-1]:
-                    ms = ms[::-1]
+                bad = False
+                if chain_number == 1: # can only reverse the first element of the chain during attempt to chain the the second element
+                    chain = chain[::-1]
+                    if chain[-(k-1):] == ms[:k-1]:
+                        pass
+                    elif chain[-(k-1):] == ms[::-1][:k-1]:
+                        ms = ms[::-1]
+                    else: 
+                        bad = True
                 else:
-                    print(len(chain),"chain:", chain[-k:], "ms:", ms)
-                    print(chain[-(k-1):], ms[::-1][:k-1])
-                    exit("unexpected element to chain")
+                    bad = True
+                if bad:
+                    # some extensive debugging information
+                    print("chain (size %d):" % len(chain), "last k=%d elements:" % k,chain[-k:])
+                    print("to be chained with node id %s (size %d):" %(node_id,len(ms)), ms)
+                    if chain == ms or chain == ms[::-1]:
+                        print("!!warning!! chain == ms or chain == ms[::-1]")
+                    print(", so tested overlap:",chain[-(k-1):])
+                    print("        with either:",ms[:k-1])
+                    print("                 or:",ms[::-1][:k-1])
+                    exit("unexpected element to chain (unitig %s)" % unitig_name)
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
-            chain += ms[k-1:]
+            chain += ms[k-1:][::]
         else:
-            chain = ms
+            chain = ms[::]
+            # small note to myself:
+            # gfaview re-uses unitig's across simplifications. i.e. the same origin unitig may be found in two different 'a' lines
     return chain
 
 output_filename = '.'.join(sys.argv[2].split('.')[:-1])+".sequences"
@@ -50,7 +64,7 @@ output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
     #print("new chain",name,len(info))
-    minims = chain_minimizers(info)
+    minims = chain_minimizers(info, name)
     output.write("%s\t%s\tPLACEHOLDER\n"% (name,minims))
 
 # read [target.gfa] file

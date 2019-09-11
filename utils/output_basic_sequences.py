@@ -79,7 +79,7 @@ for i in range(len(final_sequences_file)):
             assert(whole_seq[-l:] == seq[:l])
             whole_seq += seq[l:]
 
-    final_sequences_file[i] = "%s\t%s\t%s\n" % (utg, minims, whole_seq)
+    final_sequences_file[i] = "%s\t%s\t%s\n" % (utg, list(minims), whole_seq)
 
 # write [final.sequences] with sequence info 
 output = open(sys.argv[2],'w')
