@@ -1,5 +1,13 @@
 #!/bin/bash
-set -x
+#https://stackoverflow.com/questions/59895/get-the-source-directory-of-a-bash-script-from-within-the-script-itself
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
 if [[ $# -eq 0 ]] ; then
     #echo 'running main.py'
     #python main.py
@@ -7,15 +15,23 @@ if [[ $# -eq 0 ]] ; then
 else
     base="$1"
 fi
-gfaview $base.gfa -u > $base.unitigs.gfa
-gfaview $base.gfa -t -u > $base.notips.gfa
-gfaview $base.gfa -b -u > $base.notips.nobubbles.gfa
+set -x
+#gfaview $base.gfa -u > $base.unitigs.gfa
+#gfaview $base.gfa -t -u > $base.notips.gfa
+gfaview $base.gfa -t -b -u > $base.notips.nobubbles.gfa
 gfaview $base.notips.nobubbles.gfa -t -b -u > $base.notips.nobubbles.again.gfa
 echo ~/tools/Bandage/Bandage load $base.notips.nobubbles.again.gfa 
 
-python utils/retrace_minimizers.py $base.sequences $base.notips.gfa
-python utils/retrace_minimizers.py $base.sequences $base.notips.nobubbles.gfa
-python utils/retrace_minimizers.py $base.notips.nobubbles.sequences $base.notips.nobubbles.again.gfa
+#python utils/retrace_minimizers.py $base.sequences $base.notips.gfa
+python $DIR/retrace_minimizers.py $base.sequences $base.notips.nobubbles.gfa
+python $DIR/retrace_minimizers.py $base.notips.nobubbles.sequences $base.notips.nobubbles.again.gfa
 
-python utils/output_basic_sequences.py  $base.sequences $base.notips.nobubbles.again.sequences
-python utils/sequences_file_to_fasta.py  $base.notips.nobubbles.again.sequences $base.notips.nobubbles.again.fasta
+python $DIR/output_basic_sequences.py  $base.sequences $base.notips.nobubbles.again.sequences
+python $DIR/sequences_file_to_fasta.py  $base.notips.nobubbles.again.sequences $base.notips.nobubbles.again.fasta
+
+# finishing up
+mv $base.notips.nobubbles.again.gfa $base.assembled.gfa
+mv $base.notips.nobubbles.again.fasta $base.assembled.fasta
+
+# cleanup
+rm -f $base.gfa $base.notips.nobubbles.gfa $base.notips.nobubbles.sequences $base.sequences $base.notips.nobubbles.again.sequences

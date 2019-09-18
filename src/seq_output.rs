@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
 use std::io::Write;
@@ -10,10 +10,10 @@ use petgraph::graph::NodeIndex;
 // for reconstructing sequences in assemblies. otherwise having just 
 // the graph would be a bit useless
 
-pub fn write_minimizers_and_seq_of_kmers(graph_filename :&str, node_indices :&HashMap<Kmer,NodeIndex>, kmer_seqs :&HashMap<Kmer,String>, k:usize, l:usize)
+pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :&HashMap<Kmer,NodeIndex>, kmer_seqs :&HashMap<Kmer,String>, k:usize, l:usize)
 {
-    let output_filename = format!("{}{}",Path::new(graph_filename).file_stem().unwrap().to_string_lossy(),".sequences");
-    let path = Path::new(&output_filename);
+    let output_filename = format!("{}{}",output_prefix.to_string_lossy(),".sequences");
+    let path = PathBuf::from(&output_filename);
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
         Ok(file) => file,

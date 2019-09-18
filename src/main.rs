@@ -24,19 +24,32 @@ mod kmer_vec;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
+const preliminary_lmer_counting: bool = false;
+
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
 
-
-fn extract_minimizers(seq: &str, l :usize, percentage_retain_hashes :f64, size_miniverse: u32) -> (Vec<String>, Vec<u32>)
+pub struct Params
 {
-    minhash(seq, l, percentage_retain_hashes, size_miniverse)
+    l: usize,
+    k: usize,
+    percentage_retain_hashes :f64,
+    size_miniverse: u32,
+    average_lmer_count : f64,
+}
+
+fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>)
+{
+    minhash(seq, params, lmer_counts)
         //wk_minimizers(seq, percentage_retain_hashes) // unfinished
 }
 
-pub fn minhash_minimizer_decide(lmer: &str, percentage_retain_hashes :f64, size_miniverse: u32) -> bool
+pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> bool
 {
+    let size_miniverse = params.size_miniverse;
+    let percentage_retain_hashes = params.percentage_retain_hashes;
+
     let h0 = city::hash32(&lmer) % size_miniverse;
 
     /* hash_mode == 1 {
@@ -46,12 +59,18 @@ pub fn minhash_minimizer_decide(lmer: &str, percentage_retain_hashes :f64, size_
        h1.update(seq.as_bytes()[start + l-1]);
        }
        }*/
+    
+    // minimizers must have high count
+    //let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
+    //if *count < params.average_lmer_count as u32 { return false;}
 
-    h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 )
+    h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 ) 
 }
 
-fn minhash(seq: &str, l:usize, percentage_retain_hashes :f64, size_miniverse: u32) -> (Vec<String>, Vec<u32>)
+fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>)
 {
+    let l = params.l;
+    
     //let hash_mode = 0; // 1: rolling (currently incompat with revcomp), 0: cityhash
     let mut res = Vec::new();
     let mut pos :Vec<u32> = Vec::new();
@@ -65,7 +84,7 @@ fn minhash(seq: &str, l:usize, percentage_retain_hashes :f64, size_miniverse: u3
             let lmer_rev = utils::revcomp(&lmer);
             lmer = std::cmp::min(lmer, lmer_rev);
         }
-        if minhash_minimizer_decide(&lmer, percentage_retain_hashes, size_miniverse)
+        if minhash_minimizer_decide(&lmer, params, lmer_counts)
         {
             res.push(lmer.to_string());
             pos.push(start as u32);
@@ -122,8 +141,40 @@ fn kproduct(seq: String, k: u32) -> Vec<String> {
     }
 }
 
+fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+    let l = params.l;
+    let mut pb = ProgressBar::new(file_size);
+    let reader = fasta::Reader::from_file(&filename).unwrap();
+
+    for record in reader.records() {
+        let record = record.unwrap();
+        let seq = record.seq();
+
+        let seq_str = String::from_utf8_lossy(seq);
+        pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
+
+        if seq_str.len() < l { continue; }
+    
+        //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
+        for start in 0..(&seq_str.len()-l+1)
+        {
+            let mut lmer = String::from(&seq_str[start..start+l]);
+            if revcomp_aware {
+                let lmer_rev = utils::revcomp(&lmer);
+                lmer = std::cmp::min(lmer, lmer_rev);
+            }
+            let count = lmer_counts.entry(lmer).or_insert(0);
+            *count += 1;
+        }
+    }
+    params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
+    println!("average lmer count: {}",params.average_lmer_count);
+}
+
+
+
 #[derive(Debug, StructOpt)]
-#[structopt(name = "rust-mhdbg", about = "Original implementation of Min-Hash de Bruijn graphs")]
+#[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
 struct Opt {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
@@ -134,11 +185,15 @@ struct Opt {
     #[structopt(parse(from_os_str))]
     reads: Option<PathBuf>,
 
+    /// Output graph/sequences prefix 
+    #[structopt(parse(from_os_str), short, long)]
+    prefix: Option<PathBuf>,
+
     #[structopt(short, long)]
     k: Option<usize>,
     #[structopt(short, long)]
     l: Option<usize>,
-    #[structopt(short, long)]
+    #[structopt(long)]
     pch: Option<f64>,
     #[structopt(long)]
     test1: bool,
@@ -151,17 +206,10 @@ fn main() {
     let opt = Opt::from_args();      
 
     let mut filename = PathBuf::new();
+    let mut output_prefix = PathBuf::from("graph");
     let mut k: usize = 10;
     let mut l: usize = 12;
     let mut percentage_retain_hashes :f64 = 0.10;
-
-    let size_miniverse = match revcomp_aware
-    {
-        false => 4f32.powf(l as f32) as u32,
-        true => 4f32.powf(l as f32) as u32 / 2
-    };
-
-    if !opt.reads.is_none() { filename = opt.reads.unwrap(); }
 
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -180,11 +228,41 @@ fn main() {
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
     if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
 
+    if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
+    if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
+    
+    if filename.as_os_str().is_empty() { panic!("please specify an input file"); }
+
     let debug = opt.debug;
+
+    let size_miniverse = match revcomp_aware
+    {
+        false => 4f32.powf(l as f32) as u32,
+        true => 4f32.powf(l as f32) as u32 / 2
+    };
+
+
+    let mut params = Params { 
+        l,
+        k,
+        percentage_retain_hashes,
+        size_miniverse,
+        average_lmer_count: 0.0,
+    };
 
     // init some useful objects
     let mut nb_minimizers_per_read : f64 = 0.0;
     let mut nb_reads : u64 = 0;
+    // get file size for progress bar
+    let metadata = fs::metadata(&filename).expect("error opening input file");
+    let file_size = metadata.len();
+    let mut pb = ProgressBar::new(file_size);
+
+
+    let mut lmer_counts : HashMap<String,u32> = HashMap::new(); // for reference, 4^12 = 16M
+    if preliminary_lmer_counting {
+        lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
+    }
 
     // assign numbers to minimizers
     let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
@@ -197,20 +275,19 @@ fn main() {
             lmer = std::cmp::min(lmer, lmer_rev);
         }
 
-        if ! minhash_minimizer_decide(&lmer, percentage_retain_hashes, size_miniverse) { 
+        if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
             continue; 
+        }
+        let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
+        if *count != 0
+        {
+            //println!("found minimizer {} count {}",lmer.to_string(),count);
         }
         minimizer_to_int.insert(lmer.to_string(),  minim_idx);
         int_to_minimizer.insert(minim_idx,         lmer.to_string());
         minim_idx += 1;
     }
 
-
-
-    // get file size for progress bar
-    let metadata = fs::metadata(&filename).expect("error opening input file");
-    let file_size = metadata.len();
-    let mut pb = ProgressBar::new(file_size);
 
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
@@ -222,7 +299,6 @@ fn main() {
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
 
-
     for result in reader.records() {
         let record = result.unwrap();
         let seq = record.seq();
@@ -231,7 +307,7 @@ fn main() {
 
         //println!("seq: {}", seq_str);
 
-        let (read_minimizers, read_minimizers_pos) = extract_minimizers(&seq_str, l, percentage_retain_hashes, size_miniverse);
+        let (read_minimizers, read_minimizers_pos) = extract_minimizers(&seq_str, &params, &lmer_counts);
 
         // stats
         nb_minimizers_per_read += read_minimizers.len() as f64;
@@ -371,14 +447,13 @@ fn main() {
             let graphml = GraphMl::new(&gr).pretty_print(true);
             std::fs::write("graph.graphml", graphml.to_string()).unwrap();
         }
-    let output_graph_filename = "graph.gfa";
 
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, output_graph_filename, &kmer_seqs, &int_to_minimizer, &minim_shift);
+    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
     println!("writing sequences..");
-    seq_output::write_minimizers_and_seq_of_kmers(output_graph_filename, &node_indices, &kmer_seqs, k, l);
+    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, k, l);
 }

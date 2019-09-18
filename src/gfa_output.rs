@@ -1,6 +1,6 @@
 use petgraph::graph::DiGraph;
 use petgraph::visit::EdgeRef;
-use std::path::Path;
+use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
 use std::io::Write;
@@ -91,13 +91,13 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     (seq1.len() as u32) - (shift as u32)
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_filename :&str, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>)  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>)  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     
-    let path = Path::new(output_filename);
+    let path = format!("{}{}",output_prefix.to_str().unwrap(),".gfa");
     let mut file = match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}", path.display(), why.description()),
+        Err(why) => panic!("couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
     };
     write!(file, "H\tVZ:Z:1\n").expect("error writing GFA header");

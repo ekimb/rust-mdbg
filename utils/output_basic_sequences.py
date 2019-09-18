@@ -57,6 +57,8 @@ for i in range(len(final_sequences_file)):
     seq = spl[-1]
     
     #magic happens here
+    
+    # don't wanna do it k-mer-per-k-mer, let's be more rough than that
     #for j in range(len(minims)-k+1):
         #kmer = minims[j:j+k]
     whole_seq = ""
@@ -76,7 +78,11 @@ for i in range(len(final_sequences_file)):
         if len(whole_seq) == 0:
             whole_seq = seq
         else:
-            assert(whole_seq[-l:] == seq[:l])
+            if whole_seq[-l:] != seq[:l]:
+                print("problem with overlap") #todo understand what's up
+                print(whole_seq[-l:])
+                print(seq[:l])
+                exit(1)
             whole_seq += seq[l:]
 
     final_sequences_file[i] = "%s\t%s\t%s\n" % (utg, list(minims), whole_seq)
