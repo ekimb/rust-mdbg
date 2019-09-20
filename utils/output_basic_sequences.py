@@ -3,7 +3,7 @@ if len(sys.argv) < 3 or ".sequences" not in sys.argv[2] or ".sequences" not in s
     exit("input: [graph.sequences] [final.sequences] \n will take info from [graph.sequences] (that should contain only kmers) and fill in [final.sequences]\n note: overwrites the third column of [final.sequences]")
 
 # read [origin.sequences] file
-sequences = dict()
+kmer_to_seq = dict()
 k, l = 0, 0
 for line in open(sys.argv[1]):
     # ignore #'s lines except for getting the k value
@@ -17,7 +17,7 @@ for line in open(sys.argv[1]):
     id = spl[0]
     minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
     seq = spl[-1]
-    sequences[minims] = seq
+    kmer_to_seq[minims] = seq
 
 # read and cache [final.sequences]
 final_sequences_file = []
@@ -65,13 +65,13 @@ for i in range(len(final_sequences_file)):
     for kmer in grouper(k, double_every_k(k, minims)):
         do_revcomp = False
         if None in kmer: continue 
-        if kmer not in sequences:
+        if kmer not in kmer_to_seq:
             kmer = kmer[::-1]
             do_revcomp = True
-        if kmer not in sequences:
+        if kmer not in kmer_to_seq:
             print("kmer not found",kmer)
             exit(1)
-        seq = sequences[kmer]
+        seq = kmer_to_seq[kmer]
         if do_revcomp:
             seq = revcomp(seq)
         #print(seq)
@@ -79,10 +79,20 @@ for i in range(len(final_sequences_file)):
             whole_seq = seq
         else:
             if whole_seq[-l:] != seq[:l]:
+                """
+                # what might happen is when a repetition of the same minimizer occurs
+                # whole_seq is, in terms of minimizers: a,b,c,d,X1,X2
+                # seq is X1,e,f,g,h
+                # but for some reason, seq has a sequencing error and X2 is missed
+                # then gotta patch dirtily
                 print("problem with overlap") #todo understand what's up
                 print(whole_seq[-l:])
                 print(seq[:l])
+                print(whole_seq)
+                print(seq)
+                print(minims)
                 exit(1)
+                """
             whole_seq += seq[l:]
 
     final_sequences_file[i] = "%s\t%s\t%s\n" % (utg, list(minims), whole_seq)

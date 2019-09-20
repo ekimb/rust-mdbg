@@ -34,4 +34,4 @@ mv $base.notips.nobubbles.again.gfa $base.assembled.gfa
 mv $base.notips.nobubbles.again.fasta $base.assembled.fasta
 
 # cleanup
-rm -f $base.gfa $base.notips.nobubbles.gfa $base.notips.nobubbles.sequences $base.sequences $base.notips.nobubbles.again.sequences
+#rm -f $base.gfa $base.notips.nobubbles.gfa $base.notips.nobubbles.sequences $base.sequences $base.notips.nobubbles.again.sequences
