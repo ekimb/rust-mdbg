@@ -18,13 +18,29 @@ use itertools::iproduct;
 mod utils;
 mod gfa_output;
 mod seq_output;
+mod minimizers;
 
 mod kmer_vec;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const preliminary_lmer_counting: bool = false;
+const levenshtein_minimizers : u16 = 0; // set to 0 to disable
+/* why we need those kind of minimizers?
+
+there are 13147 kmers in the reference genome graph of dmel chr4, k10-p0.01-l12
+
+in reads with error rate 0.0075:
+43114 kmers in graph-k10-p0.01-l12.sequences
+number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-k10-p0.01-l12.sequences 13112 (99.73)% , 35 are not
+
+in reads with erro rate 0.02:
+
+15244 kmers in graph-0.02-k10-p0.01.sequences
+number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-k10-p0.01.sequences 8951 (68.08)% , 4196 are not
+
+bottom line: with k=10, can't enough solid (minabund>=2) kmers when read error rate is 2%
+*/
 
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -37,11 +53,12 @@ pub struct Params
     percentage_retain_hashes :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
+    min_kmer_abundance : usize,
 }
 
-fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>)
+fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
-    minhash(seq, params, lmer_counts)
+    minhash(seq, params, lmer_counts, minimizer_to_int)
         //wk_minimizers(seq, percentage_retain_hashes) // unfinished
 }
 
@@ -67,31 +84,38 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
     h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 ) 
 }
 
-fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>)
+fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
     let l = params.l;
     
     //let hash_mode = 0; // 1: rolling (currently incompat with revcomp), 0: cityhash
     let mut res = Vec::new();
     let mut pos :Vec<u32> = Vec::new();
-    if seq.len() < l { return (res, pos); }
+    if seq.len() < l { return (res, pos.clone(), pos.clone()); }
 
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
     for start in 0..(&seq.len()-l+1)
     {
         let mut lmer = String::from(&seq[start..start+l]);
+        if lmer.contains("N") { continue; }
         if revcomp_aware {
             let lmer_rev = utils::revcomp(&lmer);
             lmer = std::cmp::min(lmer, lmer_rev);
         }
-        if minhash_minimizer_decide(&lmer, params, lmer_counts)
+        if (levenshtein_minimizers == 0 &&  minhash_minimizer_decide(&lmer, params, lmer_counts))
+            || 
+           (levenshtein_minimizers > 0 &&  minimizer_to_int.contains_key(&lmer))
         {
             res.push(lmer.to_string());
             pos.push(start as u32);
             //println!("selected lmer: {} (hash {})", lmer.to_string(), considered_hash);
         }
     }
-    (res, pos)
+        
+    // convert minimizers to their integer representation
+    let read_transformed : Vec<u32> = res.iter().map(|minim| minimizer_to_int[minim]).collect();
+
+    (res, pos, read_transformed)
 }
 
 // TODO finish implementing it
@@ -141,36 +165,6 @@ fn kproduct(seq: String, k: u32) -> Vec<String> {
     }
 }
 
-fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
-    let l = params.l;
-    let mut pb = ProgressBar::new(file_size);
-    let reader = fasta::Reader::from_file(&filename).unwrap();
-
-    for record in reader.records() {
-        let record = record.unwrap();
-        let seq = record.seq();
-
-        let seq_str = String::from_utf8_lossy(seq);
-        pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
-
-        if seq_str.len() < l { continue; }
-    
-        //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-        for start in 0..(&seq_str.len()-l+1)
-        {
-            let mut lmer = String::from(&seq_str[start..start+l]);
-            if revcomp_aware {
-                let lmer_rev = utils::revcomp(&lmer);
-                lmer = std::cmp::min(lmer, lmer_rev);
-            }
-            let count = lmer_counts.entry(lmer).or_insert(0);
-            *count += 1;
-        }
-    }
-    params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
-    println!("average lmer count: {}",params.average_lmer_count);
-}
-
 
 
 #[derive(Debug, StructOpt)]
@@ -196,6 +190,8 @@ struct Opt {
     #[structopt(long)]
     pch: Option<f64>,
     #[structopt(long)]
+    minabund: Option<usize>,
+    #[structopt(long)]
     test1: bool,
     #[structopt(long)]
     test2: bool,
@@ -206,10 +202,11 @@ fn main() {
     let opt = Opt::from_args();      
 
     let mut filename = PathBuf::new();
-    let mut output_prefix = PathBuf::from("graph");
+    let mut output_prefix;
     let mut k: usize = 10;
     let mut l: usize = 12;
     let mut percentage_retain_hashes :f64 = 0.10;
+    let mut min_kmer_abundance: usize = 2;
 
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -227,6 +224,9 @@ fn main() {
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
     if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
+    if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
+
+    output_prefix = PathBuf::from(format!("graph-k{}-p{}-l{}",k,percentage_retain_hashes,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
@@ -241,13 +241,13 @@ fn main() {
         true => 4f32.powf(l as f32) as u32 / 2
     };
 
-
     let mut params = Params { 
         l,
         k,
         percentage_retain_hashes,
         size_miniverse,
         average_lmer_count: 0.0,
+        min_kmer_abundance,
     };
 
     // init some useful objects
@@ -258,36 +258,7 @@ fn main() {
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
 
-
-    let mut lmer_counts : HashMap<String,u32> = HashMap::new(); // for reference, 4^12 = 16M
-    if preliminary_lmer_counting {
-        lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
-    }
-
-    // assign numbers to minimizers
-    let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
-    let mut int_to_minimizer : HashMap<u32,String> = HashMap::new();
-    let mut minim_idx : u32 = 0;
-    for lmer_direct in kproduct("ACTG".to_string(), l as u32) {
-        let mut lmer = lmer_direct;
-        if revcomp_aware {
-            let lmer_rev = utils::revcomp(&lmer);
-            lmer = std::cmp::min(lmer, lmer_rev);
-        }
-
-        if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
-            continue; 
-        }
-        let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-        if *count != 0
-        {
-            //println!("found minimizer {} count {}",lmer.to_string(),count);
-        }
-        minimizer_to_int.insert(lmer.to_string(),  minim_idx);
-        int_to_minimizer.insert(minim_idx,         lmer.to_string());
-        minim_idx += 1;
-    }
-
+    let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size);
 
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
@@ -307,15 +278,13 @@ fn main() {
 
         //println!("seq: {}", seq_str);
 
-        let (read_minimizers, read_minimizers_pos) = extract_minimizers(&seq_str, &params, &lmer_counts);
+        let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
 
         // stats
         nb_minimizers_per_read += read_minimizers.len() as f64;
         nb_reads += 1;
         pb.add(record.seq().len() as u64 + record.id().len() as u64); // get approx size of entry
 
-        // convert minimizers to their integer representation
-        let read_transformed : Vec<u32> = read_minimizers.iter().map(|minim| minimizer_to_int[minim]).collect();
 
         if read_transformed.len() <= k { continue; }
 
@@ -332,7 +301,7 @@ fn main() {
             *entry += 1;
 
             // record sequences associated to solid kmers
-            if *entry == 2 
+            if *entry == min_kmer_abundance as u32
             {
                 let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
                 if seq_reversed {
@@ -351,9 +320,12 @@ fn main() {
                 minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
 
                 // some sanity checks
-                for minim in &read_minimizers[i..i+k-1]
+                if levenshtein_minimizers == 0
                 {
-                    debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                    for minim in &read_minimizers[i..i+k-1]
+                    {
+                        debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                    }
                 }
             }
         }        
@@ -364,7 +336,7 @@ fn main() {
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
 
     println!("nodes before abund-filter: {}", dbg_nodes.len());
-    dbg_nodes.retain(|x,c| c > &mut 1);
+    dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     println!("              nodes after: {}", dbg_nodes.len());
 
     let mut dbg_edges : Vec<(&Kmer,&Kmer)> = Vec::new();
