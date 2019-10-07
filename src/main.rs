@@ -25,23 +25,6 @@ mod kmer_vec;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const levenshtein_minimizers : u16 = 0; // set to 0 to disable
-/* why we need those kind of minimizers?
-
-there are 13147 kmers in the reference genome graph of dmel chr4, k10-p0.01-l12
-
-in reads with error rate 0.0075:
-43114 kmers in graph-k10-p0.01-l12.sequences
-number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-k10-p0.01-l12.sequences 13112 (99.73)% , 35 are not
-
-in reads with erro rate 0.02:
-
-15244 kmers in graph-0.02-k10-p0.01.sequences
-number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-k10-p0.01.sequences 8951 (68.08)% , 4196 are not
-
-bottom line: with k=10, can't enough solid (minabund>=2) kmers when read error rate is 2%
-*/
-
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
@@ -54,6 +37,7 @@ pub struct Params
     size_miniverse: u32,
     average_lmer_count : f64,
     min_kmer_abundance : usize,
+    levenshtein_minimizers : usize,
 }
 
 fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
@@ -98,17 +82,42 @@ fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimi
     {
         let mut lmer = String::from(&seq[start..start+l]);
         if lmer.contains("N") { continue; }
-        if revcomp_aware {
-            let lmer_rev = utils::revcomp(&lmer);
-            lmer = std::cmp::min(lmer, lmer_rev);
-        }
-        if (levenshtein_minimizers == 0 &&  minhash_minimizer_decide(&lmer, params, lmer_counts))
-            || 
-           (levenshtein_minimizers > 0 &&  minimizer_to_int.contains_key(&lmer))
+        lmer = minimizers::normalize_minimizer(&lmer);
+        let mut should_insert : Option<String> = None;
+
+        if params.levenshtein_minimizers == 0
         {
-            res.push(lmer.to_string());
+            if minhash_minimizer_decide(&lmer, params, lmer_counts)
+            {
+                should_insert = Some(lmer.to_string());
+            }
+        }
+
+        // examine l-1, l, l+1 -mers, as a necessity in that scheme
+        // small simplification: only one minimizer per start position
+        if params.levenshtein_minimizers > 0
+        {
+            if minimizer_to_int.contains_key(&lmer) { should_insert = Some(lmer.to_string());}
+            else
+            {
+                let lmer_minus_one = minimizers::normalize_minimizer(&String::from(&seq[start..start+l-1]));
+                if minimizer_to_int.contains_key(&lmer_minus_one) { should_insert = Some(lmer_minus_one.to_string());}
+                else
+                {
+                    if start+l+1 < seq.len()
+                    {
+                        let lmer_plus_one = minimizers::normalize_minimizer(&String::from(&seq[start..start+l+1]));
+                        if minimizer_to_int.contains_key(&lmer_plus_one) { should_insert = Some(lmer_plus_one.to_string());}
+                    }
+                }
+            }
+        }
+
+        if !should_insert.is_none()      
+        {
+            res.push(should_insert.unwrap());
             pos.push(start as u32);
-            //println!("selected lmer: {} (hash {})", lmer.to_string(), considered_hash);
+            //println!("selected lmer: {}", should_insert.unwrap());
         }
     }
         
@@ -137,10 +146,7 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
         for pos in start..start+w
         {
             let mut lmer = String::from(&seq[start..start+l]);
-            if revcomp_aware {
-                let lmer_rev = utils::revcomp(&lmer);
-                lmer = std::cmp::min(lmer, lmer_rev);
-            }
+            lmer = minimizers::normalize_minimizer(&lmer);
             h0 = city::hash32(lmer) % nl;
             min = std::cmp::min(h0,min); // TODO record position as well
             // TODO add(minimizer,position) to set
@@ -153,6 +159,42 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
 
     // TODO convert the list of (minimizers,positions) to a vector of list minimizers
     res
+}
+
+fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>, read_minimizers_pos :&Vec<u32>)
+{
+    println!("seq: {}",seq_str);
+    print!("min: ");
+    let mut current_minimizer :String = "".to_string();
+    for i in 0..seq_str.len()
+    {
+        if read_minimizers_pos.contains(&(i as u32))
+        {
+            let index = read_minimizers_pos.iter().position(|&r| r == i as u32).unwrap();
+            current_minimizer = read_minimizers[index].clone();
+            let c = current_minimizer.remove(0);
+            if c == seq_str.chars().nth(i).unwrap()
+            {
+                print!("X");
+            }
+                else
+            {
+                print!("x");
+            }
+            continue;
+        }
+        if current_minimizer.len() > 0
+        {
+            let c = current_minimizer.remove(0);
+            print!("{}",c);
+        }
+        else
+        {
+            print!(".");
+        }
+    }
+    println!("");
+
 }
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
@@ -192,6 +234,8 @@ struct Opt {
     #[structopt(long)]
     minabund: Option<usize>,
     #[structopt(long)]
+    levenshtein_minimizers: Option<usize>,
+    #[structopt(long)]
     test1: bool,
     #[structopt(long)]
     test2: bool,
@@ -207,6 +251,7 @@ fn main() {
     let mut l: usize = 12;
     let mut percentage_retain_hashes :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
+    let mut levenshtein_minimizers: usize = 0;
 
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -226,7 +271,12 @@ fn main() {
     if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
 
-    output_prefix = PathBuf::from(format!("graph-k{}-p{}-l{}",k,percentage_retain_hashes,l));
+    if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
+    let minimizer_type = match levenshtein_minimizers { 0 => "reg", 1 => "lev1", 2 => "lev2",_ => "levX" };
+    if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
+
+
+    output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,percentage_retain_hashes,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
@@ -248,6 +298,7 @@ fn main() {
         size_miniverse,
         average_lmer_count: 0.0,
         min_kmer_abundance,
+        levenshtein_minimizers,
     };
 
     // init some useful objects
@@ -258,7 +309,7 @@ fn main() {
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
 
-    let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size);
+    let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
 
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
@@ -285,6 +336,8 @@ fn main() {
         nb_reads += 1;
         pb.add(record.seq().len() as u64 + record.id().len() as u64); // get approx size of entry
 
+        // some debug
+        //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
         if read_transformed.len() <= k { continue; }
 
@@ -422,7 +475,7 @@ fn main() {
 
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift);
+    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers

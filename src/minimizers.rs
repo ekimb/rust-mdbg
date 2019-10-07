@@ -4,7 +4,6 @@ use super::Params;
 use super::kproduct;
 use super::revcomp_aware;
 use super::minhash_minimizer_decide;
-use super::levenshtein_minimizers; 
 use std::collections::HashMap;
 use std::collections::HashSet;
 use pbr::ProgressBar;
@@ -44,7 +43,34 @@ fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file
     println!("average lmer count: {}",params.average_lmer_count);
 }
 
-fn levenshtein_ball(lmer: &String) -> Vec<String>
+/* why we need levenshtein balls as minimizers?
+
+there are 13147 kmers in the reference genome graph of dmel chr4, k10-p0.01-l12
+
+in reads with error rate 0.0075:
+43114 kmers in graph-k10-p0.01-l12.sequences
+number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-k10-p0.01-l12.sequences 13112 (99.73)% , 35 are not
+
+in reads with erro rate 0.02:
+
+# python ../rust-mhdbg/utils/compare_kmers.py genomegraph-0.02-k10-p0.01.sequences graph-0.02-k10-p0.01.sequences:w
+15244 kmers in graph-0.02-k10-p0.01.sequences
+number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-k10-p0.01.sequences 8951 (68.08)% , 4196 are not
+
+bottom line: with k=10, can't enough solid (minabund>=2) kmers when read error rate is 2%
+*/
+
+fn levenshtein_ball(lmer: &String, ball_size: usize) -> Vec<String>
+{
+    match ball_size
+    {
+        1 => levenshtein_ball_1(lmer),
+        2 => levenshtein_ball_2(lmer),
+        _ => panic!("unsupported levenshtein ball size"),
+    }        
+}
+
+fn levenshtein_ball_1(lmer: &String) -> Vec<String>
 {
     let mut res = HashSet::new();
     // all mutations
@@ -71,10 +97,21 @@ fn levenshtein_ball(lmer: &String) -> Vec<String>
     // otherwise we end up getting the adjacent minimizer too
     for pos in 1..(lmer.len()-1)
     {
+        let mut lmer_mutated = lmer.clone();
+        lmer_mutated.remove(pos);
+        //println!("b4 {} pos {} a8 {}",&lmer,pos, &lmer_mutated);
+
+        assert_eq!(levenshtein(&lmer_mutated,&lmer), 1);
+        res.insert(lmer_mutated.to_string());
+    }
+    // all insertions
+    // (now minimizer has length l+1 too..)
+    for pos in 1..(lmer.len()-1)
+    {
         for c in vec!('A','C','T','G')
         {
             let mut lmer_mutated = lmer.clone();
-            lmer_mutated.remove(pos);
+            lmer_mutated.insert(pos, c);
             //println!("b4 {} pos {} a8 {}",&lmer,pos, &lmer_mutated);
 
             assert_eq!(levenshtein(&lmer_mutated,&lmer), 1);
@@ -82,12 +119,36 @@ fn levenshtein_ball(lmer: &String) -> Vec<String>
         }
     }
     //println!("ball around {} is {:?}",lmer,res);
-    return res.iter().cloned().collect();
+    res.iter().cloned().collect()
 }
 
+fn levenshtein_ball_2(lmer: &String) -> Vec<String>
+{
+    let ball_1 = levenshtein_ball_1(&lmer);
+    let mut res = HashSet::new();
+    for elt_from_ball_1 in ball_1
+    {
+        for elt_from_ball_2 in levenshtein_ball_1(&elt_from_ball_1)
+        {
+            if levenshtein(&elt_from_ball_2,&lmer) == 2
+            { res.insert(elt_from_ball_2); }
+        }
+    }
+    //println!("ball2 around {} is {:?}",lmer,res);
+    res.iter().cloned().collect()
+}
 
+pub fn normalize_minimizer(lmer: &String) -> String
+{
+    let mut res = lmer.clone();
+    if revcomp_aware {
+        let rev = utils::revcomp(&lmer);
+        if rev < res { res = rev; }
+    }
+    res
+}
 
-pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64) -> (HashMap<String,u32>, HashMap<u32,String>, HashMap<String,u32>) {
+pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize) -> (HashMap<String,u32>, HashMap<u32,String>, HashMap<String,u32>) {
 
     let l = params.l;
     let mut lmer_counts : HashMap<String,u32> = HashMap::new(); // for reference, 4^12 = 16M
@@ -131,14 +192,10 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             let mut can_insert = true;
             let mut to_insert :Vec<String> = Vec::new();
         
-            // otherwise consider all the lmers within his 1-levenshtein-ball
-            for lmer_neighbor_unmut in levenshtein_ball(&lmer)
+            // otherwise consider all the lmers within his levenshtein-ball
+            for lmer_neighbor_unmut in levenshtein_ball(&lmer, levenshtein_minimizers)
             {
-                let mut lmer_neighbor = lmer_neighbor_unmut;
-                if revcomp_aware {
-                    let mut_rev = utils::revcomp(&lmer_neighbor);
-                    lmer_neighbor = std::cmp::min(lmer_neighbor, mut_rev);
-                }
+                let lmer_neighbor = normalize_minimizer(&lmer_neighbor_unmut);
 
                 if set_nonoverlap_minimizers.contains(&lmer_neighbor)
                 {

@@ -6,6 +6,7 @@ use std::error::Error;
 use std::io::Write;
 use super::Kmer;
 use std::collections::HashMap;
+use strsim::levenshtein;
 
 use crate::utils::revcomp;
 
@@ -23,9 +24,21 @@ fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer> ) -> (&
     panic!("unknown orientation");
 }   
 
+fn matches(seq1 :&str, seq2 :&str, levenshtein_minimizers: usize) -> bool
+{
+    if levenshtein_minimizers == 0
+    {
+        return seq1 == seq2;
+    }
+    else
+    {
+        return levenshtein(seq1, seq2) <= levenshtein_minimizers+1 as usize; // +1 to take into account that some minimizers in the ball have length +- 1
+    }
+}
+
 // should be fairly easy to find, as both sequences should share exactly k-1 minimizers exactly in
 // common, and we even know which ones
-fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>) -> u32
+fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize) -> u32
 {
     // strategy: find the second minimizer at position 0 of seq2, by construction of the dbg
     /*
@@ -70,8 +83,8 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     let mut shift :i32 = -1;
     if ori1 == "+" 
     {
-        if &seq1[shift_p.0..shift_p.0+l] == minim_str || 
-            &seq1[shift_p.0..shift_p.0+l] == minim_str_rev 
+        if matches(&seq1[shift_p.0..shift_p.0+l], &minim_str, levenshtein_minimizers) || 
+            matches(&seq1[shift_p.0..shift_p.0+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.0 as i32; 
                 //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
@@ -79,8 +92,8 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     }
     else
     {
-        if &seq1[shift_p.1..shift_p.1+l] == minim_str || 
-            &seq1[shift_p.1..shift_p.1+l] == minim_str_rev 
+        if matches(&seq1[shift_p.1..shift_p.1+l], &minim_str, levenshtein_minimizers) || 
+            matches(&seq1[shift_p.1..shift_p.1+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.1 as i32;
             }
@@ -91,7 +104,7 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     (seq1.len() as u32) - (shift as u32)
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>)  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize)  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     
@@ -126,7 +139,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             seq2 = revcomp(&seq2);
             kmer2 = kmer2.reverse();
         }
-        let overlap_length = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift);
+        let overlap_length = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
 
         /*println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
         if (overlap_length as usize) > seq2.len()
