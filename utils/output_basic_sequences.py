@@ -15,8 +15,8 @@ for line in open(sys.argv[1]):
         continue
     spl = line.split()
     id = spl[0]
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
-    seq = spl[-1]
+    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-2]))
+    seq = spl[-2]
     kmer_to_seq[minims] = seq
 
 # read and cache [final.sequences]
@@ -53,8 +53,8 @@ for i in range(len(final_sequences_file)):
     if line.startswith('#'): continue
     spl = line.split()
     utg = spl[0]
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
-    seq = spl[-1]
+    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-2]))
+    seq = spl[-2]
     
     #magic happens here
     

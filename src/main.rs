@@ -5,7 +5,6 @@ use pbr::ProgressBar;
 use bio::io::fasta;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use fasthash::city;
 use petgraph_graphml::GraphMl;
 use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
@@ -42,123 +41,8 @@ pub struct Params
 
 fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
-    minhash(seq, params, lmer_counts, minimizer_to_int)
+    minimizers::minhash(seq, params, lmer_counts, minimizer_to_int)
         //wk_minimizers(seq, percentage_retain_hashes) // unfinished
-}
-
-pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> bool
-{
-    let size_miniverse = params.size_miniverse;
-    let percentage_retain_hashes = params.percentage_retain_hashes;
-
-    let h0 = city::hash32(&lmer) % size_miniverse;
-
-    /* hash_mode == 1 {
-       if start > 0
-       {
-       h1.remove(l, seq.as_bytes()[start-1]);
-       h1.update(seq.as_bytes()[start + l-1]);
-       }
-       }*/
-    
-    // minimizers must have high count
-    //let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-    //if *count < params.average_lmer_count as u32 { return false;}
-
-    h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 ) 
-}
-
-fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
-{
-    let l = params.l;
-    
-    //let hash_mode = 0; // 1: rolling (currently incompat with revcomp), 0: cityhash
-    let mut res = Vec::new();
-    let mut pos :Vec<u32> = Vec::new();
-    if seq.len() < l { return (res, pos.clone(), pos.clone()); }
-
-    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-    for start in 0..(&seq.len()-l+1)
-    {
-        let mut lmer = String::from(&seq[start..start+l]);
-        if lmer.contains("N") { continue; }
-        lmer = minimizers::normalize_minimizer(&lmer);
-        let mut should_insert : Option<String> = None;
-
-        if params.levenshtein_minimizers == 0
-        {
-            if minhash_minimizer_decide(&lmer, params, lmer_counts)
-            {
-                should_insert = Some(lmer.to_string());
-            }
-        }
-
-        // examine l-1, l, l+1 -mers, as a necessity in that scheme
-        // small simplification: only one minimizer per start position
-        if params.levenshtein_minimizers > 0
-        {
-            if minimizer_to_int.contains_key(&lmer) { should_insert = Some(lmer.to_string());}
-            else
-            {
-                let lmer_minus_one = minimizers::normalize_minimizer(&String::from(&seq[start..start+l-1]));
-                if minimizer_to_int.contains_key(&lmer_minus_one) { should_insert = Some(lmer_minus_one.to_string());}
-                else
-                {
-                    if start+l+1 < seq.len()
-                    {
-                        let lmer_plus_one = minimizers::normalize_minimizer(&String::from(&seq[start..start+l+1]));
-                        if minimizer_to_int.contains_key(&lmer_plus_one) { should_insert = Some(lmer_plus_one.to_string());}
-                    }
-                }
-            }
-        }
-
-        if !should_insert.is_none()      
-        {
-            res.push(should_insert.unwrap());
-            pos.push(start as u32);
-            //println!("selected lmer: {}", should_insert.unwrap());
-        }
-    }
-        
-    // convert minimizers to their integer representation
-    let read_transformed : Vec<u32> = res.iter().map(|minim| minimizer_to_int[minim]).collect();
-
-    (res, pos, read_transformed)
-}
-
-// TODO finish implementing it
-#[allow(dead_code)]
-fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
-{
-    // actually it's (w,l)-minimizers, k is already used in the dbg
-    let w = 15;
-    let hash_mode = 0; // 0: cityhash
-    let mut res = Vec::new();
-    if seq.len() < l { return res; }
-    let mut h0 :u32 = 0;
-    let nl =  4f32.powf(l as f32) as u32;
-    // TODO create a set of (minimizers,positions)
-
-    for start in 0..(&seq.len()-w+1)
-    {
-        let mut min : u32 = std::u32::MAX;
-        for pos in start..start+w
-        {
-            let mut lmer = String::from(&seq[start..start+l]);
-            lmer = minimizers::normalize_minimizer(&lmer);
-            h0 = city::hash32(lmer) % nl;
-            min = std::cmp::min(h0,min); // TODO record position as well
-            // TODO add(minimizer,position) to set
-        }
-
-        //&res.push(lmer.to_string());
-        res.push(h0.to_string()); // placeholder
-        h0 = 1; // placeholder
-    }
-
-    // TODO convert the list of (minimizers,positions) to a vector of list minimizers
-    res
 }
 
 fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>, read_minimizers_pos :&Vec<u32>)
@@ -480,5 +364,5 @@ fn main() {
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
     println!("writing sequences..");
-    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, k, l);
+    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &dbg_nodes, k, l);
 }
