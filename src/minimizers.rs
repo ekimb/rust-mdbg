@@ -287,26 +287,9 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             continue; 
         }
 
-        if lmer_frequency_based {
-            let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-            if *count != 0
-            {
-                //println!("found minimizer {} count {}",lmer.to_string(),count);
-                list_minimizers.push(lmer);
-
-            }
-            else
-            {
-                continue;
-            }
-        }
-        else
-        {
-            //println!("found minimizer {} min-id {}",lmer.to_string(), minim_idx);
-            list_minimizers.push(lmer);
-        }
         
-
+        list_minimizers.push(lmer);
+       
     }
    
     let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
@@ -363,6 +346,16 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             minimizer_to_int.insert(lmer.to_string(),  minim_idx);
             int_to_minimizer.insert(minim_idx,         lmer.to_string());
             minim_idx += 1;
+
+            let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
+            if *count != 0
+            {
+                println!("found minimizer {} min-id {} count {}",lmer.to_string(),minim_idx, count);
+            }
+            else
+            {
+                println!("found minimizer {} min-id {}",lmer.to_string(), minim_idx);
+            }
         }
         assert_eq!(minimizer_to_int.len(), int_to_minimizer.len());
     }
