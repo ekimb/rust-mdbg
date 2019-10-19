@@ -1,0 +1,62 @@
+use std::fs::File;
+use std::error::Error;
+use std::io::Write;
+use itertools::Itertools;
+use std::io::{BufWriter, BufRead, BufReader};
+
+pub fn new_file() -> BufWriter<File> 
+{
+    let path = format!("{}","ec.data");
+    let file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}", path, why.description()),
+        Ok(file) => file,
+    };
+    let file = BufWriter::new(file);
+    file
+}
+
+pub fn record(file: &mut BufWriter<File>, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
+{
+    write!(file, "{}\n", seq_str).expect("error writing EC info");
+    write!(file, "{}\n", read_transformed.iter().join(" ")).expect("error writing EC info");
+    write!(file, "{}\n", read_minimizers.iter().join(" ")).expect("error writing EC info");
+    write!(file, "{}\n", read_minimizers_pos.iter().join(" ")).expect("error writing EC info");
+}
+pub fn flush(file: &mut BufWriter<File>)
+{
+    file.flush().ok();
+}
+
+pub struct EcRecord
+{
+    pub seq_str :String,
+    pub read_transformed: Vec<u32>,
+    pub read_minimizers: Vec<String>,
+    pub read_minimizers_pos: Vec<u32>
+}
+
+pub fn load() -> Vec<EcRecord>
+{
+    let file = match File::open("ec.data") {
+        Err(why) => panic!("couldn't load ec file: {}", why.description()),
+        Ok(file) => file,
+    }; 
+    let mut br = BufReader::new(file);
+    let mut res : Vec<EcRecord> = vec![];
+    let to_vec_int = |s: &String| -> Vec<u32> { s.trim().split(' ').map(|s| s.parse().unwrap()).collect::<Vec<u32>>() };
+    let to_vec_str = |s: &String| -> Vec<String> { s.trim().split(' ').map(String::from).collect::<Vec<String>>() };
+
+    loop
+    {
+        let mut line = String::new();
+        let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
+        if let Err(e) = br.read_line(&mut line) { break; }
+        if line.len() == 0                      { break; }
+        let seq_str = line.clone();                           new_line(&mut line, &mut br);
+        let read_transformed: Vec<u32> = to_vec_int(&line);   new_line(&mut line, &mut br);
+        let read_minimizers: Vec<String> = to_vec_str(&line); new_line(&mut line, &mut br);
+        let read_minimizers_pos: Vec<u32> = to_vec_int(&line);
+        res.push( EcRecord { seq_str, read_transformed, read_minimizers, read_minimizers_pos } );
+    }
+    res
+}

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use strsim::levenshtein;
 use fasthash::city;
 
-const lmer_frequency_based : bool = true;
+const lmer_frequency_based : bool = false;
 
 fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
@@ -350,11 +350,11 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
             if *count != 0
             {
-                println!("found minimizer {} min-id {} count {}",lmer.to_string(),minim_idx, count);
+                //println!("found minimizer {} min-id {} count {}",lmer.to_string(),minim_idx, count);
             }
             else
             {
-                println!("found minimizer {} min-id {}",lmer.to_string(), minim_idx);
+                //println!("found minimizer {} min-id {}",lmer.to_string(), minim_idx);
             }
         }
         assert_eq!(minimizer_to_int.len(), int_to_minimizer.len());

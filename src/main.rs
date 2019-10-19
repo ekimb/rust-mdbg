@@ -18,11 +18,14 @@ mod utils;
 mod gfa_output;
 mod seq_output;
 mod minimizers;
+mod ec_reads;
 
 mod kmer_vec;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
+
+const error_correct: bool = true; // fix errors within kmers before assembly
 
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -79,6 +82,57 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
     }
     println!("");
 
+}
+
+fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params)
+{
+    let k = params.k;
+    let l = params.l;
+    let min_kmer_abundance = params.min_kmer_abundance;
+    let levenshtein_minimizers = params.levenshtein_minimizers;
+
+    for i in 0..(read_transformed.len()-k+1)
+    {
+        let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
+        let mut seq_reversed = false;
+        if revcomp_aware { 
+            let (node_norm, reversed) = node.normalize(); 
+            node = node_norm;
+            seq_reversed = reversed;
+        }
+        let entry = dbg_nodes.entry(node.clone()).or_insert(0);
+        *entry += 1;
+
+        // decide if that kmer is finally solid
+        if *entry == min_kmer_abundance as u32
+        {
+            // record sequences associated to solid kmers
+            let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
+            if seq_reversed {
+                seq = utils::revcomp(&seq);
+            }
+            kmer_seqs.insert(node.clone(), seq.clone());
+            let position_of_second_minimizer = match seq_reversed {
+                true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
+                false => read_minimizers_pos[i+1]-read_minimizers_pos[i]
+            };
+            let position_of_second_to_last_minimizer = match seq_reversed {
+                true => read_minimizers_pos[i+1]-read_minimizers_pos[i],
+                false => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2]
+            };
+
+            minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+
+            // some sanity checks
+            if levenshtein_minimizers == 0
+            {
+                for minim in &read_minimizers[i..i+k-1]
+                {
+                    debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                }
+            }
+        }
+    }
 }
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
@@ -205,6 +259,8 @@ fn main() {
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
 
+    let mut ec_file = ec_reads::new_file();
+
     for result in reader.records() {
         let record = result.unwrap();
         let seq = record.seq();
@@ -225,52 +281,36 @@ fn main() {
 
         if read_transformed.len() <= k { continue; }
 
-        for i in 0..(read_transformed.len()-k+1)
+        if error_correct
         {
-            let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
-            let mut seq_reversed = false;
-            if revcomp_aware { 
-                let (node_norm, reversed) = node.normalize(); 
-                node = node_norm;
-                seq_reversed = reversed;
-            }
-            let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-            *entry += 1;
+            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
+        }
+        else
+        {
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+        }
 
-            // record sequences associated to solid kmers
-            if *entry == min_kmer_abundance as u32
-            {
-                let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
-                if seq_reversed {
-                    seq = utils::revcomp(&seq);
-                }
-                kmer_seqs.insert(node.clone(), seq.clone());
-                let position_of_second_minimizer = match seq_reversed {
-                    true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
-                    false => read_minimizers_pos[i+1]-read_minimizers_pos[i]
-                };
-                let position_of_second_to_last_minimizer = match seq_reversed {
-                    true => read_minimizers_pos[i+1]-read_minimizers_pos[i],
-                    false => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2]
-                };
-
-                minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
-
-                // some sanity checks
-                if levenshtein_minimizers == 0
-                {
-                    for minim in &read_minimizers[i..i+k-1]
-                    {
-                        debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
-                    }
-                }
-            }
-        }        
     }
     pb.finish_print("done converting reads to minimizers");
     nb_minimizers_per_read /= nb_reads as f64;
+    if error_correct { ec_reads::flush(&mut ec_file); }
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
+
+    if error_correct
+    {
+        // do error correction of reads 
+
+        
+        for ec_record in ec_reads::load() 
+        {
+            let seq_str             = ec_record.seq_str;
+            let read_transformed    = ec_record.read_transformed;
+            let read_minimizers     = ec_record.read_minimizers;
+            let read_minimizers_pos = ec_record.read_minimizers_pos;
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+        }
+    }
 
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
