@@ -12,7 +12,6 @@ use petgraph::graph::NodeIndex;
 use std::fs;
 use structopt::StructOpt;
 use std::path::PathBuf;
-use itertools::iproduct;
 
 mod utils;
 mod gfa_output;
@@ -25,7 +24,7 @@ mod kmer_vec;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const error_correct: bool = true; // fix errors within kmers before assembly
+const error_correct: bool = false; // fix errors within kmers before assembly
 
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -35,7 +34,7 @@ pub struct Params
 {
     l: usize,
     k: usize,
-    percentage_retain_hashes :f64,
+    density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
     min_kmer_abundance : usize,
@@ -45,12 +44,12 @@ pub struct Params
 fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
     minimizers::minhash(seq, params, lmer_counts, minimizer_to_int)
-        //wk_minimizers(seq, percentage_retain_hashes) // unfinished
+        //wk_minimizers(seq, density) // unfinished
 }
 
 fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>, read_minimizers_pos :&Vec<u32>)
 {
-    println!("seq: {}",seq_str);
+    println!("\nseq: {}",seq_str);
     print!("min: ");
     let mut current_minimizer :String = "".to_string();
     for i in 0..seq_str.len()
@@ -135,17 +134,6 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
     }
 }
 
-// https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
-fn kproduct(seq: String, k: u32) -> Vec<String> {
-    match k {
-        0 => vec![],
-        1 => seq.chars().map(|c| c.to_string()).collect(),
-        2 => iproduct!(seq.chars(), seq.chars()).map(|(a, b)| format!("{}{}", a, b)).collect(),
-        _ => iproduct!(kproduct(seq.clone(), k - 1), seq.chars()).map(|(a, b)| format!("{}{}", a, b)).collect(),
-    }
-}
-
-
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
@@ -168,7 +156,7 @@ struct Opt {
     #[structopt(short, long)]
     l: Option<usize>,
     #[structopt(long)]
-    pch: Option<f64>,
+    density: Option<f64>,
     #[structopt(long)]
     minabund: Option<usize>,
     #[structopt(long)]
@@ -187,7 +175,7 @@ fn main() {
     let mut output_prefix;
     let mut k: usize = 10;
     let mut l: usize = 12;
-    let mut percentage_retain_hashes :f64 = 0.10;
+    let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
 
@@ -195,18 +183,18 @@ fn main() {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
         if opt.k.is_none() { k = 5; }
         if opt.l.is_none() { l = 8; }
-        if opt.pch.is_none() { percentage_retain_hashes = 0.15 };
+        if opt.density.is_none() { density = 1.0 };
     }
     else if opt.test2 {
         filename = PathBuf::from("../SRR9969842_vs_chr4.fasta");
         if opt.k.is_none() { k = 50; }
         if opt.l.is_none() { l = 12; }
-        if opt.pch.is_none() { percentage_retain_hashes = 0.01 };
+        if opt.density.is_none() { density = 0.1 };
     }
 
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
-    if !opt.pch.is_none() { percentage_retain_hashes = opt.pch.unwrap() } else { println!("Warning: using default hash rate ({}%)",percentage_retain_hashes*100.0); }
+    if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
@@ -214,7 +202,7 @@ fn main() {
     if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
 
 
-    output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,percentage_retain_hashes,l));
+    output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
@@ -232,7 +220,7 @@ fn main() {
     let mut params = Params { 
         l,
         k,
-        percentage_retain_hashes,
+        density,
         size_miniverse,
         average_lmer_count: 0.0,
         min_kmer_abundance,
@@ -259,7 +247,7 @@ fn main() {
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
 
-    let mut ec_file = ec_reads::new_file();
+    let mut ec_file = ec_reads::new_file(&output_prefix);
 
     for result in reader.records() {
         let record = result.unwrap();
@@ -294,6 +282,7 @@ fn main() {
     pb.finish_print("done converting reads to minimizers");
     nb_minimizers_per_read /= nb_reads as f64;
     if error_correct { ec_reads::flush(&mut ec_file); }
+    else { ec_reads::delete_file(&output_prefix); } // hacky
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
 
@@ -302,7 +291,7 @@ fn main() {
         // do error correction of reads 
 
         
-        for ec_record in ec_reads::load() 
+        for ec_record in ec_reads::load(&output_prefix) 
         {
             let seq_str             = ec_record.seq_str;
             let read_transformed    = ec_record.read_transformed;

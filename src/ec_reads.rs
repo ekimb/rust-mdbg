@@ -1,18 +1,32 @@
-use std::fs::File;
+// unfinished module
+
+use std::fs::{File,remove_file};
 use std::error::Error;
 use std::io::Write;
 use itertools::Itertools;
 use std::io::{BufWriter, BufRead, BufReader};
+use std::path::PathBuf;
 
-pub fn new_file() -> BufWriter<File> 
+fn make_filename(output_prefix: &PathBuf) -> String
 {
-    let path = format!("{}","ec.data");
+    format!("{}.ec_data",output_prefix.to_str().unwrap())
+}
+
+pub fn new_file(output_prefix: &PathBuf) -> BufWriter<File> 
+{
+    let path = make_filename(output_prefix);
     let file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
     };
     let file = BufWriter::new(file);
     file
+}
+
+pub fn delete_file(output_prefix: &PathBuf)
+{
+    let path = make_filename(output_prefix);
+    remove_file(path).unwrap();
 }
 
 pub fn record(file: &mut BufWriter<File>, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
@@ -35,9 +49,10 @@ pub struct EcRecord
     pub read_minimizers_pos: Vec<u32>
 }
 
-pub fn load() -> Vec<EcRecord>
+pub fn load(output_prefix: &PathBuf) -> Vec<EcRecord>
 {
-    let file = match File::open("ec.data") {
+    let path = make_filename(output_prefix);
+    let file = match File::open(path) {
         Err(why) => panic!("couldn't load ec file: {}", why.description()),
         Ok(file) => file,
     }; 

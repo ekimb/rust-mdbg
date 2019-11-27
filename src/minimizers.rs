@@ -1,7 +1,6 @@
 //mod super::params;
 use super::utils;
 use super::Params;
-use super::kproduct;
 use super::revcomp_aware;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -10,6 +9,7 @@ use bio::io::fasta;
 use std::path::PathBuf;
 use strsim::levenshtein;
 use fasthash::city;
+use itertools::Itertools;
 
 const lmer_frequency_based : bool = false;
 
@@ -151,7 +151,8 @@ pub fn normalize_minimizer(lmer: &String) -> String
 pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> bool
 {
     let size_miniverse = params.size_miniverse;
-    let percentage_retain_hashes = params.percentage_retain_hashes;
+    let density = params.density;
+    let l = params.l;
 
     let h0 = city::hash32(&lmer) % size_miniverse;
 
@@ -170,7 +171,7 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
         if *count < params.average_lmer_count as u32 { return false;}
     }
 
-    h0 < ((size_miniverse as f64*percentage_retain_hashes) as u32 ) 
+    h0 < ((size_miniverse as f64*(density/(l as f64))) as u32 ) 
 }
 
 pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
@@ -266,6 +267,7 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
     res
 }
 
+// https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
 
 pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize) -> (HashMap<String,u32>, HashMap<u32,String>, HashMap<String,u32>) {
 
@@ -277,7 +279,16 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
 
 
     let mut list_minimizers : Vec<String> = Vec::new();
-    for lmer in kproduct("ACTG".to_string(), l as u32) {
+    
+    // the following code replaces what i had before:
+    // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
+    let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
+            .multi_cartesian_product();
+
+//    for lmer in kproduct("ACTG".to_string(), l as u32) {
+    for lmer_vec in multi_prod {
+        let lmer :String = lmer_vec.into_iter().collect();
+        //println!("testing minimizer {}",lmer.to_string());
         if revcomp_aware {
             let lmer_rev = utils::revcomp(&lmer);
             if lmer > lmer_rev {continue;} // skip if not canonical
@@ -286,10 +297,9 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
             continue; 
         }
+        //println!("found minimizer {}",lmer.to_string());
 
-        
         list_minimizers.push(lmer);
-       
     }
    
     let mut minimizer_to_int : HashMap<String,u32> = HashMap::new();
