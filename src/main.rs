@@ -12,7 +12,7 @@ use petgraph::graph::NodeIndex;
 use std::fs;
 use structopt::StructOpt;
 use std::path::PathBuf;
-
+use std::borrow::Cow;
 mod utils;
 mod gfa_output;
 mod seq_output;
@@ -37,6 +37,7 @@ pub struct Params
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
+    average_kmer_count : f64,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
@@ -89,7 +90,7 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
     let l = params.l;
     let min_kmer_abundance = params.min_kmer_abundance;
     let levenshtein_minimizers = params.levenshtein_minimizers;
-
+    //println!("{}",read_transformed.len());
     for i in 0..(read_transformed.len()-k+1)
     {
         let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
@@ -100,6 +101,7 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
             seq_reversed = reversed;
         }
         let entry = dbg_nodes.entry(node.clone()).or_insert(0);
+        //println!("here");
         *entry += 1;
 
         // decide if that kmer is finally solid
@@ -165,6 +167,8 @@ struct Opt {
     test1: bool,
     #[structopt(long)]
     test2: bool,
+    #[structopt(long)]
+    err: bool,
 }
 
 
@@ -175,6 +179,7 @@ fn main() {
     let mut output_prefix;
     let mut k: usize = 10;
     let mut l: usize = 12;
+    let mut errKmer : bool = false;
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
@@ -190,6 +195,9 @@ fn main() {
         if opt.k.is_none() { k = 50; }
         if opt.l.is_none() { l = 12; }
         if opt.density.is_none() { density = 0.1 };
+    }
+    if opt.err {
+        errKmer = true;
     }
 
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
@@ -223,6 +231,7 @@ fn main() {
         density,
         size_miniverse,
         average_lmer_count: 0.0,
+        average_kmer_count: 0.0,
         min_kmer_abundance,
         levenshtein_minimizers,
     };
@@ -234,7 +243,8 @@ fn main() {
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
-
+    let mut kmer_counts   : HashMap<String,u32> = HashMap::new(); // it's a Counter
+    minimizers::kmer_counting(&mut kmer_counts, &filename, file_size, &mut params);
     let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
 
     // fasta parsing
@@ -252,11 +262,16 @@ fn main() {
     for result in reader.records() {
         let record = result.unwrap();
         let seq = record.seq();
+        let mut seq_str = String::from_utf8_lossy(seq);
+        //println!("{}", seq_str);
+        if errKmer {
+            let threshold = 700;
+            let new_seq = minimizers::correct_kmers(&kmer_counts, &mut seq_str, threshold, &params);
+            //println!("{}", new_seq);
+            seq_str = Cow::Owned(new_seq);
 
-        let seq_str = String::from_utf8_lossy(seq);
-
-        //println!("seq: {}", seq_str);
-
+        }
+        //println!("{}", seq_str);
         let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
 
         // stats
@@ -266,7 +281,7 @@ fn main() {
 
         // some debug
         //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
-
+        //println!("{}", read_transformed.len());
         if read_transformed.len() <= k { continue; }
 
         if error_correct
@@ -276,6 +291,7 @@ fn main() {
         else
         {
             read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+
         }
 
     }
@@ -285,10 +301,9 @@ fn main() {
     else { ec_reads::delete_file(&output_prefix); } // hacky
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
-
     if error_correct
     {
-        // do error correction of reads 
+        
 
         
         for ec_record in ec_reads::load(&output_prefix) 
@@ -300,7 +315,6 @@ fn main() {
             read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
         }
     }
-
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     println!("              nodes after: {}", dbg_nodes.len());

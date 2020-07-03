@@ -10,8 +10,84 @@ use std::path::PathBuf;
 use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
+use std::borrow::Cow;
+
 
 const lmer_frequency_based : bool = false;
+
+pub fn kmer_counting(kmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+    let k = params.k;
+    let mut pb = ProgressBar::new(file_size);
+    let reader = fasta::Reader::from_file(&filename).unwrap();
+
+    for record in reader.records() {
+        let record = record.unwrap();
+        let seq = record.seq();
+
+        let seq_str = String::from_utf8_lossy(seq);
+        pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
+
+        if seq_str.len() < k { continue; }
+    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
+        for start in 0..(&seq_str.len()-k+1)
+        {
+            let mut kmer = String::from(&seq_str[start..start+k]);
+            if revcomp_aware {
+                let kmer_rev = utils::revcomp(&kmer);
+                kmer = std::cmp::min(kmer, kmer_rev);
+            }
+            let count = kmer_counts.entry(kmer).or_insert(0);
+            *count += 1;
+        }
+    }
+    params.average_kmer_count = kmer_counts.values().sum::<u32>() as f64 / kmer_counts.len() as f64;
+    println!("average kmer count: {}",params.average_kmer_count);
+
+}
+pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, threshold :u32, params: &Params) -> String{
+    let k = params.k;
+    let mut new_seq = seq_str.to_string();
+    for start in 0..(&seq_str.len()-k+1) {
+        let mut kmer = String::from(&seq_str[start..start+k]);
+        //println!("{}", &seq_str[start..start+k]);
+        let mut count = 0;
+        if kmer_counts.contains_key(&kmer) {
+            count = kmer_counts[&kmer];
+            //println!("K-mer count: {}", &count);
+        }
+        else {
+            //println!("K-mer count: {}", &count);
+        }
+        //println!("{}", count);
+        if count <= threshold {
+            let levBall = levenshtein_ball(&kmer, 1);
+            let mut maxCount = 0;
+            let mut maxNeighbor = String::new();
+            for neighbor in levBall {
+                if kmer_counts.contains_key(&neighbor)  {
+                    let neighborCount = kmer_counts[&neighbor];
+                    if neighborCount > maxCount {
+                        maxCount = neighborCount;
+                        maxNeighbor = neighbor;
+                    }
+                }
+            }
+            //println!("maxcount: {}", maxCount);
+            if maxCount <= threshold {
+                //println!("Threshold not met");
+                continue;
+                
+            }
+            //println!("Switched kmer with neighbor with count {}", maxCount);
+            //println!("Old k-mer: {}, new k-mer: {}", &kmer, maxNeighbor);
+            new_seq = new_seq.replace(&kmer, &maxNeighbor);
+            //println!("{}", &seq_str[start..start+k]);
+
+        }
+    }
+    new_seq
+}
+
 
 fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
@@ -223,7 +299,7 @@ pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, mi
         {
             res.push(should_insert.unwrap());
             pos.push(start as u32);
-            //println!("selected lmer: {}", should_insert.unwrap());
+            //println!("selected lmer");
         }
     }
         
