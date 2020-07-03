@@ -34,10 +34,14 @@ pub fn kmer_counting(kmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, 
             let mut kmer = String::from(&seq_str[start..start+k]);
             if revcomp_aware {
                 let kmer_rev = utils::revcomp(&kmer);
-                kmer = std::cmp::min(kmer, kmer_rev);
+                let countrev = kmer_counts.entry(kmer_rev).or_insert(0);
+                *countrev += 1;
+                //kmer = std::cmp::min(kmer, kmer_rev);
             }
             let count = kmer_counts.entry(kmer).or_insert(0);
+            
             *count += 1;
+            
         }
     }
     params.average_kmer_count = kmer_counts.values().sum::<u32>() as f64 / kmer_counts.len() as f64;
@@ -49,14 +53,15 @@ pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, thre
     let mut new_seq = seq_str.to_string();
     for start in 0..(&seq_str.len()-k+1) {
         let mut kmer = String::from(&seq_str[start..start+k]);
+        let kmer_rev = utils::revcomp(&kmer);
         //println!("{}", &seq_str[start..start+k]);
         let mut count = 0;
         if kmer_counts.contains_key(&kmer) {
             count = kmer_counts[&kmer];
-            //println!("K-mer count: {}", &count);
+            println!("K-mer count: {}", &count);
         }
         else {
-            //println!("K-mer count: {}", &count);
+            println!("K-mer count: {}", &count);
         }
         //println!("{}", count);
         if count <= threshold {
@@ -75,11 +80,25 @@ pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, thre
             //println!("maxcount: {}", maxCount);
             if maxCount <= threshold {
                 //println!("Threshold not met");
-                continue;
+                let levBallRev = levenshtein_ball(&kmer_rev, 1);
+                let mut maxCount = 0;
+                let mut maxNeighbor = String::new();
+                for neighbor in levBallRev {
+                    if kmer_counts.contains_key(&neighbor)  {
+                        let neighborCount = kmer_counts[&neighbor];
+                        if neighborCount > maxCount {
+                            maxCount = neighborCount;
+                            maxNeighbor = utils::revcomp(&neighbor);
+                        }
+                    }
+                }
+                if maxCount <= threshold {
+                    continue;
+                }
                 
             }
             //println!("Switched kmer with neighbor with count {}", maxCount);
-            //println!("Old k-mer: {}, new k-mer: {}", &kmer, maxNeighbor);
+            println!("Old k-mer: {}, new k-mer: {}", &kmer, maxNeighbor);
             new_seq = new_seq.replace(&kmer, &maxNeighbor);
             //println!("{}", &seq_str[start..start+k]);
 

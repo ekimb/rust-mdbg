@@ -265,7 +265,7 @@ fn main() {
         let mut seq_str = String::from_utf8_lossy(seq);
         //println!("{}", seq_str);
         if errKmer {
-            let threshold = 700;
+            let threshold = 1;
             let new_seq = minimizers::correct_kmers(&kmer_counts, &mut seq_str, threshold, &params);
             //println!("{}", new_seq);
             seq_str = Cow::Owned(new_seq);
