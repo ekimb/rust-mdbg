@@ -15,8 +15,8 @@ use std::borrow::Cow;
 
 const lmer_frequency_based : bool = false;
 
-pub fn kmer_counting(kmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
-    let k = params.k;
+pub fn lmerCounting(lmerCounts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+    let l = params.l;
     let mut pb = ProgressBar::new(file_size);
     let reader = fasta::Reader::from_file(&filename).unwrap();
 
@@ -27,58 +27,123 @@ pub fn kmer_counting(kmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, 
         let seq_str = String::from_utf8_lossy(seq);
         pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
 
-        if seq_str.len() < k { continue; }
+        if seq_str.len() < l { continue; }
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-        for start in 0..(&seq_str.len()-k+1)
+        for start in 0..(&seq_str.len()-l+1)
         {
-            let mut kmer = String::from(&seq_str[start..start+k]);
-            if revcomp_aware {
-                let kmer_rev = utils::revcomp(&kmer);
-                let countrev = kmer_counts.entry(kmer_rev).or_insert(0);
-                *countrev += 1;
+            let mut lmer = String::from(&seq_str[start..start+l]);
+            //if revcomp_aware {
+            //    let lmer_rev = utils::revcomp(&lmer);
+            //    let countrev = lmerCounts.entry(lmer_rev).or_insert(0);
+            //    *countrev += 1;
                 //kmer = std::cmp::min(kmer, kmer_rev);
-            }
-            let count = kmer_counts.entry(kmer).or_insert(0);
+           // }
+            let count = lmerCounts.entry(lmer).or_insert(0);
             
             *count += 1;
             
         }
     }
-    params.average_kmer_count = kmer_counts.values().sum::<u32>() as f64 / kmer_counts.len() as f64;
-    println!("average kmer count: {}",params.average_kmer_count);
+    params.average_lmerCount = lmerCounts.values().sum::<u32>() as f64 / lmerCounts.len() as f64;
+    println!("average kmer count: {}",params.average_lmerCount);
 
 }
-pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, threshold :u32, params: &Params) -> String{
-    let k = params.k;
+pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, threshold :u32, params: &Params) -> String{
+    let l = params.l;
     let mut new_seq = seq_str.to_string();
-    for start in 0..(&seq_str.len()-k+1) {
-        let mut kmer = String::from(&seq_str[start..start+k]);
-        let kmer_rev = utils::revcomp(&kmer);
+    let mut errSwitch : bool = false;
+    let mut errStartPos = 0;
+    let mut errSuffPos = 0;
+    let mut errEndPos = 0;
+    for start in 0..(&seq_str.len()-l+1) {
+        let mut lmer = String::from(&seq_str[start..start+l]);
+        let lmer_rev = utils::revcomp(&lmer);
         //println!("{}", &seq_str[start..start+k]);
         let mut count = 0;
-        if kmer_counts.contains_key(&kmer) {
-            count = kmer_counts[&kmer];
+        if lmerCounts.contains_key(&lmer) {
+            count = lmerCounts[&lmer];
             println!("K-mer count: {}", &count);
         }
         else {
             println!("K-mer count: {}", &count);
         }
         //println!("{}", count);
-        if count <= threshold {
-            let levBall = levenshtein_ball(&kmer, 1);
-            let mut maxCount = 0;
-            let mut maxNeighbor = String::new();
-            for neighbor in levBall {
-                if kmer_counts.contains_key(&neighbor)  {
-                    let neighborCount = kmer_counts[&neighbor];
-                    if neighborCount > maxCount {
-                        maxCount = neighborCount;
-                        maxNeighbor = neighbor;
-                    }
-                }
+        if (count <= threshold && errSwitch) && (errSuffPos < errStartPos+l){
+            println!("Error continues");
+            errSuffPos += 1;
+            
+        }
+        else if count <= threshold {
+            println!("Error starting");
+            errStartPos = start;
+            errSuffPos = start;
+            errEndPos = start+l;
+            errSwitch = true;
+        }
+        else if (count > threshold && errSwitch) || (errSuffPos == errStartPos+l){
+            println!("Error over");
+            let mut errSuffix = String::new();
+            if errSuffPos != errEndPos {
+                errSuffix = String::from(&seq_str[errSuffPos..errEndPos]);
             }
+            let mut old = String::from(&seq_str[errStartPos..errEndPos]);
+            println!("{}", old);
+            if old.len() == l {
+                let levBall = levenshtein_ball(&old, 1);
+                let mut maxCount = 0;
+                let mut maxNeighbor = String::new();
+                let mut neighbor = String::new();
+                for neighbor in levBall {
+                    println!("{}", old);
+                    println!("{}", neighbor);
+                    //assert_eq!(neighbor.len(), l);
+                    if lmerCounts.contains_key(&neighbor)  {
+                        let neighborCount = lmerCounts[&neighbor];
+                        if neighborCount > maxCount {
+                            maxCount = neighborCount;
+                            maxNeighbor = neighbor;
+                        }
+                    }
+
+                }
+                if maxCount <= threshold {
+                    continue;
+                }
+                println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
+                new_seq = new_seq.replace(&old, &maxNeighbor);
+                errSwitch = false;
+        
+            }
+            else {
+                //let suffixLen = errSuffix.len();
+                let levSuffBall = levenshtein_ball(&errSuffix, 1);
+                let mut maxCount = 0;
+                let mut maxNeighbor = String::new();
+                let mut neighbor = String::new();
+                for suff in levSuffBall {
+                    neighbor = String::from(&seq_str[errStartPos..errSuffPos]) + &suff;
+                    println!("{}", errSuffix);
+                    println!("{}", neighbor);
+                    //assert_eq!(neighbor.len(), l);
+                    if lmerCounts.contains_key(&neighbor)  {
+                        let neighborCount = lmerCounts[&neighbor];
+                        if neighborCount > maxCount {
+                            maxCount = neighborCount;
+                            maxNeighbor = neighbor;
+                        }
+                    }
+
+                }
+                if maxCount <= threshold {
+                    continue;
+                }
+                println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
+                new_seq = new_seq.replace(&old, &maxNeighbor);
+                errSwitch = false;
+            }
+        
             //println!("maxcount: {}", maxCount);
-            if maxCount <= threshold {
+            //if maxCount <= threshold {
                 //println!("Threshold not met");
                 //let levBallRev = levenshtein_ball(&kmer_rev, 1);
                 //let mut maxCount = 0;
@@ -93,13 +158,13 @@ pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, thre
                     //}
                // }
                 //if maxCount <= threshold {
-                continue;
+               // continue;
                // }
                 
-            }
+           // }
             //println!("Switched kmer with neighbor with count {}", maxCount);
-            println!("Old k-mer: {}, new k-mer: {}", &kmer, maxNeighbor);
-            new_seq = new_seq.replace(&kmer, &maxNeighbor);
+            //let mut old = String::from(&seq_str[errStartPos..errEndPos]);
+            
             //println!("{}", &seq_str[start..start+k]);
 
         }

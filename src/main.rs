@@ -37,7 +37,7 @@ pub struct Params
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
-    average_kmer_count : f64,
+    average_lmerCount : f64,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
@@ -231,7 +231,7 @@ fn main() {
         density,
         size_miniverse,
         average_lmer_count: 0.0,
-        average_kmer_count: 0.0,
+        average_lmerCount: 0.0,
         min_kmer_abundance,
         levenshtein_minimizers,
     };
@@ -243,8 +243,8 @@ fn main() {
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
-    let mut kmer_counts   : HashMap<String,u32> = HashMap::new(); // it's a Counter
-    minimizers::kmer_counting(&mut kmer_counts, &filename, file_size, &mut params);
+    let mut lmerCounts   : HashMap<String,u32> = HashMap::new(); // it's a Counter
+    minimizers::lmerCounting(&mut lmerCounts, &filename, file_size, &mut params);
     let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
 
     // fasta parsing
@@ -266,7 +266,7 @@ fn main() {
         //println!("{}", seq_str);
         if errKmer {
             let threshold = 1;
-            let new_seq = minimizers::correct_kmers(&kmer_counts, &mut seq_str, threshold, &params);
+            let new_seq = minimizers::correct_kmers(&lmerCounts, &mut seq_str, threshold, &params);
             //println!("{}", new_seq);
             seq_str = Cow::Owned(new_seq);
 
