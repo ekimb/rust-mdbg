@@ -80,21 +80,21 @@ pub fn correct_kmers<'a>(kmer_counts: &HashMap<String,u32>, seq_str : &str, thre
             //println!("maxcount: {}", maxCount);
             if maxCount <= threshold {
                 //println!("Threshold not met");
-                let levBallRev = levenshtein_ball(&kmer_rev, 1);
-                let mut maxCount = 0;
-                let mut maxNeighbor = String::new();
-                for neighbor in levBallRev {
-                    if kmer_counts.contains_key(&neighbor)  {
-                        let neighborCount = kmer_counts[&neighbor];
-                        if neighborCount > maxCount {
-                            maxCount = neighborCount;
-                            maxNeighbor = utils::revcomp(&neighbor);
-                        }
-                    }
-                }
-                if maxCount <= threshold {
-                    continue;
-                }
+                //let levBallRev = levenshtein_ball(&kmer_rev, 1);
+                //let mut maxCount = 0;
+                //let mut maxNeighbor = String::new();
+                //for neighbor in levBallRev {
+                    //if kmer_counts.contains_key(&neighbor)  {
+                       // let neighborCount = kmer_counts[&neighbor];
+                        //if neighborCount > maxCount {
+                           // maxCount = neighborCount;
+                           // maxNeighbor = utils::revcomp(&neighbor);
+                       // }
+                    //}
+               // }
+                //if maxCount <= threshold {
+                continue;
+               // }
                 
             }
             //println!("Switched kmer with neighbor with count {}", maxCount);
