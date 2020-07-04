@@ -13,7 +13,7 @@ use itertools::Itertools;
 use std::borrow::Cow;
 
 
-const lmer_frequency_based : bool = false;
+const lmer_frequency_based : bool = true;
 
 pub fn lmerCounting(lmerCounts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
@@ -57,51 +57,55 @@ pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, thres
     let mut errEndPos = 0;
     for start in 0..(&seq_str.len()-l+1) {
         let mut lmer = String::from(&seq_str[start..start+l]);
-        let lmer_rev = utils::revcomp(&lmer);
+        if revcomp_aware {
+            let lmer_rev = utils::revcomp(&lmer);
+            lmer = std::cmp::min(lmer, lmer_rev);
+        }
         //println!("{}", &seq_str[start..start+k]);
         let mut count = 0;
         if lmerCounts.contains_key(&lmer) {
             count = lmerCounts[&lmer];
-            println!("K-mer count: {}", &count);
+            //println!("K-mer count: {}", &count);
         }
         else {
-            println!("K-mer count: {}", &count);
+            //println!("K-mer count: {}", &count);
         }
         //println!("{}", count);
         if (count <= threshold && errSwitch) && (errSuffPos < errStartPos+l){
-            println!("Error continues");
+            //println!("Error continues");
             errSuffPos += 1;
             
         }
         else if count <= threshold {
-            println!("Error starting");
+            //println!("Error starting");
             errStartPos = start;
             errSuffPos = start;
             errEndPos = start+l;
             errSwitch = true;
         }
         else if (count > threshold && errSwitch) || (errSuffPos == errStartPos+l){
-            println!("Error over");
+            //println!("Error over");
             let mut errSuffix = String::new();
             if errSuffPos != errEndPos {
                 errSuffix = String::from(&seq_str[errSuffPos..errEndPos]);
             }
             let mut old = String::from(&seq_str[errStartPos..errEndPos]);
-            println!("{}", old);
+            //println!("{}", old);
             if old.len() == l {
                 let levBall = levenshtein_ball(&old, 1);
                 let mut maxCount = 0;
                 let mut maxNeighbor = String::new();
                 let mut neighbor = String::new();
                 for neighbor in levBall {
-                    println!("{}", old);
-                    println!("{}", neighbor);
+                    //println!("{}", old);
+                    //println!("{}", neighbor);
                     //assert_eq!(neighbor.len(), l);
                     if lmerCounts.contains_key(&neighbor)  {
                         let neighborCount = lmerCounts[&neighbor];
-                        if neighborCount > maxCount {
-                            maxCount = neighborCount;
-                            maxNeighbor = neighbor;
+                        if neighborCount > count {
+                            new_seq = new_seq.replace(&old, &neighbor);
+                            errSwitch = false;
+                            continue;
                         }
                     }
 
@@ -109,9 +113,7 @@ pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, thres
                 if maxCount <= threshold {
                     continue;
                 }
-                println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
-                new_seq = new_seq.replace(&old, &maxNeighbor);
-                errSwitch = false;
+                //println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
         
             }
             else {
@@ -122,14 +124,15 @@ pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, thres
                 let mut neighbor = String::new();
                 for suff in levSuffBall {
                     neighbor = String::from(&seq_str[errStartPos..errSuffPos]) + &suff;
-                    println!("{}", errSuffix);
-                    println!("{}", neighbor);
+                    //println!("{}", errSuffix);
+                    //println!("{}", neighbor);
                     //assert_eq!(neighbor.len(), l);
                     if lmerCounts.contains_key(&neighbor)  {
                         let neighborCount = lmerCounts[&neighbor];
-                        if neighborCount > maxCount {
-                            maxCount = neighborCount;
-                            maxNeighbor = neighbor;
+                        if neighborCount > count {
+                            new_seq = new_seq.replace(&old, &neighbor);
+                            errSwitch = false;
+                            continue;
                         }
                     }
 
@@ -137,9 +140,8 @@ pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, thres
                 if maxCount <= threshold {
                     continue;
                 }
-                println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
-                new_seq = new_seq.replace(&old, &maxNeighbor);
-                errSwitch = false;
+                //println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
+                
             }
         
             //println!("maxcount: {}", maxCount);
@@ -171,9 +173,23 @@ pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, thres
     }
     new_seq
 }
+pub fn print_hist(lmer_counts: &HashMap<String,u32>) {
+    let mut hist = vec![0; 256];
+    for (_lmer, count) in lmer_counts {
+        let idx = if *count > 255 {
+            255 as usize
+        } else {
+            *count as usize
+        };
+        hist[idx] += 1;
+    }
+    for i in 0..256 {
+        println!("{}\t{}", i, hist[i]);
+    }
+}
 
 
-fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+pub fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
     let mut pb = ProgressBar::new(file_size);
     let reader = fasta::Reader::from_file(&filename).unwrap();

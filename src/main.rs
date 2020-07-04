@@ -34,6 +34,7 @@ pub struct Params
 {
     l: usize,
     k: usize,
+    t: u32,
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
@@ -157,6 +158,8 @@ struct Opt {
     k: Option<usize>,
     #[structopt(short, long)]
     l: Option<usize>,
+    #[structopt(short, long)]
+    t: Option<u32>,
     #[structopt(long)]
     density: Option<f64>,
     #[structopt(long)]
@@ -178,6 +181,7 @@ fn main() {
     let mut filename = PathBuf::new();
     let mut output_prefix;
     let mut k: usize = 10;
+    let mut t: u32 = 1;
     let mut l: usize = 12;
     let mut errKmer : bool = false;
     let mut density :f64 = 0.10;
@@ -198,6 +202,8 @@ fn main() {
     }
     if opt.err {
         errKmer = true;
+        if !opt.t.is_none() { t = opt.t.unwrap() } else { println!("Warning: using default t value ({})",t); } 
+
     }
 
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
@@ -228,6 +234,7 @@ fn main() {
     let mut params = Params { 
         l,
         k,
+        t,
         density,
         size_miniverse,
         average_lmer_count: 0.0,
@@ -244,7 +251,8 @@ fn main() {
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
     let mut lmerCounts   : HashMap<String,u32> = HashMap::new(); // it's a Counter
-    minimizers::lmerCounting(&mut lmerCounts, &filename, file_size, &mut params);
+    minimizers::lmer_counting(&mut lmerCounts, &filename, file_size, &mut params);
+    minimizers::print_hist(&lmerCounts);
     let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
 
     // fasta parsing
@@ -265,8 +273,7 @@ fn main() {
         let mut seq_str = String::from_utf8_lossy(seq);
         //println!("{}", seq_str);
         if errKmer {
-            let threshold = 1;
-            let new_seq = minimizers::correct_kmers(&lmerCounts, &mut seq_str, threshold, &params);
+            let new_seq = minimizers::correct_kmers(&lmerCounts, &mut seq_str, t, &params);
             //println!("{}", new_seq);
             seq_str = Cow::Owned(new_seq);
 
