@@ -3,11 +3,18 @@
 
 use pbr::ProgressBar;
 use bio::io::fasta;
+use std::io;
+use bio::io::fasta::{Writer, Record};
+use std::path::Path;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use petgraph_graphml::GraphMl;
 use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
+use std::error::Error;
+use std::io::Write;
+use itertools::Itertools;
+use std::io::{BufWriter, BufRead, BufReader};
 //use adler32::RollingAdler32;
 use std::fs;
 use structopt::StructOpt;
@@ -38,12 +45,11 @@ pub struct Params
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
-    average_lmerCount : f64,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
 
-fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
+fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &mut HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
     minimizers::minhash(seq, params, lmer_counts, minimizer_to_int)
         //wk_minimizers(seq, density) // unfinished
@@ -238,7 +244,6 @@ fn main() {
         density,
         size_miniverse,
         average_lmer_count: 0.0,
-        average_lmerCount: 0.0,
         min_kmer_abundance,
         levenshtein_minimizers,
     };
@@ -250,36 +255,65 @@ fn main() {
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
     let mut pb = ProgressBar::new(file_size);
-    let mut lmerCounts   : HashMap<String,u32> = HashMap::new(); // it's a Counter
-    minimizers::lmer_counting(&mut lmerCounts, &filename, file_size, &mut params);
-    minimizers::print_hist(&lmerCounts);
-    let (minimizer_to_int, int_to_minimizer, lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
+    
 
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
-    let reader = fasta::Reader::from_file(&filename).unwrap();
 
+    let mut readerErr = fasta::Reader::from_file(&filename).unwrap();
+    let mut lmer_counts   : HashMap<String,u32> = HashMap::new();
+    minimizers::lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
+    minimizers::print_hist(&lmer_counts);
+    if errKmer {
+        let path = Path::new("test.fa");
+        let file = fs::File::create(path).unwrap();
+        let handle = io::BufWriter::new(file);
+        let mut writer = Writer::new(handle);
+        for result in readerErr.records() {
+            let record = result.unwrap();
+            let seq = record.seq();
+            let mut seq_str = String::from_utf8_lossy(seq);
+            //println!("{}", seq_str);
+            let new_seq = minimizers::correct_kmers(&mut lmer_counts, &mut seq_str, &mut params);
+            //seq_str = Cow::Owned(new_seq);
+            //println!("{}", &new_seq);
+            let record = Record::with_attrs("id", Some(""), new_seq.as_bytes());
+            let write_result = writer.write_record(&record);
+            assert!(write_result.is_ok());
+        }  
+    }
     // create a hash table containing (kmers, count)
     // then will keep only those with count > 1
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
 
-    let mut ec_file = ec_reads::new_file(&output_prefix);
+    //let mut ec_file = ec_reads::new_file(&output_prefix);
+    let mut reader;
+    let mut filename2;
+   if errKmer {
 
+        filename2 = PathBuf::from("test.fa");
+        
+    }
+    else {
+        filename2 = filename;
+
+    }
+    println!("{:?}", filename2);
+    let mut lmer_countsNew : HashMap<String,u32> = HashMap::new();
+    reader = fasta::Reader::from_file(&filename2).unwrap();
+    minimizers::lmer_counting(&mut lmer_countsNew, &filename2, file_size, &mut params);
+    minimizers::print_hist(&lmer_countsNew);
+    let (minimizer_to_int, int_to_minimizer) = minimizers::minimizers_preparation(&mut lmer_countsNew, &mut params, &filename2, file_size, levenshtein_minimizers);
     for result in reader.records() {
         let record = result.unwrap();
         let seq = record.seq();
         let mut seq_str = String::from_utf8_lossy(seq);
+        //assert_eq!(reader, readerErr);
+        
         //println!("{}", seq_str);
-        if errKmer {
-            let new_seq = minimizers::correct_kmers(&lmerCounts, &mut seq_str, t, &params);
-            //println!("{}", new_seq);
-            seq_str = Cow::Owned(new_seq);
-
-        }
-        //println!("{}", seq_str);
-        let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
+        let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &mut lmer_countsNew, &minimizer_to_int);
 
         // stats
         nb_minimizers_per_read += read_minimizers.len() as f64;
@@ -291,37 +325,24 @@ fn main() {
         //println!("{}", read_transformed.len());
         if read_transformed.len() <= k { continue; }
 
-        if error_correct
-        {
-            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
-        }
-        else
-        {
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+        //if error_correct
+        //{
+         //   ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
+        //}
+        //else
+        //{
+        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
 
-        }
+        //}
 
     }
     pb.finish_print("done converting reads to minimizers");
     nb_minimizers_per_read /= nb_reads as f64;
-    if error_correct { ec_reads::flush(&mut ec_file); }
-    else { ec_reads::delete_file(&output_prefix); } // hacky
+    //if error_correct { ec_reads::flush(&mut ec_file); }
+    //else { 
+    //ec_reads::delete_file(&output_prefix); //} // hacky
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
-    if error_correct
-    {
-        
-
-        
-        for ec_record in ec_reads::load(&output_prefix) 
-        {
-            let seq_str             = ec_record.seq_str;
-            let read_transformed    = ec_record.read_transformed;
-            let read_minimizers     = ec_record.read_minimizers;
-            let read_minimizers_pos = ec_record.read_minimizers_pos;
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
-        }
-    }
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     println!("              nodes after: {}", dbg_nodes.len());

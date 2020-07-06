@@ -14,164 +14,262 @@ use std::borrow::Cow;
 
 
 const lmer_frequency_based : bool = true;
-
-pub fn lmerCounting(lmerCounts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+const simple_correct : bool = false;
+pub fn correct_kmers(lmer_counts: &mut HashMap<String,u32>, seq_str : &str, params: &Params) -> String{
     let l = params.l;
-    let mut pb = ProgressBar::new(file_size);
-    let reader = fasta::Reader::from_file(&filename).unwrap();
-
-    for record in reader.records() {
-        let record = record.unwrap();
-        let seq = record.seq();
-
-        let seq_str = String::from_utf8_lossy(seq);
-        pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
-
-        if seq_str.len() < l { continue; }
-    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-        for start in 0..(&seq_str.len()-l+1)
-        {
-            let mut lmer = String::from(&seq_str[start..start+l]);
-            //if revcomp_aware {
-            //    let lmer_rev = utils::revcomp(&lmer);
-            //    let countrev = lmerCounts.entry(lmer_rev).or_insert(0);
-            //    *countrev += 1;
-                //kmer = std::cmp::min(kmer, kmer_rev);
-           // }
-            let count = lmerCounts.entry(lmer).or_insert(0);
-            
-            *count += 1;
-            
-        }
-    }
-    params.average_lmerCount = lmerCounts.values().sum::<u32>() as f64 / lmerCounts.len() as f64;
-    println!("average kmer count: {}",params.average_lmerCount);
-
-}
-pub fn correct_kmers<'a>(lmerCounts: &HashMap<String,u32>, seq_str : &str, threshold :u32, params: &Params) -> String{
-    let l = params.l;
+    let threshold = params.t;
     let mut new_seq = seq_str.to_string();
     let mut errSwitch : bool = false;
     let mut errStartPos = 0;
     let mut errSuffPos = 0;
     let mut errEndPos = 0;
-    for start in 0..(&seq_str.len()-l+1) {
-        let mut lmer = String::from(&seq_str[start..start+l]);
-        if revcomp_aware {
-            let lmer_rev = utils::revcomp(&lmer);
-            lmer = std::cmp::min(lmer, lmer_rev);
-        }
-        //println!("{}", &seq_str[start..start+k]);
-        let mut count = 0;
-        if lmerCounts.contains_key(&lmer) {
-            count = lmerCounts[&lmer];
-            //println!("K-mer count: {}", &count);
-        }
-        else {
-            //println!("K-mer count: {}", &count);
-        }
-        //println!("{}", count);
-        if (count <= threshold && errSwitch) && (errSuffPos < errStartPos+l){
-            //println!("Error continues");
-            errSuffPos += 1;
-            
-        }
-        else if count <= threshold {
-            //println!("Error starting");
-            errStartPos = start;
-            errSuffPos = start;
-            errEndPos = start+l;
-            errSwitch = true;
-        }
-        else if (count > threshold && errSwitch) || (errSuffPos == errStartPos+l){
-            //println!("Error over");
-            let mut errSuffix = String::new();
-            if errSuffPos != errEndPos {
-                errSuffix = String::from(&seq_str[errSuffPos..errEndPos]);
+    if simple_correct {
+        
+        for start in 0..(&new_seq.len()-l+1) {
+            let mut lmer = String::from(&new_seq[start..start+l]);
+                if revcomp_aware {
+                    let lmer_rev = utils::revcomp(&lmer);
+                    lmer = std::cmp::min(lmer, lmer_rev);
+                }
+            //println!("{}", &seq_str[start..start+k]);
+            let mut count = 0;
+            //println!("{}", lmer);
+            if lmer_counts.contains_key(&lmer) {
+                count = lmer_counts[&lmer];
+                //println!("K-mer count: {}", &count);
             }
-            let mut old = String::from(&seq_str[errStartPos..errEndPos]);
-            //println!("{}", old);
-            if old.len() == l {
-                let levBall = levenshtein_ball(&old, 1);
-                let mut maxCount = 0;
+            if count <= threshold {
+                let levBall = levenshtein_ball(&lmer, 1);
                 let mut maxNeighbor = String::new();
                 let mut neighbor = String::new();
+                let mut neighborMin = String::new();
+                let mut maxCount = 0;
+
                 for neighbor in levBall {
+                    if revcomp_aware {
+                        let neighborRev = utils::revcomp(&neighbor);
+                        neighborMin = std::cmp::min(neighbor, neighborRev);
+                    }
                     //println!("{}", old);
                     //println!("{}", neighbor);
                     //assert_eq!(neighbor.len(), l);
-                    if lmerCounts.contains_key(&neighbor)  {
-                        let neighborCount = lmerCounts[&neighbor];
-                        if neighborCount > count {
-                            new_seq = new_seq.replace(&old, &neighbor);
+                    //println!("here");
+                    if lmer_counts.contains_key(&neighborMin)  {
+                        let mut neighborCount = lmer_counts[&neighborMin];
+                        if neighborMin.len() > l {
+                            neighborCount = lmer_counts[&neighborMin[0..l]];
+                        }
+                        if neighborCount > params.t {
+                            maxCount = neighborCount;
+                            maxNeighbor = neighborMin;
                             errSwitch = false;
-                            continue;
+                            //errStartPos = 0;
+                            //errSuffPos = 0;
+                            //errEndPos = 0;
+                            break;
                         }
                     }
 
                 }
+
                 if maxCount <= threshold {
                     continue;
                 }
-                //println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
-        
+                else {
+                    new_seq = new_seq.replace(&lmer, &maxNeighbor);
+                    
+
+                }
+            }
+        }
+        new_seq
+    }
+    else {
+        let l = params.l;
+        let threshold = params.t;
+        let mut new_seq = seq_str.to_string();
+        let mut errSwitch : bool = false;
+        let mut errStartPos = 0;
+        let mut errSuffPos = 0;
+        let mut errEndPos = 0;
+        for start in 0..(&new_seq.len()-l+1) {
+            let mut lmer = String::from(&new_seq[start..start+l]);
+                if revcomp_aware {
+                    let lmer_rev = utils::revcomp(&lmer);
+                    lmer = std::cmp::min(lmer, lmer_rev);
+                }
+            //println!("{}", &seq_str[start..start+k]);
+            let mut count = 0;
+            //println!("{}", lmer);
+            if lmer_counts.contains_key(&lmer) {
+                count = lmer_counts[&lmer];
+                //println!("K-mer count: {}", &count);
             }
             else {
-                //let suffixLen = errSuffix.len();
-                let levSuffBall = levenshtein_ball(&errSuffix, 1);
-                let mut maxCount = 0;
-                let mut maxNeighbor = String::new();
-                let mut neighbor = String::new();
-                for suff in levSuffBall {
-                    neighbor = String::from(&seq_str[errStartPos..errSuffPos]) + &suff;
-                    //println!("{}", errSuffix);
-                    //println!("{}", neighbor);
-                    //assert_eq!(neighbor.len(), l);
-                    if lmerCounts.contains_key(&neighbor)  {
-                        let neighborCount = lmerCounts[&neighbor];
-                        if neighborCount > count {
-                            new_seq = new_seq.replace(&old, &neighbor);
-                            errSwitch = false;
-                            continue;
-                        }
-                    }
-
-                }
-                if maxCount <= threshold {
-                    continue;
-                }
-                //println!("Old l-mer: {}, new l-mer: {}", &old, maxNeighbor);
+                //println!("K-mer count: {}", &count);
+            }
+            //println!("{}", count);
+            if (count <= threshold && errSwitch) && (errSuffPos < errStartPos+l){
+                //println!("Error continues");
+                errSuffPos += 1;
                 
             }
-        
-            //println!("maxcount: {}", maxCount);
-            //if maxCount <= threshold {
-                //println!("Threshold not met");
-                //let levBallRev = levenshtein_ball(&kmer_rev, 1);
-                //let mut maxCount = 0;
-                //let mut maxNeighbor = String::new();
-                //for neighbor in levBallRev {
-                    //if kmer_counts.contains_key(&neighbor)  {
-                       // let neighborCount = kmer_counts[&neighbor];
-                        //if neighborCount > maxCount {
-                           // maxCount = neighborCount;
-                           // maxNeighbor = utils::revcomp(&neighbor);
-                       // }
-                    //}
-               // }
-                //if maxCount <= threshold {
-               // continue;
-               // }
-                
-           // }
-            //println!("Switched kmer with neighbor with count {}", maxCount);
-            //let mut old = String::from(&seq_str[errStartPos..errEndPos]);
-            
+            else if (count <= threshold) && (!errSwitch) {
+                //println!("Error starting");
+                errStartPos = start;
+                errSuffPos = start;
+                errEndPos = start+l;
+                errSwitch = true;
+            }
+            else if (count > threshold && errSwitch) {
+                //println!("Error over");
+                errSuffPos += 1;
+                errSwitch = false;
+                let mut old = String::from(&new_seq[start..start+l]);
+                if revcomp_aware {
+                    let oldRev = utils::revcomp(&old);
+                    old = std::cmp::min(old, oldRev);
+                }
             //println!("{}", &seq_str[start..start+k]);
+                let mut count = 0;
+                //println!("{}", old);
+                if lmer_counts.contains_key(&old) {
+                    count = lmer_counts[&lmer];
+                    //println!("K-mer count: {}", &count);
+                }
+                if errSuffPos >= errEndPos {
+                    let levBall = levenshtein_ball(&old, 1);
+                    let mut maxCount = 0;
+                    let mut maxNeighbor = String::new();
+                    let mut neighbor = String::new();
+                    let mut neighborMin = String::new();
+                    let mut maxCount = 0;
+                    let mut maxNeighbor = String::new();
 
+                    for levNeighbor in levBall {
+                        if revcomp_aware {
+                            let neighborRev = utils::revcomp(&levNeighbor);
+                            neighborMin = std::cmp::min(levNeighbor, neighborRev);
+                        }
+                        //println!("{}", old);
+                        //println!("{}", neighbor);
+                        //assert_eq!(neighbor.len(), l);
+                        //println!("here");
+                        if lmer_counts.contains_key(&neighborMin)  {
+                            let mut neighborCount = lmer_counts[&neighborMin];
+                            if neighborMin.len() > l {
+                                neighborCount = lmer_counts[&neighborMin[0..l]];
+                            }
+                            if neighborCount > params.t {
+                                neighborCount = maxCount;
+                                maxNeighbor = neighborMin;
+                                errSwitch = false;
+                                //errStartPos = 0;
+                                //errSuffPos = 0;
+                                //errEndPos = 0;
+                                break;
+                            }
+                        }
+
+                    }
+
+                    if maxCount <= threshold {
+                        continue;
+                    }
+                    else {
+                        new_seq = new_seq.replace(&old, &maxNeighbor);
+                        let count = lmer_counts.entry(maxNeighbor).or_insert(0);
+                        *count += 1;
+
+                    }
+                    //println!("Old l-mer: {}, new l-mer: {}", &old, &neighbor);
+                    //errStartPos = 0;
+                    //errSuffPos = 0;
+                    //errEndPos = 0;
+                    errSwitch = false;
+            
+                }
+                else if errSuffPos != errEndPos {
+                    let mut errSuffix = String::new();
+                    errSuffix = String::from(&new_seq[errSuffPos..errEndPos]);
+                    //println!("Suffix: {}", errSuffix);
+                    //let suffixLen = errSuffix.len();
+                    let levSuffBall = levenshtein_ball(&errSuffix, 1);
+                    let mut maxCount = 0;
+                    let mut maxNeighbor = String::new();
+                    let mut neighborSuff = String::new();
+                    for suff in levSuffBall {
+                        //println!("LevSuff: {}", &suff);
+                        //assert_eq!(neighbor.len(), l);
+                        neighborSuff = String::from(&new_seq[errStartPos..errSuffPos]) + &suff;
+                        if revcomp_aware {
+                            let neighborRev = utils::revcomp(&neighborSuff);
+                            neighborSuff = std::cmp::min(neighborSuff, neighborRev);
+                        }
+                        if lmer_counts.contains_key(&neighborSuff)  {
+                            let neighborCount = lmer_counts[&neighborSuff];
+                            //println!("Old count: {}", &count);
+                            if neighborCount > params.t {
+                                maxCount = neighborCount;
+                                maxNeighbor = neighborSuff;
+                                //new_seq = new_seq.replace(&old, &neighborSuff);
+                                //println!("Old l-mer: {}, new l-mer: {}", &old, &neighborSuff);
+                                errSwitch = false;
+                                //errStartPos = 0;
+                                //errSuffPos = 0;
+                                //errEndPos = 0;
+                                break;
+                            }
+                        }
+
+                    }
+                    if maxCount <= threshold {
+                        continue;
+                    }
+                    else {
+                        new_seq = new_seq.replace(&old, &maxNeighbor);
+                        let count = lmer_counts.entry(maxNeighbor).or_insert(0);
+                        *count += 1;
+
+                    }
+                    errSwitch = false;
+                    //errStartPos = 0;
+                    //errSuffPos = 0;
+                    //errEndPos = 0;
+                    errSuffix = String::new();
+                    
+                }
+            
+                //println!("maxcount: {}", maxCount);
+                //if maxCount <= threshold {
+                    //println!("Threshold not met");
+                    //let levBallRev = levenshtein_ball(&kmer_rev, 1);
+                    //let mut maxCount = 0;
+                    //let mut maxNeighbor = String::new();
+                    //for neighbor in levBallRev {
+                        //if kmer_counts.contains_key(&neighbor)  {
+                        // let neighborCount = kmer_counts[&neighbor];
+                            //if neighborCount > maxCount {
+                            // maxCount = neighborCount;
+                            // maxNeighbor = utils::revcomp(&neighbor);
+                        // }
+                        //}
+                // }
+                    //if maxCount <= threshold {
+                // continue;
+                // }
+                    
+            // }
+                //println!("Switched kmer with neighbor with count {}", maxCount);
+                //let mut old = String::from(&seq_str[errStartPos..errEndPos]);
+                
+                //println!("{}", &seq_str[start..start+k]);
+
+            }
         }
+        new_seq
     }
-    new_seq
+    
 }
 pub fn print_hist(lmer_counts: &HashMap<String,u32>) {
     let mut hist = vec![0; 256];
@@ -324,11 +422,13 @@ pub fn normalize_minimizer(lmer: &String) -> String
     res
 }
 
-pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashMap<String,u32>) -> bool
+pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &mut HashMap<String,u32>) -> bool
 {
     let size_miniverse = params.size_miniverse;
     let density = params.density;
     let l = params.l;
+    let mut lmer_rev = String::new ();
+    let mut lmerMin = String::new ();
 
     let h0 = city::hash32(&lmer) % size_miniverse;
 
@@ -342,15 +442,26 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
     
     if lmer_frequency_based
     {
+        if revcomp_aware {
+            lmer_rev = utils::revcomp(&lmer);
+            lmerMin = std::cmp::min(lmer.to_string(), lmer_rev);
+            println!("{}", lmerMin);
+        }
         // minimizers must have high count
-        let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-        if *count < params.average_lmer_count as u32 { return false;}
+        let count = lmer_counts.entry(lmer.to_string()).or_insert(0);
+        if (*count == 0) {
+            return false;
+        }
+        let weight = (*count)/ (params.average_lmer_count as u32);
+        return h0 < ((size_miniverse as f64*(density/(l as f64))) as u32 * weight);
+
+        //if *count < params.average_lmer_count as u32 { return false;}
     }
 
     h0 < ((size_miniverse as f64*(density/(l as f64))) as u32 ) 
 }
 
-pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
+pub fn minhash(seq: &str, params: &Params, lmer_counts: &mut HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
 {
     let l = params.l;
     
@@ -445,13 +556,13 @@ fn wk_minimizers(seq: &str, l :usize) -> Vec<String>
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
 
-pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize) -> (HashMap<String,u32>, HashMap<u32,String>, HashMap<String,u32>) {
+pub fn minimizers_preparation(lmer_counts: &mut HashMap<String,u32>, mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize) -> (HashMap<String,u32>, HashMap<u32,String>) {
 
     let l = params.l;
-    let mut lmer_counts : HashMap<String,u32> = HashMap::new(); // for reference, 4^12 = 16M
-    if lmer_frequency_based {
-        lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
-    }
+    //let mut lmer_counts : HashMap<String,u32> = HashMap::new(); // for reference, 4^12 = 16M
+    //if lmer_frequency_based {
+    //    lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
+    //}
 
 
     let mut list_minimizers : Vec<String> = Vec::new();
@@ -470,7 +581,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             if lmer > lmer_rev {continue;} // skip if not canonical
         }
 
-        if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
+        if ! minhash_minimizer_decide(&lmer, &params, lmer_counts) { 
             continue; 
         }
         //println!("found minimizer {}",lmer.to_string());
@@ -548,6 +659,6 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     
     println!("selected {} minimizer ID's, {} sequences",int_to_minimizer.len(), minimizer_to_int.len());
 
-    (minimizer_to_int, int_to_minimizer, lmer_counts)
+    (minimizer_to_int, int_to_minimizer)
 }
 
