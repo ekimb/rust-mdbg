@@ -15,7 +15,7 @@ for line in open(sys.argv[1]):
         continue
     spl = line.split()
     node_id = spl[0]
-    minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
+    minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-2]))
     d_minims[node_id] = minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
