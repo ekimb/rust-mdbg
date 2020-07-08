@@ -10,6 +10,7 @@ for line in open(sys.argv[1]):
     unitig_id = spl[0]
     minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
     seq = spl[-1]
+    assert not seq.isdigit(),"error: this .sequences file shouldnt contain abundance as last field"
     output.write(">%s\n%s\n" % (unitig_id,seq))
 output.close()
      
