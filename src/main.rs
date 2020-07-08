@@ -83,6 +83,9 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 
 }
 
+// here, keep in mind a kmer is in minimizer-space, not base-space
+// this code presupposes that the read has already been transformed into a sequence of minimizers
+// so it just performs revcomp normalization and solidy check
 fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params)
 {
     let k = params.k;
