@@ -1,3 +1,8 @@
+"""
+ this script takes as input the .ec_data file for a reference genome (processed by rust-mhdbg with min-abundance of 1)
+ as well as the .sequences file for a set of reads (also processed by rust-mhdbg but with the desired error correction method)
+ and outputs 
+"""
 import sys
 if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
     exit("input: [reference.ec_data] [reads.sequences]\n will evaluate accuracy of minimizers in reads\n")
