@@ -1,4 +1,8 @@
 #!/bin/bash
+# this script simplifies a gfa graph using gfaview (tip, bubbles)
+# and outputs a fasta assembly 
+
+# boilerplate code for finding folder where this script really reised
 #https://stackoverflow.com/questions/59895/get-the-source-directory-of-a-bash-script-from-within-the-script-itself
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink

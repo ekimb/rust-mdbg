@@ -1,7 +1,3 @@
 /target
 **/*.rs.bk
-*.gfa
-*.sequences
-chr4/
-read50x_err/
 *.fa
