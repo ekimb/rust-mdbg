@@ -8,9 +8,10 @@ for line in open(sys.argv[1]):
         continue 
     spl = line.split()
     unitig_id = spl[0]
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-1]))
-    seq = spl[-1]
-    assert not seq.isdigit(),"error: this .sequences file shouldnt contain abundance as last field"
+    spl_end = -2 if spl[-1].isdigit() else -1
+    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:spl_end]))
+    seq = spl[spl_end]
+    assert not seq.isdigit(),"error: this .sequences file has an odd format"
     output.write(">%s\n%s\n" % (unitig_id,seq))
 output.close()
      

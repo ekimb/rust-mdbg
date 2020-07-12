@@ -24,7 +24,7 @@ mod kmer_vec;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const error_correct: bool = true; // fix errors within kmers before assembly
+const error_correct: bool = false; // fix errors within kmers before assembly
 
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
