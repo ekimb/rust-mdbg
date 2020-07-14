@@ -53,8 +53,9 @@ for i in range(len(final_sequences_file)):
     if line.startswith('#'): continue
     spl = line.split()
     utg = spl[0]
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-2]))
-    seq = spl[-2]
+    spl_end = -2 if spl[-1].isdigit() else -1
+    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:spl_end]))
+    seq = spl[spl_end]
     
     #magic happens here
     
