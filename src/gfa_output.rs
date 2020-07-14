@@ -81,6 +81,7 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     let minim_str_rev = revcomp(&minim_str);
     
     let mut shift :i32 = -1;
+    //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
     if ori1 == "+" 
     {
         if matches(&seq1[shift_p.0..shift_p.0+l], &minim_str, levenshtein_minimizers) || 
@@ -96,6 +97,8 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
             matches(&seq1[shift_p.1..shift_p.1+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.1 as i32;
+                //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
+
             }
     }
     

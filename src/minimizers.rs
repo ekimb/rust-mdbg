@@ -60,7 +60,7 @@ number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-
 bottom line: with k=10, can't enough solid (minabund>=2) kmers when read error rate is 2%
 */
 
-fn levenshtein_ball(lmer: &String, ball_size: usize) -> Vec<String>
+pub fn levenshtein_ball(lmer: &String, ball_size: usize) -> Vec<String>
 {
     match ball_size
     {
@@ -198,7 +198,6 @@ pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, mi
                 should_insert = Some(lmer.to_string());
             }
         }
-
         // examine l-1, l, l+1 -mers, as a necessity in that scheme
         // small simplification: only one minimizer per start position
         if params.levenshtein_minimizers > 0
@@ -221,9 +220,10 @@ pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, mi
 
         if !should_insert.is_none()      
         {
-            res.push(should_insert.unwrap());
             pos.push(start as u32);
-            //println!("selected lmer: {}", should_insert.unwrap());
+            //println!("selected lmer: {}", start);
+            res.push(should_insert.unwrap());
+
         }
     }
         

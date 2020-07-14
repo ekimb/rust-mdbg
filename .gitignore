@@ -1,3 +1,6 @@
 /target
 **/*.rs.bk
 *.fa
+*.ec_data
+*.sequences
+*.gfa
