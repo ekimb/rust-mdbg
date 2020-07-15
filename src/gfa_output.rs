@@ -84,8 +84,8 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
     for i in 0..seq1.len()-l
     {
-        if matches(&seq1[i..i+l], &minim_str, 1) || 
-            matches(&seq1[i..i+l], &minim_str_rev, 1)
+        if matches(&seq1[i..i+l], &minim_str, 2) || 
+            matches(&seq1[i..i+l], &minim_str_rev, 2)
             { 
                 shift = i as i32 + 1 ; 
                 //print!("shift {:?}\n",shift);
