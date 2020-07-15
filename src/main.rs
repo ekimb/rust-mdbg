@@ -25,6 +25,7 @@ mod kmer_vec;
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
 const error_correct: bool = true; // fix errors within kmers before assembly
+const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
@@ -250,7 +251,10 @@ fn main() {
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
     let mut triple_reads : HashMap<(String, String, String), Vec<(String, (u32, u32, u32))>> = HashMap::new(); // maps triples to read ids
     let mut minimizer_vec : Vec<String> = Vec::<String>::new(); //keeping all minimizers in a vector
+    let mut true_vec : Vec<(String, String, String)> = Vec::<(String, String, String)>::new(); //keeping all true triples in a vector
     let mut minimizer_correct : HashMap<String, Vec<(String, (u32, u32, u32))>> = HashMap::new(); //read to true minimizer and pos
+    let mut counts : HashMap<u32, u32> = HashMap::new();
+    let mut transformed_min : HashMap<String, String> = HashMap::new(); //transformed min to original min
 
 
 
@@ -272,7 +276,7 @@ fn main() {
             if i < read_minimizers.len()-2 {
                 let read_ids = triple_reads.entry((String::from(minimizers::normalize_minimizer(&read_minimizers[i])), String::from(minimizers::normalize_minimizer(&read_minimizers[i+1])), String::from(minimizers::normalize_minimizer(&read_minimizers[i+2])))).or_insert(Vec::<(String, (u32, u32, u32))>::new());
                 read_ids.push((seq_str.to_string(), (read_minimizers_pos[i], read_minimizers_pos[i+1], read_minimizers_pos[i+2])));
-                //println!("Read count: {}", read_ids.len());
+                
             }
         }
 
@@ -304,150 +308,100 @@ fn main() {
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
     
-
+    for triple in triple_reads.keys() {
+        let count = triple_reads[triple].len() as u32;
+        //println!("This triple's count: {}", count);
+        if count > 2 {
+            true_vec.push((triple.0.to_string(), triple.1.to_string(), triple.2.to_string()));
+        }
+        let count_entry = counts.entry(count).or_insert(0);
+        *count_entry += 1;
+    }
+    for i in (0..counts.keys().len()) {
+        if counts.contains_key(&(i as u32)) {
+            println!("Count {} \t {}", i, counts[&(i as u32)]);
+        }
+        else {
+            println!("Count {} \t 0", i);
+        }
+    }
     if error_correct
     {
-        // do error correction of reads 
-        for triple in triple_reads.keys() {
-            let count = triple_reads[triple].len();
-            println!("This triple's count: {}", count);
-            if count < 2 {
-                for (other_triple, read_ids) in &triple_reads {
-                    if other_triple != triple {
-                        if other_triple.0 != triple.0 && other_triple.1 == triple.1 && other_triple.2 == triple.2 {
-                            let other_count = triple_reads[other_triple].len();
-                            if other_count >= 2 {
-                                //println!("Replacing left minimizer");
-                                //println!("Count: {}", triple_reads[other_triple].len());
-                                for (false_read, false_pos) in triple_reads[triple].iter() {
-                                    let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
-                                    //println!("False read: {}", false_read);
-                                    readid_tocorrect.push((other_triple.0.clone(), (0, false_pos.1, false_pos.0)));
-                                    //println!("Will correct read with minimizer {}", triple.0);
-                                    //println!("At position {}", false_pos.0);
-                                    //println!("With minimizer {}", other_triple.0);
-                                }
-                            }
-
+        for (other_triple, read_ids) in &triple_reads {
+            let count = triple_reads[other_triple].len();
+            if count <= 2 {
+                for true_triple in true_vec.iter() {
+                    if true_triple.0 != other_triple.0 && true_triple.1 == other_triple.1 && true_triple.2 == other_triple.2 {
+                        for (false_read, false_pos) in triple_reads[other_triple].iter() {
+                            let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
+                            readid_tocorrect.push((true_triple.0.clone(), (0, false_pos.1, false_pos.0)));
                         }
-                        else if other_triple.0 == triple.0 && other_triple.1 != triple.1 && other_triple.2 == triple.2 {
-                            let other_count = triple_reads[other_triple].len();
-                            if other_count >= 2 {
-                                //println!("Replacing middle minimizer");
-                                //println!("Count: {}", triple_reads[other_triple].len());
-                                for (false_read, false_pos) in triple_reads[triple].iter() {
-                                    let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
-                                    readid_tocorrect.push((other_triple.1.clone(), (false_pos.0, false_pos.2, false_pos.1)));
-                                    //println!("Will correct read with minimizer {}", triple.1);
-                                    //println!("At position {}", false_pos.1);
-                                    //println!("With minimizer {}", other_triple.1);
-                                }
-                            }
+                        break;
+                    }
+                    else if true_triple.1 != other_triple.1 && true_triple.0 == other_triple.0 && true_triple.2 == other_triple.2 {
+                        for (false_read, false_pos) in triple_reads[other_triple].iter() {
+                            let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
+                            readid_tocorrect.push((true_triple.1.clone(), (false_pos.0, false_pos.2, false_pos.1)));
                         }
-                        else if other_triple.0 == triple.0 && other_triple.1 == triple.1 && other_triple.2 != triple.2 {
-                            let other_count = triple_reads[other_triple].len();
-                            if other_count >= 2 {
-                                //println!("Replacing right minimizer");
-                                //println!("Count: {}", triple_reads[other_triple].len());
-                                for (false_read, false_pos) in triple_reads[triple].iter() {
-                                    let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
-                                    readid_tocorrect.push((other_triple.2.clone(), (false_pos.1, 0, false_pos.2))); //hacky
-                                    //println!("Will correct read with minimizer {}", triple.2);
-                                    //println!("At position {}", false_pos.2);
-                                    //println!("With minimizer {}", other_triple.2);
-                                }
-                            }
-                        }
+                        break;
 
                     }
+                    else if true_triple.2 != other_triple.2 && true_triple.0 == other_triple.0 && true_triple.1 == other_triple.1 {
+                        for (false_read, false_pos) in triple_reads[other_triple].iter() {
+                            let readid_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, (u32, u32, u32))>::new());
+                            readid_tocorrect.push((true_triple.2.clone(), (false_pos.1, 0, false_pos.2)));
+                        }
+                        break;
+                    }
+
                 }
             }
-        }
+
+        }           
         let mut nb_minimizers_per_read : f64 = 0.0;
         let mut nb_reads : u64 = 0;
         let mut pb = ProgressBar::new(file_size);
         let mut ec_file2 = ec_reads::new_file(&PathBuf::from("err"));
         for ec_record in ec_reads::load(&output_prefix) {
-            let mut seq_str = ec_record.seq_str.to_string();
-            seq_str.truncate(seq_str.len() - 1);
+            let mut seq_str             = ec_record.seq_str;
+            let mut read_transformed    = ec_record.read_transformed;
+            let mut read_minimizers     = ec_record.read_minimizers;
+            let read_minimizers_pos = ec_record.read_minimizers_pos;
+            seq_str.truncate(seq_str.len()-1);
+            //println!("New seq");
             for (false_read, false_vec) in &mut minimizer_correct {
                 if *false_read == seq_str {
-                    false_vec.sort_unstable();
-                    false_vec.dedup();
                     for false_tuple in false_vec.iter() {
-                        //println!("{:?}", false_tuple);
-                        //let old_min_unmut = &seq_str[(false_tuple.1).2 as usize..(false_tuple.1).2 as usize+(l as usize)];
-                        //let old_min_pos = seq_str.find(old_min_unmut).unwrap();
-                        //let old_min = minimizers::normalize_minimizer(&old_min_unmut.to_string());
-                        //println!("Old pos:  {}", old_min_pos);
-                        let mut slice = String::new();
-                        slice = seq_str[(false_tuple.1).0 as usize..seq_str.len()-1].to_string();
-                        //if (false_tuple.1).1 != 0 {
-                            //slice = seq_str[(false_tuple.1).0 as usize..((false_tuple.1).1 as usize) +].to_string();
-                        //}
-                       // else if (false_tuple.1).1 == 0 {
-                            //slice = seq_str[(false_tuple.1).0 as usize..seq_str.len()-1].to_string();
-                        //}
-                        //println!("Slice: {}", slice);
-                        //println!("Correct min: {}", false_tuple.0);
-                        //println!("Original is {}", old_min);
-                        //println!("Original pos is {}", old_min_pos);
-                        let mut lev_neighbors = minimizers::levenshtein_ball(&false_tuple.0, 1);
+                        let old_min = &(minimizers::normalize_minimizer(&(&seq_str[(false_tuple.1).2 as usize..((false_tuple.1).2 as usize +l)]).to_string()));
+                        let correct_min = minimizers::normalize_minimizer(&false_tuple.0.to_string());
+                        if !read_minimizers.contains(old_min) {continue;}
+                        //println!("Old min {}", old_min);
+                        //println!("Old min int {}", minimizer_to_int[old_min]);
+                        let mut min_entry = minimizer_to_int[&correct_min];
+                        //println!("Correct min int {}", min_entry);
+                        //println!("Read minimizers {:?}", read_minimizers);
+                        let false_index = read_minimizers.iter().position(|r| r == old_min).unwrap();
+                        //println!("Minimizer pos {}", false_index);
+                        read_minimizers[false_index] = correct_min.clone();
+                        read_transformed[false_index] = minimizer_to_int[&correct_min];
+                        //*int_to_minimizer.entry(minimizer_to_int[old_min]).or_insert(correct_min.clone()) = correct_min.clone();
+                        //*minimizer_to_int.entry(old_min.to_string()).or_insert(min_entry) = min_entry;
+                        transformed_min.insert(correct_min, old_min.to_string());
 
-                        let lev_neighborsrev = minimizers::levenshtein_ball(&utils::revcomp(&false_tuple.0), 1);
-                        lev_neighbors.extend(lev_neighborsrev.iter().cloned());
-                        for neighbor_unmut in lev_neighbors {
-                            let mut new_str = String::new();
-                            let neighbor = minimizers::normalize_minimizer(&neighbor_unmut);
-                            let neighbor_rev = utils::revcomp(&neighbor);
-                            if slice.contains(&neighbor) {
-                                let neighbor_pos = (slice.find(&neighbor).unwrap() as u32 + (false_tuple.1).0) as usize;
-                                //println!("Neighbor is {}", neighbor);
-                                let mut new_str = String::new();
-                                //println!("Found in read position {}", neighbor_pos);
-                                new_str.push_str(&seq_str[0..neighbor_pos]);
-                                new_str.push_str(&false_tuple.0);
-                                new_str.push_str(&seq_str[neighbor_pos+neighbor.len()..(seq_str.len()) as usize]);
-                                seq_str = new_str;
-                                
-                                //if read_minimizers.contains(&old_min.to_string()) {
-                                    
-                                    //let min_idx = read_minimizers.iter().position(|r| r == &old_min).unwrap();
-                                    //let pos_idx = read_minimizers_pos.iter().position(|&r| r == old_min_pos as u32).unwrap();
-                                    //read_minimizers_pos[pos_idx] = neighbor_pos as u32;
-                                    //read_minimizers[min_idx] = neighbor.to_string();
-                                    //minimizer_to_int.insert(neighbor.to_string(),  (minimizer_to_int.len()+1) as u32);
-                                    //int_to_minimizer.insert((int_to_minimizer.len()+1) as u32, neighbor.to_string());
-                                    //read_transformed = read_minimizers.iter().map(|minim| minimizer_to_int[minim]).collect();
-                                //}
-                                  
-                                //fixed_str.push_str(&seq_str[0..neighbor_pos]);
-                                //fixed_str.push_str(&neighbor);
-                                //fixed_str.push_str(&seq_str[neighbor.len()+neighbor_pos..seq_str.len()-1]);
-                                break;
-                            }
-                            else if slice.contains(&neighbor_rev) {
-                                let neighbor_pos = (slice.find(&neighbor_rev).unwrap() as u32 + (false_tuple.1).0) as usize;
-                                //println!("Neighbor is {}", neighbor_rev);
-                               // println!("Found in reverse read position {}", neighbor_pos);
-                                new_str.push_str(&seq_str[0..neighbor_pos]);
-                                new_str.push_str(&false_tuple.0);
-                                new_str.push_str(&seq_str[neighbor_pos+neighbor.len()..(seq_str.len()) as usize]);
-                                seq_str = new_str;
-                                break;
-                            }
-                        }
-                        
+
                     }
                 }
             }
-            let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
+            nb_minimizers_per_read += read_minimizers.len() as f64;
+            nb_reads += 1;
+            pb.add(seq_str.len() as u64); // get approx size of entry
             //read_minimizers.sort();
             //read_minimizers_pos.sort();
             //read_transformed.sort();
             if read_transformed.len() <= k { continue; }
             read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
         }
+        
     }
 
     println!("nodes before abund-filter: {}", dbg_nodes.len());
@@ -537,7 +491,7 @@ fn main() {
 
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers);
+    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers, &transformed_min);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers

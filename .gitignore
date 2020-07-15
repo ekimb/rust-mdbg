@@ -4,3 +4,5 @@
 *.ec_data
 *.sequences
 *.gfa
+small-example/*
+*.fasta
