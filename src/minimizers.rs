@@ -42,6 +42,40 @@ fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file
     params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
     println!("average lmer count: {}",params.average_lmer_count);
 }
+pub fn extract_hierarchical(read_minimizers : &Vec<String>, read_minimizers_pos : &Vec<u32>, params: &Params,  minimizer_to_int: &HashMap<String,u32>, w : u32) -> (Vec<String>, Vec<u32>, Vec<u32>) {
+    let mut res = Vec::new();
+    let mut pos :Vec<u32> = Vec::new();
+    let mut should_insert : Option<String> = None;
+    let size_miniverse = read_minimizers.len() as u32;
+    if w > read_minimizers.iter().len() as u32 {
+        return (read_minimizers.to_vec(), read_minimizers_pos.to_vec(), read_minimizers.iter().map(|minim| minimizer_to_int[minim]).collect())
+    }
+    for mut i in 0..read_minimizers.iter().len()-w as usize+1 {
+        let lmers = &read_minimizers[i..i+w as usize];
+        let mut min_h =  read_minimizers.len() as u32;
+        let mut min_lmer = String::new();
+        for lmer in lmers {
+            let h0 = city::hash32(&lmer) % size_miniverse;
+            if h0 < min_h {
+                min_h = h0;
+                min_lmer = lmer.to_string();
+            }
+        } 
+        should_insert = Some(min_lmer.to_string());
+        if !should_insert.is_none() && !res.contains(&min_lmer)     
+        {
+            let lmer_pos = read_minimizers.iter().position(|r| r == &min_lmer).unwrap();
+            pos.push(read_minimizers_pos[lmer_pos] as u32);
+            //println!("selected lmer: {}", start);
+            res.push(should_insert.unwrap());
+
+        }
+    }
+    let read_transformed : Vec<u32> = res.iter().map(|minim| minimizer_to_int[minim]).collect();
+    //println!("{:?}", res);
+
+    (res, pos, read_transformed)
+}
 
 /* why we need levenshtein balls as minimizers?
 

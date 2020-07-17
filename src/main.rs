@@ -12,6 +12,7 @@ use petgraph::graph::NodeIndex;
 use std::fs;
 use structopt::StructOpt;
 use std::path::PathBuf;
+use strsim::levenshtein;
 
 mod utils;
 mod gfa_output;
@@ -24,7 +25,7 @@ mod kmer_vec;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const error_correct: bool = true; // fix errors within kmers before assembly
+const error_correct: bool = false; // fix errors within kmers before assembly
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -46,6 +47,7 @@ fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u
     minimizers::minhash(seq, params, lmer_counts, minimizer_to_int)
         //wk_minimizers(seq, density) // unfinished
 }
+
 
 fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>, read_minimizers_pos :&Vec<u32>)
 {
@@ -86,7 +88,7 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 // here, keep in mind a kmer is in minimizer-space, not base-space
 // this code presupposes that the read has already been transformed into a sequence of minimizers
 // so it just performs revcomp normalization and solidy check
-fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params)
+fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params, nonsolid_kmers : &mut Vec<Vec<u32>>, solid_kmers : &mut Vec<Vec<u32>>, solid_kmer_to_seq : &mut HashMap<Vec<u32>, String>)
 {
     let k = params.k;
     let l = params.l;
@@ -108,8 +110,10 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
         // decide if that kmer is finally solid
         if *entry == min_kmer_abundance as u32
         {
+            solid_kmers.push(read_transformed[i..i+k].to_vec());
             // record sequences associated to solid kmers
             let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
+            solid_kmer_to_seq.insert(read_transformed[i..i+k].to_vec(), seq.to_string());
             if seq_reversed {
                 seq = utils::revcomp(&seq);
             }
@@ -134,7 +138,35 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
                 }
             }
         }
+        else {
+            nonsolid_kmers.push(read_transformed[i..i+k].to_vec());
+        }
     }
+}
+
+fn fix_nonsolid(nonsolid_kmers : &mut Vec<Vec<u32>>, solid_kmers : &mut Vec<Vec<u32>>, params: &Params) -> HashMap<Vec<u32>, Vec<u32>> {
+    let mut nonsolid_to_solid   : HashMap<Vec<u32>, Vec<u32>> = HashMap::new();
+    let mut new_solid = solid_kmers.clone();
+    for kmer_vec_unmut in nonsolid_kmers.iter() {
+        let mut kmer_vec = kmer_vec_unmut.to_vec();
+        for solid_kmer_vec_unmut in solid_kmers.iter() {
+            let mut solid_kmer_vec = solid_kmer_vec_unmut.to_vec();
+            let matching = kmer_vec.iter().zip(solid_kmer_vec.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).count();
+            if matching == params.k - 1 {
+                let matching = kmer_vec.iter().zip(solid_kmer_vec.to_vec()).filter(|(lmer, solid_lmer)| lmer != &solid_lmer).next().unwrap();
+                println!("{:?}", kmer_vec);
+                println!("{:?}", solid_kmer_vec.to_vec());
+                println!("{:?}", matching);
+                let index = kmer_vec.iter().position(|&r| r == *matching.0 as u32).unwrap();
+                kmer_vec[index] = matching.1;
+                nonsolid_to_solid.insert(kmer_vec_unmut.to_vec(), solid_kmer_vec_unmut.to_vec());
+
+             
+            }
+        }
+    }
+    (nonsolid_to_solid)
+
 }
 
 
@@ -253,11 +285,11 @@ fn main() {
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
-    let mut nple_reads : HashMap<Vec<String>, Vec<(String, Vec<u32>)>> = HashMap::new(); // maps triples to read ids
-    let mut true_vec : Vec<Vec<String>> = Vec::<Vec<String>>::new(); //keeping all true triples in a vector
-    let mut minimizer_correct : HashMap<String, Vec<(String, u32)>> = HashMap::new(); //read to true minimizer and pos
-    let mut counts : HashMap<u32, u32> = HashMap::new();
-    let mut transformed_min : HashMap<String, String> = HashMap::new(); //transformed min to original min
+    let mut solid_kmers : Vec<Vec<u32>> = Vec::<Vec<u32>>::new();
+    let mut nonsolid_kmers : Vec<Vec<u32>> = Vec::<Vec<u32>>::new();
+    let mut nonsolid_to_solid   : HashMap<Vec<u32>, Vec<u32>> = HashMap::new(); // associate a dBG node to its sequence
+    let mut solid_kmer_to_seq : HashMap<Vec<u32>, String> = HashMap::new();
+
 
 
 
@@ -273,18 +305,8 @@ fn main() {
         //println!("seq: {}", seq_str);
 
         let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
-        for i in 0..(read_minimizers.len()-n+1) {
-            if read_minimizers.len() < n {break;}
-            let mut nple_vec = Vec::<String>::new();
-            let mut nple_pos_vec = Vec::<u32>::new();
-            for j in 0..n {
-                nple_vec.push(read_minimizers[i+j].to_string());
-                nple_pos_vec.push(read_minimizers_pos[i+j]);
-            }
-            let read_ids = nple_reads.entry(nple_vec).or_insert(Vec::<(String, Vec<u32>)>::new());
-            read_ids.push((seq_str.to_string(), nple_pos_vec));
-                
-        }
+        //println!("{:?}", read_minimizers);
+        
 
 
         // stats
@@ -303,111 +325,76 @@ fn main() {
         }
         else
         {
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params, &mut nonsolid_kmers, &mut solid_kmers, &mut solid_kmer_to_seq);
         }
 
     }
+    nonsolid_to_solid = fix_nonsolid(&mut nonsolid_kmers, &mut solid_kmers, &params);
+    let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
+    let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
+    let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
     pb.finish_print("done converting reads to minimizers");
     nb_minimizers_per_read /= nb_reads as f64;
     if error_correct { ec_reads::flush(&mut ec_file); }
     else { ec_reads::delete_file(&output_prefix); } // hacky
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
-    
-    for nple in nple_reads.keys() {
-        let count = nple_reads[nple].len() as u32;
-        println!("This triple's count: {}", count);
-        if count > 15 {
-            true_vec.push(nple.to_vec());
-        }
-        let mut count_entry = counts.entry(count).or_insert(0);
-        *count_entry += 1;
-    }
-    for i in (0..counts.keys().len()) {
-        if counts.contains_key(&(i as u32)) {
-            println!("Count {} \t {}", i, counts[&(i as u32)]);
-        }
-        else {
-            println!("Count {} \t 0", i);
-        }
-    }
-    if error_correct
-    {
-        for (nple, read_pos_vec) in &nple_reads {
-            let count = nple_reads[nple].len();
-            if count <= 15 {
-                //println!("True nples start");
-                for true_nple in true_vec.iter() {
-                    let mut miss_count = 0;
-                    let mut miss_idx = 0;
-                    for i in 0..true_nple.len() {
-                        if miss_count > 1 {break;}
-                        if nple[i] != true_nple[i] {
-                            miss_idx = i;
-                            miss_count += 1;
-                        }
-                    }
-                    if miss_count != 1 {continue;}
-                    else {
-                       // println!("Found true nple for nple {:?}", true_nple);
-                        for (false_read, false_pos_vec) in nple_reads[nple].iter() {
-                            let read_tocorrect = minimizer_correct.entry(false_read.to_string()).or_insert(Vec::<(String, u32)>::new());
-                            read_tocorrect.push((true_nple[miss_idx].to_string(), false_pos_vec[miss_idx]));
-                        }
+    let reader2 = fasta::Reader::from_file(&filename).unwrap();
+    for result in reader2.records() {
+        let record = result.unwrap();
+        let seq = record.seq();
+        let mut seq_str = String::from_utf8_lossy(seq).to_string();
+        let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
+        if read_transformed.len() <= k { continue; }
+        for i in 0..(read_transformed.len()-k+1) {
+            let kmer = &read_transformed[i..i+k].to_vec();
+            if nonsolid_to_solid.contains_key(kmer) {
+                println!("{:?}", kmer);
+                println!("{:?}", read_transformed);
+                let correct_kmer = nonsolid_to_solid[kmer].to_vec();
+                let kmer_transformed : Vec<String> = correct_kmer.iter().map(|pos| int_to_minimizer[pos].to_string()).collect();
+                let correct_kmer_seq = solid_kmer_to_seq[&correct_kmer].to_string();
+                let old_kmer: Vec<_> = read_minimizers.splice(i..i+k, kmer_transformed.iter().cloned()).collect();
+                let old_kmer: Vec<_> = read_transformed.splice(i..i+k, correct_kmer.iter().cloned()).collect();
+                let mut err_lmer = String::new();
+                let mut old_err_lmer = String::new();
+                println!("Incorrect kmer {:?}", kmer);
+                println!("Correct kmer {:?}", correct_kmer);
+                for j in 0..k {
+                    let old_lmer = seq_str[read_minimizers_pos[i+j] as usize..read_minimizers_pos[i+j] as usize + l].to_string();
+                    let correct_lmer = &kmer_transformed[j];
+                    println!("Old lmer {:?}", old_lmer);
+                    println!("Correct lmer {:?}", correct_lmer);
+                    println!("Correct kmer seq {:?}", correct_kmer_seq);
+                    if (minimizers::normalize_minimizer(&old_lmer.to_string()) != minimizers::normalize_minimizer(&correct_lmer.to_string())) {
+                        println!("{}",seq_str[read_minimizers_pos[i] as usize..read_minimizers_pos[i+k-1] as usize + l].to_string());
+                        seq_str.replace_range(read_minimizers_pos[i] as usize..read_minimizers_pos[i+k-1] as usize + l, &correct_kmer_seq);
+                        println!("{}",seq_str[read_minimizers_pos[i] as usize..read_minimizers_pos[i+k-1] as usize + l].to_string());
+                        println!("{}",seq_str.to_string());
+
+                        err_lmer = correct_lmer.to_string();
+                        old_err_lmer = old_lmer.to_string();
+                        break;
                     }
                 }
+                let mut opt_pos = seq_str.find(&err_lmer);
+                let mut new_pos = 0;
+                if opt_pos == None {new_pos = seq_str.find(&utils::revcomp(&err_lmer)).unwrap() as u32;}
+                else {new_pos = seq_str.find(&err_lmer).unwrap() as u32;}
+                println!("{}", new_pos);
+                let old_err_index = read_minimizers.iter().position(|r| r == &minimizers::normalize_minimizer(&err_lmer)).unwrap();
+                read_minimizers_pos[old_err_index as usize] = new_pos;
+                println!("{:?}", read_transformed);
             }
-
-        }           
-        let mut nb_minimizers_per_read : f64 = 0.0;
-        let mut nb_reads : u64 = 0;
-        let mut pb = ProgressBar::new(file_size);
-        let mut ec_file2 = ec_reads::new_file(&PathBuf::from("err"));
-        for ec_record in ec_reads::load(&output_prefix) {
-            let mut seq_str             = ec_record.seq_str;
-            let mut read_transformed    = ec_record.read_transformed;
-            let mut read_minimizers     = ec_record.read_minimizers;
-            let read_minimizers_pos = ec_record.read_minimizers_pos;
-            seq_str.truncate(seq_str.len()-1);
-            //println!("New seq");
-            for (false_read, false_pos_vec) in &mut minimizer_correct {
-                for tuple in false_pos_vec {
-                    if *false_read == seq_str {
-                        let old_min = &(minimizers::normalize_minimizer(&(&seq_str[tuple.1 as usize..(tuple.1 as usize +l)]).to_string()));
-                        let correct_min = minimizers::normalize_minimizer(&tuple.0.to_string());
-                        if !read_minimizers.contains(old_min) {continue;}
-                        //println!("Old min {}", old_min);
-                        //println!("Old min int {}", minimizer_to_int[old_min]);
-                        let mut min_entry = minimizer_to_int[&correct_min];
-                        //println!("Correct min int {}", min_entry);
-                        //println!("Read minimizers {:?}", read_minimizers);
-                        let false_index = read_minimizers.iter().position(|r| r == old_min).unwrap();
-                        //println!("Minimizer pos {}", false_index);
-                        read_minimizers[false_index] = correct_min.clone();
-                        read_transformed[false_index] = minimizer_to_int[&correct_min];
-                        //*int_to_minimizer.entry(minimizer_to_int[old_min]).or_insert(correct_min.clone()) = correct_min.clone();
-                        //*minimizer_to_int.entry(old_min.to_string()).or_insert(min_entry) = min_entry;
-                        transformed_min.insert(correct_min, old_min.to_string());
-
-                    }
-                }
-            }
-            nb_minimizers_per_read += read_minimizers.len() as f64;
-            nb_reads += 1;
-            pb.add(seq_str.len() as u64); // get approx size of entry
-            //read_minimizers.sort();
-            //read_minimizers_pos.sort();
-            //read_transformed.sort();
-            if read_transformed.len() <= k { continue; }
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
         }
-        
+        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params, &mut nonsolid_kmers, &mut solid_kmers, &mut solid_kmer_to_seq);
+
+
     }
 
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     println!("              nodes after: {}", dbg_nodes.len());
-
     let mut dbg_edges : Vec<(&Kmer,&Kmer)> = Vec::new();
 
     // index k-1-mers
@@ -491,7 +478,7 @@ fn main() {
 
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers, &transformed_min);
+    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers

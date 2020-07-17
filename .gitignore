@@ -6,3 +6,4 @@
 *.gfa
 small-example/*
 *.fasta
+src/trash.rs
