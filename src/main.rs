@@ -18,8 +18,8 @@ mod gfa_output;
 mod seq_output;
 mod minimizers;
 mod ec_reads;
-mod cluster;
 mod kmer_vec;
+mod buckets;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
@@ -105,9 +105,16 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
         }
         let entry = dbg_nodes.entry(node.clone()).or_insert(0);
         *entry += 1;
+       // let s = node.print_as_string();
+        //println!("{:?}", s);
+        //if node == Kmer::make_from(&vec![1948, 64, 943, 3497, 2263]).normalize().0 {
+        //    println!("{}", seq_str);
+        //    println!("{:?}, {:?}, {:?}", read_minimizers, read_minimizers_pos, read_transformed);
+        //    assert_eq!(0, 1);
+        //}
 
         // decide if that kmer is finally solid
-        if !kmer_seqs.contains_key(&node)//if *entry == min_kmer_abundance as u32
+        if *entry == min_kmer_abundance as u32
         {
             // record sequences associated to solid kmers
             let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
@@ -139,111 +146,6 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
 
     }
 }
-
-fn fix_nonsolid(counts : &mut HashMap<u32, u32>, kmers : &mut Vec<Vec<u32>>, kmer_to_seq: &mut HashMap<Vec<u32>, String>, dbg_nodes: &mut HashMap<Kmer,u32>, int_to_minimizer: &HashMap<u32,String>, params: &Params) -> (Vec<Vec<u32>>, Vec<Vec<u32>>, HashMap<Vec<u32>, String>, HashMap<Vec<u32>, Vec<u32>>) {
-    let mut solid_kmers =  Vec::<Vec<u32>>::new();
-    let mut nonsolid_kmers =  Vec::<Vec<u32>>::new();
-    let mut solid_kmer_to_seq : HashMap<Vec<u32>, String> = HashMap::new();
-    let mut seq = String::new();
-    for (kmer,seq) in kmer_to_seq {
-        let mut node : Kmer = Kmer::make_from(&kmer);
-        let mut seq_reversed = false;
-        if revcomp_aware { 
-            let (node_norm, reversed) = node.normalize(); 
-            node = node_norm;
-            seq_reversed = reversed;
-        }
-        //if seq_reversed {
-            //seq = utils::revcomp(&seq_unmut);
-        //}
-        let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-        let mut count_entry = counts.entry(*entry).or_insert(0);
-        *count_entry += 1;
-        if *entry >= params.min_kmer_abundance as u32 {
-            solid_kmers.push(kmer.to_vec());
-            solid_kmer_to_seq.insert(kmer.to_vec(), seq.to_string());
-        }
-        else if *entry < params.min_kmer_abundance as u32{
-            nonsolid_kmers.push(kmer.to_vec());
-        }
-
-    }
-    for i in (0..counts.keys().len()) {
-        if counts.contains_key(&(i as u32)) {
-            println!("Count {} \t {}", i, counts[&(i as u32)]);
-        }
-        else {
-            println!("Count {} \t 0", i);
-        }
-    }
-    let mut nonsolid_to_solid   : HashMap<Vec<u32>, Vec<u32>> = HashMap::new();
-    for kmer_vec_unmut in nonsolid_kmers.iter() {
-        let mut kmer_vec = kmer_vec_unmut.to_vec();
-        let mut count = 0;
-        for solid_kmer_vec_unmut in solid_kmers.iter() {
-            let mut solid_kmer_vec = solid_kmer_vec_unmut.to_vec();
-            let mut matching = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).count();
-            if matching == params.k - 1 {
-                let mut diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-            break;
-            }
-            else if matching == params.k - 2 {
-                let mut diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-            break;
-            }
-            else if matching == params.k - 3 {
-                let mut diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-            break;
-            }
-            else if matching == params.k - 4 {
-                let mut diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-                diff = kmer_vec_unmut.iter().zip(solid_kmer_vec_unmut.to_vec()).filter(|(lmer, solid_lmer)| lmer == &solid_lmer).next().unwrap();
-                let opt_index = kmer_vec.iter().position(|&r| r == *diff.0 as u32);
-                kmer_vec[opt_index.unwrap() as usize] = diff.1;
-                nonsolid_to_solid.insert(kmer_vec.to_vec(), solid_kmer_vec_unmut.to_vec()); 
-            break;
-            }
-
-            
-        }
-    }
-    println!("Nonsolid kmers {} solid kmers {}", nonsolid_kmers.len(), solid_kmers.len());
-    (nonsolid_kmers, solid_kmers, solid_kmer_to_seq, nonsolid_to_solid)
-
-}
-
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
@@ -380,7 +282,6 @@ fn main() {
         //println!("seq: {}", seq_str);
 
         let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
-        //println!("{:?}", read_minimizers);
         
 
 
@@ -404,7 +305,6 @@ fn main() {
         }
 
     }
-    let (nonsolid_kmers, solid_kmers, solid_kmer_to_seq, nonsolid_to_solid) = fix_nonsolid(&mut counts, &mut kmers, &mut kmer_to_seq, &mut dbg_nodes, &int_to_minimizer, &params);
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
@@ -429,11 +329,13 @@ fn main() {
             read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
         }
     }
-    cluster::cluster_kmers(&mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+    buckets::get_consensus(&mut dbg_nodes, &params, &mut kmer_seqs, &mut minim_shift);
     println!("nodes before abund-filter: {}", dbg_nodes.len());
-    kmer_seqs.retain(|x, s| dbg_nodes[x] >= (min_kmer_abundance as u32));
-    minim_shift.retain(|x, s| dbg_nodes[x] >= (min_kmer_abundance as u32));
-    dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
+    kmer_seqs.retain(|x, c| dbg_nodes[&x] >= (min_kmer_abundance as u32+1));
+    minim_shift.retain(|x, c| dbg_nodes[&x] >= (min_kmer_abundance as u32+1));
+    dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32+1));
+    
+
     
 
     println!("nodes after: {}", dbg_nodes.len());

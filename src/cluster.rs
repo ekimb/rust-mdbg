@@ -76,14 +76,14 @@ pub fn levenshtein(a: &Vec<u32>, b: &Vec<u32>) -> usize {
 pub fn get_nonsolid(dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params) -> Vec<Vec<u32>> {
     dbg_nodes.iter().map(|(kmer, count)| kmer_vec::get(kmer).to_vec()).collect()
 }
-pub fn dbscan(kmers : &Vec<Vec<u32>>, epsilon : u32) ->  HashMap<Vec::<u32>,Vec<Vec<u32>>> {
+pub fn dbscan(kmers : &Vec<Vec<u32>>, epsilon : u32, params : &Params) ->  HashMap<Vec::<u32>,Vec<Vec<u32>>> {
     let mut neighbors_map : HashMap<Vec::<u32>,Vec<Vec<u32>>> = HashMap::new();
     let mut label : HashMap<Vec::<u32>,String> = HashMap::new();
     let mut cluster_count = 0;
     for kmer in kmers.iter() {
         if label.contains_key(kmer) {continue;}
         let mut neighbors : Vec::<Vec<u32>> = range_query(kmers, kmer, epsilon);
-        if neighbors.len() < 3 {
+        if neighbors.len() < params.k {
             label.insert(kmer.to_vec(), "N".to_string());
             //println!("Inserted noise");
             continue;
@@ -97,7 +97,7 @@ pub fn dbscan(kmers : &Vec<Vec<u32>>, epsilon : u32) ->  HashMap<Vec::<u32>,Vec<
             if label.contains_key(seed) {continue;}
             label.insert(seed.to_vec(), "C".to_string());
             let mut seed_neighbors = range_query(kmers, seed, epsilon);
-            if seed_neighbors.len() >= 3 {
+            if seed_neighbors.len() >= params.k {
                 seeds.extend(neighbors.to_vec());
             }
         }
@@ -117,8 +117,8 @@ pub fn range_query(kmers : &Vec<Vec<u32>>, kmer : &Vec<u32>, epsilon : u32) -> V
 
 pub fn cluster_kmers(mut dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params : &Params) {
     let kmers = get_nonsolid(&mut dbg_nodes, &params);
-    println!("Got nonsolid kmers");
-    let mut neighbors_map = dbscan(&kmers, 1);
+    println!("Got kmers");
+    let mut neighbors_map = dbscan(&kmers, 2, &params);
     for (kmer, neighbors) in &neighbors_map {
         let mut consensus = Vec::<u32>::new();
         for i in 0..params.k {
@@ -127,8 +127,11 @@ pub fn cluster_kmers(mut dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut Has
             for neighbor in neighbors.iter() {
                 lmers.push(neighbor[i]);
                 let solid_kmer = Kmer::make_from(&neighbor);
-                if dbg_nodes.contains_key(&solid_kmer) && dbg_nodes[&solid_kmer] >= 2 as u32 {
-                    for j in 0..dbg_nodes[&solid_kmer] {lmers.push(neighbor[i]);}
+                if dbg_nodes.contains_key(&solid_kmer) && dbg_nodes[&solid_kmer] >= params.min_kmer_abundance as u32+1 {
+                    for j in 0..dbg_nodes[&solid_kmer] {
+                        lmers.push(neighbor[i]);
+                    }
+                    println!("{:?} solid", neighbor[i])
                 }
             }
             for lmer in lmers.iter() {
@@ -142,37 +145,15 @@ pub fn cluster_kmers(mut dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut Has
         let (node_norm, reversed) = consensus_node.normalize(); 
         consensus_node = node_norm;
         let seq_reversed = reversed;
-        println!("Kmer {:?}, neighbors {:?}", kmer, neighbors);
-        if dbg_nodes.contains_key(&consensus_node) && dbg_nodes[&consensus_node] >= 2 as u32 {
-            println!("Found existing kmer seq {:?}", kmer_seqs[&consensus_node]);
-            for neighbor in neighbors {
-                let mut neighbor_node : Kmer = Kmer::make_from(&neighbor);
-                let (node_norm, reversed) = neighbor_node.normalize(); 
-                neighbor_node = node_norm;
-                let seq_reversed = reversed;
-                let mut count = dbg_nodes.entry(consensus_node.clone()).or_insert(0);
-                *count += 1;
-                if dbg_nodes.contains_key(&neighbor_node) && dbg_nodes[&neighbor_node] < 2 as u32 {
-                    dbg_nodes.remove(&neighbor_node);
-                    println!("Dbg removed");
-                    if kmer_seqs.contains_key(&neighbor_node) {
-                        kmer_seqs.remove(&neighbor_node);
-                        println!("Kmerseq removed");
-
-                    }
-                    if minim_shift.contains_key(&neighbor_node){
-                        minim_shift.remove(&neighbor_node);
-                        println!("Shift removed");
-
-                    }
-                    
-                }
-                
+        println!("Kmer {:?} neighbors {:?}", kmer, neighbors);
+        if dbg_nodes.contains_key(&consensus_node) {
+            println!("Found existing kmer {:?}", consensus);
+            let mut count = dbg_nodes.entry(consensus_node).or_insert(0);
+            if *count < params.min_kmer_abundance as u32+1 {
+                println!("Is nonsolid");
+                *count += neighbors.len() as u32;
             }
-
-        }
-        else {
-            println!("Found new kmer {:?}", consensus)
+            
         }
     }
 }
