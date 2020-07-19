@@ -8,6 +8,7 @@ pub struct KmerVec
 {
     data: Vec<u32>
 }
+pub fn get(a: &KmerVec) -> Vec<u32> { a.data.to_vec() }
 
 impl KmerVec
 {

@@ -74,6 +74,7 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     
     let shift_p :(u32,u32)= minim_shift[&kmer1.normalize().0];
     let shift_p :(usize,usize)= (shift_p.0 as usize, shift_p.1 as usize);
+    //println!("minim shift {:?}",shift_p);
     let minim = kmer1.minimizers()[1];
     let minim_str = &int_to_minimizer[&minim];
     let l = minim_str.len() as usize;
@@ -81,17 +82,11 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     
     let mut shift :i32 = -1;
     //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
-    for i in 0..seq1.len()-l {
-        if matches(&seq1[i..i+l], &minim_str, 1) || 
-            matches(&seq1[i..i+l], &minim_str_rev, 1) {
-                shift = i as i32;
-            }
-    }
-    /*if ori1 == "+" 
+    if ori1 == "+" 
     {
-        shift = shift_p.0 as i32; 
-        if matches(&seq1[shift_p.0..shift_p.0+l], &minim_str, 1) || 
-            matches(&seq1[shift_p.0..shift_p.0+l], &minim_str_rev, 1)
+        //shift = shift_p.0 as i32; 
+        if matches(&seq1[shift_p.0..shift_p.0+l], &minim_str, levenshtein_minimizers) || 
+            matches(&seq1[shift_p.0..shift_p.0+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.0 as i32; 
                 //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
@@ -99,16 +94,16 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     }
     else
     {
-        shift = shift_p.1 as i32;
-        if matches(&seq1[shift_p.1..shift_p.1+l], &minim_str, 1) || 
-            matches(&seq1[shift_p.1..shift_p.1+l], &minim_str_rev, 1)
+        //shift = shift_p.1 as i32;
+        if matches(&seq1[shift_p.1..shift_p.1+l], &minim_str, levenshtein_minimizers) || 
+            matches(&seq1[shift_p.1..shift_p.1+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.1 as i32;
             }
-    }*/
+    }
     
     assert!(shift != -1);
-    //assert!((shift as usize) < seq1.len());
+    assert!((shift as usize) < seq1.len());
     (seq1.len() as u32) - (shift as u32)
 }
 
