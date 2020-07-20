@@ -14,7 +14,6 @@ pub fn enumerate_buckets(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params
         buckets_insert(kmer.to_vec(), (params.k-1)/2, &mut buckets, &mut dbg_nodes);
     }
     for (key, entry) in &mut buckets {
-        println!("{:?}", entry);
         entry.sort_by_key(|tuple| tuple.0.iter().position(|&x| x == key[0]).unwrap());
         entry.reverse();
 
@@ -34,33 +33,42 @@ pub fn get_consensus(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params, km
         for (kmer, count) in entry.iter() {
             let kmer_node = Kmer::make_from(&kmer.to_vec());
             println!("{:?}\t{}\t{:?}\t{:?}", key, dbg_nodes[&kmer_node], kmer, kmer_seqs[&kmer_node]);
+        }
+        for (kmer, count) in entry.iter() {
             for lmer in kmer {
                 if !entry_collect.contains(lmer) {entry_collect.push(*lmer);}
                 let mut count = counts.entry(*lmer).or_insert(0);
                 *count += 1;
             }
+        }
+        let consensus : Vec<u32> = entry_collect.iter().filter(|x| counts[x] > 1).cloned().collect();
+        if consensus.len() > params.k {
+            let mut multiple = Vec::<Vec<u32>>::new();
+            for i in 0..consensus.len()-params.k+1 {
+                multiple.push(consensus[i..i+params.k].to_vec());
+            }
+            for correct in multiple.iter() {
+                if correct.len() < params.k {continue;}
+                let node = Kmer::make_from(&correct.to_vec());
+                let ent = dbg_nodes.entry(node.clone()).or_insert(0);
+                *ent += entry.len() as u32 - multiple.len() as u32;
+                println!("{:?}", entry_collect);
+                println!("{:?}", correct);
+                println!("{:?}\t{}\t{:?}\t{:?}\n", key, dbg_nodes[&node], correct, kmer_seqs[&node]);
+
+            }
+        }
+        else {
+            if consensus.len() < params.k {continue;}
+            let node = Kmer::make_from(&consensus.to_vec());
+            let ent = dbg_nodes.entry(node.clone()).or_insert(0);
+            *ent += entry.len() as u32 -1;
             println!("{:?}", entry_collect);
-            let consensus : Vec<u32> = entry_collect.iter().filter(|x| counts[x] > 1).cloned().collect();
-            if consensus.len() > params.k {
-                let mut multiple = Vec::<Vec<u32>>::new();
-                for i in 0..consensus.len()-params.k+1 {
-                    multiple.push(consensus[i..i+params.k].to_vec());
-                }
-                for correct in multiple {
-                    let node = Kmer::make_from(&correct.to_vec());
-                    let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-                    *entry += 1;
-                    println!("{:?}", correct);
-                }
-            }
-            else {
-                let node = Kmer::make_from(&consensus.to_vec());
-                let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-                *entry += 1;
-                println!("{:?}", consensus);
-            }
+            println!("{:?}", consensus);
+            println!("{:?}\t{}\t{:?}\t{:?}\n", key, dbg_nodes[&node], consensus, kmer_seqs[&node]);
 
         }
+
     }
 }
 
