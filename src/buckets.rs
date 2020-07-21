@@ -12,7 +12,7 @@ pub fn enumerate_buckets(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params
     let kmers = get_kmers(&mut dbg_nodes, &params);
     let mut buckets : HashMap<Vec<u32>, Vec<(Vec<u32>, u32)>> = HashMap::new();
     for kmer in kmers.iter() {
-        buckets_insert(kmer.to_vec(), (params.k+1)/2, &mut buckets, &mut dbg_nodes);
+        buckets_insert(kmer.to_vec(), 9, &mut buckets, &mut dbg_nodes);
     }
     for (key, entry) in &mut buckets {
         entry.sort_by_key(|tuple| tuple.0.iter().position(|&x| x == key[0]).unwrap());
@@ -36,11 +36,13 @@ pub fn recur_multiple (consensus: Vec<u32>,  entry : Vec<(Vec<u32>, u32)>, mut m
 }
 pub fn get_consensus(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params, kmer_seqs_tot: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer,(u32,u32)>, int_to_minimizer : &HashMap<u32,String>) -> HashMap<Vec<u32>, String> {
     let mut buckets = enumerate_buckets(&mut dbg_nodes, &params, kmer_seqs_tot, minim_shift);
-    //println!("{:?}", buckets.len());
-    buckets.retain(|key, entry| entry.len() >= 4 ).count() == entry.len());
-    //println!("{:?}", buckets.len());
+    println!("{:?}", buckets.len());
+    buckets.retain(|key, entry| entry.len() >= 100 && entry.iter().filter(|tuple| tuple.1 == 1).count() == entry.len());
+    println!("{:?}", buckets.len());
     let mut seq_switch : HashMap<Vec<u32>, String> = HashMap::new();
+    let mut counter = 0; 
     for (key, entry) in &buckets {
+        println!("Entry {}", counter);
         let mut base_counts : HashMap<u32, Vec<String>> = HashMap::new();
         let mut bucket_seqs : HashMap<Vec<u32>, String> = HashMap::new();
         let mut bucket_gapped_seqs : HashMap<Vec<u32>, String> = HashMap::new();
@@ -62,6 +64,7 @@ pub fn get_consensus(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params, km
         let mut prev_len = 0;
         let mut min_prev_len = 99999;
         for (kmer, seq) in &bucket_seqs {
+            //println!("{}", seq.len());
             let mut offset;
             let mut offset_reg = seq.find(&int_to_minimizer[&key[0]]);
             if offset_reg == None {offset = seq.find(&utils::revcomp(&int_to_minimizer[&key[0]])).unwrap();}
@@ -81,7 +84,7 @@ pub fn get_consensus(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params, km
                 }
             }            
             new_str.push_str(&seq.to_string());
-            println!("{}", new_str);
+            //println!("{}", new_str);
             bucket_gapped_seqs.insert(kmer.to_vec(), new_str);
         }
         for (kmer, new_str) in &bucket_gapped_seqs {
@@ -102,11 +105,23 @@ pub fn get_consensus(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params, km
             consensus_str.push_str(&max_base.clone());
 
         }
-        println!("{}", consensus_str);
-        for (kmer, count) in entry.iter() {
-            seq_switch.insert(kmer.to_vec(), consensus_str.to_string());
-        }
+        //println!("{}", consensus_str);
+        for (kmer, new_str) in bucket_gapped_seqs {
+            let mut start_pos = 0;
+            for i in 0..new_str.len() {
+                if new_str.chars().nth(i).unwrap().to_string() != "-" {
+                    start_pos = i;
+                    break;
+                }
 
+
+            }
+            let mod_str = &consensus_str[start_pos..new_str.len()];
+            //println!("{}", mod_str);
+            seq_switch.insert(kmer.to_vec(), mod_str.to_string());
+
+        }
+        counter += 1;
     }
     seq_switch
 }

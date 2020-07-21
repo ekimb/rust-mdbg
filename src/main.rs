@@ -114,19 +114,23 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
         //}
 
         // decide if that kmer is finally solid
-        if *entry == min_kmer_abundance as u32
+         
+       if *entry == 1
         {
+            let mut seq_tot = seq_str.to_string();
+            //println!("{}", seq_tot.len());
+            if seq_reversed {
+                seq_tot = utils::revcomp(&seq_tot);
+            } 
+            kmer_seqs_tot.insert(node.clone(), seq_tot.clone()); 
             // record sequences associated to solid kmers
             let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
             if seq_reversed {
                 seq = utils::revcomp(&seq);
             }
-            let mut seq_tot = seq_str.to_string();
-            if seq_reversed {
-                seq_tot = utils::revcomp(&seq_tot);
-            }         
+                  
             kmer_seqs.insert(node.clone(), seq.clone());
-            kmer_seqs_tot.insert(node.clone(), seq_tot.clone());
+            
             let position_of_second_minimizer = match seq_reversed {
                 true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
                 false => read_minimizers_pos[i+1]-read_minimizers_pos[i]
@@ -146,7 +150,7 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
                     debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
                 }
             }
-        }
+       }
 
     }
 }
@@ -311,7 +315,7 @@ fn main() {
 
         }
     }
-    let mut seq_switch = buckets::get_consensus(&mut dbg_nodes, &params, &mut kmer_seqs, &mut minim_shift, &int_to_minimizer);
+    let mut seq_switch = buckets::get_consensus(&mut dbg_nodes, &params, &mut kmer_seqs_tot, &mut minim_shift, &int_to_minimizer);
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
@@ -334,21 +338,24 @@ fn main() {
             let mut read_minimizers     = ec_record.read_minimizers;
             let mut read_minimizers_pos = ec_record.read_minimizers_pos;
             seq_str.truncate(seq_str.len()-1);
+
             for i in 0..(read_transformed.len()-k+1) {
                 let kmer = read_transformed[i..i+k].to_vec();
                 if seq_switch.contains_key(&kmer) {
                     seq_str = seq_switch[&kmer].to_string();
+                    //println!("Kmer {:?}", kmer);
                     break;
                 }
             }
             let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
+            //println!("{:?}", read_transformed);
+            if read_transformed.len() <= k { continue; }
+
             read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut minim_shift, &params);
         }
     }
     println!("nodes before abund-filter: {}", dbg_nodes.len());
-    kmer_seqs.retain(|x, c| dbg_nodes[&x] >= (min_kmer_abundance as u32+1));
-    minim_shift.retain(|x, c| dbg_nodes[&x] >= (min_kmer_abundance as u32+1));
-    dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32+1));
+    dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     
 
     
