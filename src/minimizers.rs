@@ -11,7 +11,7 @@ use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
 
-const lmer_frequency_based : bool = false;
+const lmer_frequency_based : bool = true;
 
 fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
@@ -41,6 +41,15 @@ fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file
     }
     params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
     println!("average lmer count: {}",params.average_lmer_count);
+}
+pub fn get_max_count(lmer_counts: &HashMap<String,u32>) -> u32 {
+    let mut max_count = 0;
+    for (lmer, count) in lmer_counts {
+        if *count > max_count {
+            max_count = *count;
+        }
+    }
+    max_count
 }
 pub fn extract_hierarchical(read_minimizers : &Vec<String>, read_minimizers_pos : &Vec<u32>, params: &Params,  minimizer_to_int: &HashMap<String,u32>, w : u32) -> (Vec<String>, Vec<u32>, Vec<u32>) {
     let mut res = Vec::new();
@@ -187,8 +196,9 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
     let size_miniverse = params.size_miniverse;
     let density = params.density;
     let l = params.l;
+    let max_count = params.max_lmer_count;
 
-    let h0 = city::hash32(&lmer) % size_miniverse;
+    let mut h0 = (city::hash32(&lmer) % size_miniverse) as f64 / size_miniverse as f64;
 
     /* hash_mode == 1 {
        if start > 0
@@ -197,15 +207,19 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
        h1.update(seq.as_bytes()[start + l-1]);
        }
        }*/
-    
+       
     if lmer_frequency_based
     {
         // minimizers must have high count
         let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-        if *count < params.average_lmer_count as u32 { return false;}
+        if *count == 0 { return false;}	        
+        let weight = ((*count as f64)/(params.average_lmer_count as f64)) as f64;
+        //println!("Weight:{}\tHash:{}\tWeight after:{}",weight, h0, h0.powf(weight));
+        h0 = h0.powf(weight);
+        return h0 < (density/(l as f64));
     }
 
-    h0 < ((size_miniverse as f64*(density/(l as f64))) as u32 ) 
+    h0 < (density/(l as f64))
 }
 
 pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)

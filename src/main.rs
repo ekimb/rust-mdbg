@@ -37,6 +37,7 @@ pub struct Params
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
+    max_lmer_count : u32,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
@@ -249,6 +250,7 @@ fn main() {
         density,
         size_miniverse,
         average_lmer_count: 0.0,
+        max_lmer_count: 0,
         min_kmer_abundance,
         levenshtein_minimizers,
     };
@@ -262,7 +264,7 @@ fn main() {
     let mut pb = ProgressBar::new(file_size);
 
     let (mut minimizer_to_int, mut int_to_minimizer, mut lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
-
+    params.max_lmer_count = minimizers::get_max_count(&lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
