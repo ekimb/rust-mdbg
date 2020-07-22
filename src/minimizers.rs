@@ -11,7 +11,7 @@ use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
 
-const lmer_frequency_based : bool = true;
+const lmer_frequency_based : bool = false;
 
 fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
@@ -211,12 +211,18 @@ pub fn minhash_minimizer_decide(lmer: &str, params: &Params, lmer_counts: &HashM
     if lmer_frequency_based
     {
         // minimizers must have high count
+        //println!("Before count");
         let count = lmer_counts.get(&lmer.to_string()).unwrap_or_else(|| &0);
-        if *count == 0 { return false;}	        
-        let weight = ((*count as f64)/(params.average_lmer_count as f64)) as f64;
+        //println!("Count {}", count);
+        if *count < params.average_lmer_count as u32 { 
+            return h0 < (density/(l as f64));
+
+
+        }	
+        let weight = ((*count as f64)/(params.max_lmer_count as f64)) as f64;
+        
         //println!("Weight:{}\tHash:{}\tWeight after:{}",weight, h0, h0.powf(weight));
-        h0 = h0.powf(weight);
-        return h0 < (density/(l as f64));
+        return (h0 - h0*weight) < (density/(l as f64));
     }
 
     h0 < (density/(l as f64))
@@ -243,6 +249,7 @@ pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, mi
         {
             if minhash_minimizer_decide(&lmer, params, lmer_counts)
             {
+                //println!("Here with lmer {}", lmer);
                 should_insert = Some(lmer.to_string());
             }
         }
@@ -342,9 +349,9 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             if lmer > lmer_rev {continue;} // skip if not canonical
         }
 
-        if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
-            continue; 
-        }
+        //if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
+        //    continue; 
+       // }
         //println!("found minimizer {}",lmer.to_string());
 
         list_minimizers.push(lmer);

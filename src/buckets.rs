@@ -13,7 +13,9 @@ pub fn enumerate_buckets(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params
     let kmers = get_kmers(&mut dbg_nodes, &params);
     let mut buckets : HashMap<Vec<u32>, Vec<(Vec<u32>, u32)>> = HashMap::new();
     for kmer in kmers.iter() {
-        buckets_insert(kmer.to_vec(), 2, &mut buckets, &mut dbg_nodes);
+        for _ in 0..dbg_nodes[&Kmer::make_from(&kmer.to_vec())] {
+            buckets_insert(kmer.to_vec(), 4, &mut buckets, &mut dbg_nodes);
+        }
     }
     for (key, entry) in &mut buckets {
         entry.sort_by_key(|tuple| tuple.0.iter().position(|&x| x == key[0]).unwrap());
@@ -21,7 +23,7 @@ pub fn enumerate_buckets(mut dbg_nodes: &mut HashMap<Kmer,u32>, params : &Params
 
     }
     println!("{:?}", buckets.len());
-    //buckets.retain(|key, entry| entry.len() > 3 && entry.iter().filter(|tuple| tuple.1 == 1).count() == entry.len());
+    buckets.retain(|key, entry| entry.len() > 2);
     println!("{:?}", buckets.len());
     buckets
 }
@@ -39,8 +41,7 @@ pub fn recur_multiple (consensus: Vec<u32>,  entry : Vec<(Vec<u32>, u32)>, mut m
 
 }
 pub fn query_buckets(read_transformed : Vec<u32>, mut dbg_nodes: &mut HashMap<Kmer,u32>, buckets : &mut HashMap<Vec<u32>, Vec<(Vec<u32>, u32)>>, mut seq_str: &mut String, params : &Params, mut kmer_seqs_tot: &mut HashMap<Kmer,String>, lmer_counts: &HashMap<String,u32>, minimizer_to_int : &HashMap<String,u32>, int_to_minimizer : &HashMap<u32,String>) -> String{
-    let sub = 2;
-    let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
+    let sub = 4;
     let k = params.k;
     let mut consensus_strs = Vec::<String>::new();
     for i in 0..read_transformed.len()-k+1 {
@@ -59,13 +60,10 @@ pub fn query_buckets(read_transformed : Vec<u32>, mut dbg_nodes: &mut HashMap<Km
             let mut entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<(Vec<u32>, u32)>::new());
             if entry.len() == 0 {continue;}
             
-            let mut base_counts : HashMap<u32, Vec<String>> = HashMap::new();
             let mut bucket_seqs : HashMap<Vec<u32>, String> = HashMap::new();
-            let mut bucket_gapped_seqs : HashMap<Vec<u32>, String> = HashMap::new();
-            let mut counts : HashMap<u32, u32> = HashMap::new();
             let mut found : bool = false;
             for (kmer, count) in entry.iter() {
-                if kmer.to_vec() == og_kmer.to_vec() {found = true;}
+                if kmer.to_vec() == og_kmer.to_vec() && *count > 1 {found = true;}
                 let kmer_node = Kmer::make_from(&kmer.to_vec());
                 let (node_norm, reversed) = kmer_node.normalize();
                 //println!("{:?}\t{}\t{:?}\t{:?}", key, dbg_nodes[&kmer_node], kmer, kmer_seqs_tot[&kmer_node]);
@@ -77,6 +75,9 @@ pub fn query_buckets(read_transformed : Vec<u32>, mut dbg_nodes: &mut HashMap<Km
                 //}
             }
             if !found {break;}
+            let mut bucket_gapped_seqs : HashMap<Vec<u32>, String> = HashMap::new();
+            let mut counts : HashMap<u32, u32> = HashMap::new();
+            let mut base_counts : HashMap<u32, Vec<String>> = HashMap::new();
            // println!("Found false kmer");
             let mut prev_len = 0;
             let mut min_prev_len = 99999;
@@ -143,10 +144,15 @@ pub fn query_buckets(read_transformed : Vec<u32>, mut dbg_nodes: &mut HashMap<Km
             //println!("{}", seq_str);
             //println!("Now");
             //println!("{}", seq_str_new.to_string());
-            consensus_strs.push(seq_str_new);
-            counter += 1;
+           // if !consensus.strs.contains(seq_str_new) {
+                consensus_strs.push(seq_str_new);
+                counter += 1;
+            //}
         }
-        break;
+    }
+    if consensus_strs.len() == 1 {
+        //println!("Consensus seq \t {}", consensus_seq);
+        return consensus_strs[0].to_string();
     }
     let mut seq_base_counts : HashMap<u32, Vec<String>> = HashMap::new();
     let mut consensus_seq = String::new();
