@@ -88,7 +88,7 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 // here, keep in mind a kmer is in minimizer-space, not base-space
 // this code presupposes that the read has already been transformed into a sequence of minimizers
 // so it just performs revcomp normalization and solidy check
-fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , kmer_seqs_tot: &mut HashMap<Kmer,String> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params, corr : bool)
+fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , seq_mins: &mut Vec<Vec<u32>> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params, corr : bool)
 {
     let k = params.k;
     let l = params.l;
@@ -118,20 +118,16 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
          
        if *entry == 1 && !corr
         {
-            let mut seq_tot = seq_str.to_string();
-            //println!("{}", seq_tot.len());
-            if seq_reversed {
-                seq_tot = utils::revcomp(&seq_tot);
-            } 
-            kmer_seqs_tot.insert(node.clone(), seq_tot.clone()); 
+            seq_mins.push(read_transformed[i..i+k].to_vec());
         }
+
         if *entry == min_kmer_abundance as u32 {
             // record sequences associated to solid kmers
             let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
             if seq_reversed {
                 seq = utils::revcomp(&seq);
             }
-                  
+               
             kmer_seqs.insert(node.clone(), seq.clone());
             
             let position_of_second_minimizer = match seq_reversed {
@@ -273,7 +269,7 @@ fn main() {
     // then will keep only those with count > 1
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
-    let mut kmer_seqs_tot   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
+    let mut seq_mins   = Vec::<Vec<u32>>::new(); // associate a dBG node to its sequence
 
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
     let mut kmers : Vec<Vec<u32>> = Vec::<Vec<u32>>::new();
@@ -316,11 +312,11 @@ fn main() {
         if error_correct
         {
             ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut minim_shift, &params, false);
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut seq_mins, &mut minim_shift, &params, false);
 
         }
     }
-    let mut buckets = buckets::enumerate_buckets(&mut dbg_nodes, &params);
+    let mut buckets = buckets::enumerate_buckets(&mut seq_mins, &mut dbg_nodes, &params);
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
@@ -347,12 +343,12 @@ fn main() {
             seq_str.truncate(seq_str.len()-1);
             if read_transformed.len() <= k { continue; }
 
-            seq_str = buckets::query_buckets(read_transformed, &mut dbg_nodes, &mut buckets, &mut seq_str, &params, &mut kmer_seqs_tot, &lmer_counts, &minimizer_to_int, &int_to_minimizer);
+            read_transformed = buckets::query_buckets(read_transformed, &mut dbg_nodes, &mut buckets, &mut seq_str, &params, &mut seq_mins, &lmer_counts, &minimizer_to_int, &int_to_minimizer);
             //println!("{:?}", read_transformed);
             let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
             if read_transformed.len() <= k { continue; }
 
-            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut minim_shift, &params, true);
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut seq_mins, &mut minim_shift, &params, true);
             //println!("Seq {} done", counter);
             pb.add(seq_str.len() as u64 + record_len as u64); // get approx size of entry
             counter += 1;
