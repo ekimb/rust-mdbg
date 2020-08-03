@@ -19,4 +19,5 @@ arrayvec = "0.4.10"
 structopt = "0.3.1"
 itertools = "0.8.0"
 strsim = "0.9.2"
+rust-spoa = "*"
 

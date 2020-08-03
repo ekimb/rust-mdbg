@@ -7,3 +7,6 @@
 small-example/*
 *.fasta
 src/trash.rs
+*.gz
+ref/
+*.graphml

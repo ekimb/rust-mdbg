@@ -166,6 +166,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
+name = "cc"
+version = "1.0.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9a06fb2e53271d7c279ec1efea6ab691c35a2ae67ec0d91d7acec0caf13b518"
+
+[[package]]
 name = "cfg-if"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -184,6 +190,15 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e56268c17a6248366d66d4a47a3381369d068cce8409bb1716ed77ea32163bb"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -717,8 +732,19 @@ dependencies = [
  "pbr",
  "petgraph",
  "petgraph-graphml",
+ "rust-spoa",
  "strsim 0.9.3",
  "structopt",
+]
+
+[[package]]
+name = "rust-spoa"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3e2b549b9af17763a1e6f040e8aa2e5c1cbe4a762390b5a1798fdc24971cf35"
+dependencies = [
+ "cc",
+ "cmake",
 ]
 
 [[package]]

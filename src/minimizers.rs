@@ -349,9 +349,9 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             if lmer > lmer_rev {continue;} // skip if not canonical
         }
 
-        //if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
-        //    continue; 
-       // }
+       // if ! minhash_minimizer_decide(&lmer, &params, &lmer_counts) { 
+         //   continue; 
+        //}
         //println!("found minimizer {}",lmer.to_string());
 
         list_minimizers.push(lmer);
