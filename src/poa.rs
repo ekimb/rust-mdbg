@@ -712,21 +712,21 @@ impl<F: MatchFunc> Poa<F> {
         let mut cons_scores = Vec::<i32>::new();
         let mut cons_next = Vec::<i32>::new();
         for i in 0..self.graph.node_count() {
-            cons_scores.push(-1);
-            cons_next.push(-1);
+            cons_scores.push(0);
+            cons_next.push(0);
         }
         for i in 0..self.graph.node_count() {
             let prev_index = self.graph.node_count()-i-1;
             let prev = NodeIndex::new(self.graph.node_count()-i-1);
             let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(prev, Outgoing).collect();
-            let mut max_weight = -1;
+            let mut max_weight = 0;
             let mut max_node = NodeIndex::new(0 as usize);
             let mut count = 0;
             let mut max_weight_nodes = Vec::<NodeIndex<usize>>::new();
             for node in next.iter() {
                 let edge = self.graph.find_edge(prev, *node).unwrap();
                 let weight = self.graph.edge_weight_mut(edge).unwrap();
-                if *weight == max_weight {
+                if *weight == max_weight && max_weight != -1 {
                     max_node = node.clone();
                     max_weight_nodes.push(max_node);
                 }

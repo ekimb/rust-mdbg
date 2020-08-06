@@ -48,6 +48,7 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
     let mut aligner = poa::Aligner::new(scoring, read_transformed.to_vec());
     let mut prev_len = 0;	
     let mut min_prev_len = 99999;
+    let mut start_pos = 0;
     for i in 0..read_transformed.len()-n+1 {
         let mut pileup_seqs = Vec::<Vec<u32>>::new();
         let bucket_idx = read_transformed[i..i+n].to_vec();
@@ -68,7 +69,8 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
             // }
             
         }
-        for seq in pileup_seqs.iter() {	
+        
+        /*for seq in pileup_seqs.iter() {	
             //print!("Seq\t");	
             //for min in seq.iter() {	
             //    print!("{}\t", min);	
@@ -92,7 +94,7 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
                 print!("{}\t", min);	
             }	
             print!("\n");	
-        }
+        }/*
         
         //println!("OG\t{:?}", og_kmer);
         //println!("After\t{:?}", consensus);
