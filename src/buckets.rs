@@ -70,7 +70,7 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
             
         }
         
-        /*for seq in pileup_seqs.iter() {	
+        for seq in pileup_seqs.iter() {	
             //print!("Seq\t");	
             //for min in seq.iter() {	
             //    print!("{}\t", min);	
@@ -94,7 +94,7 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
                 print!("{}\t", min);	
             }	
             print!("\n");	
-        }/*
+        }
         
         //println!("OG\t{:?}", og_kmer);
         //println!("After\t{:?}", consensus);
