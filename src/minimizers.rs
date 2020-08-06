@@ -100,7 +100,7 @@ in reads with erro rate 0.02:
 15244 kmers in graph-0.02-k10-p0.01.sequences
 number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-k10-p0.01.sequences 8951 (68.08)% , 4196 are not
 
-bottom line: with k=10, can't enough solid (minabund>=2) kmers when read error rate is 2%
+bottom line: with k=10, couldn't retrieve enough solid (minabund>=2) kmers (at read error rate is 2%)
 */
 
 pub fn levenshtein_ball(lmer: &String, ball_size: usize) -> Vec<String>

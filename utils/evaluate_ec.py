@@ -1,11 +1,11 @@
 """
  this script takes as input the .ec_data file for a reference genome (processed by rust-mhdbg with min-abundance of 1)
- as well as the .sequences file for a set of reads (also processed by rust-mhdbg but with the desired error correction method)
+ as well as the .ec_data file for a set of reads (also processed by rust-mhdbg but with the desired error correction method)
  and outputs the needleman-wunch alignment of each read to the reference (semi-global aln)  
 """
 import sys
 if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
-    exit("input: [reference.ec_data] [reads.sequences]\n will evaluate accuracy of minimizers in reads\n")
+    exit("input: [reference.ec_data] [reads.ec_data]\n will evaluate accuracy of minimizers in reads\n")
 
 # tip: make file1 be the .ec_data file constructed from a reference genome
 # and file2 be one made from the reads
