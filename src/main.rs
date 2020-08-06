@@ -7,6 +7,7 @@ use std::collections::hash_map::Entry;
 use petgraph_graphml::GraphMl;
 use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
+extern crate array_tool;
 //use adler32::RollingAdler32;
 use std::fs;
 use structopt::StructOpt;
@@ -95,9 +96,16 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
 {
     let k = params.k;
     let l = params.l;
+    let n = params.n;
     let min_kmer_abundance = params.min_kmer_abundance;
     let levenshtein_minimizers = params.levenshtein_minimizers;
+    if !corr
+    {
+        for i in 0..read_transformed.len()-n+1 {
+            seq_mins.push(read_transformed[i..i+n].to_vec());
 
+        }
+    }
     for i in 0..(read_transformed.len()-k+1)
     {
         let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
@@ -121,16 +129,15 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
         
         
          
-      // if *entry == 1 && !corr
-       // {
-       //     seq_mins.push(read_transformed.to_vec());
+      
+            
             //let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
             //if seq_reversed {
             //   seq = utils::revcomp(&seq);
             //}
             
             //kmer_seqs_tot.insert(node.clone(), seq.clone());
-       // }
+      
 
         if *entry == min_kmer_abundance as u32 {
             // record sequences associated to solid kmers
