@@ -344,8 +344,8 @@ fn main() {
              //   *count += 1;
             //}
             if read_transformed.len() < n {continue;}
+            if read_transformed.len() > k {ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);}            }
             buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
-            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
 
         }
 
