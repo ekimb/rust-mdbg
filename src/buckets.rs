@@ -49,28 +49,27 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
     let mut prev_len = 0;	
     let mut min_prev_len = 99999;
     let mut start_pos = 0;
+    let mut offset_hash : HashMap<Vec<u32>, u32> = HashMap::new(); 
     for i in 0..read_transformed.len()-n+1 {
         let mut pileup_seqs = Vec::<Vec<u32>>::new();
         let bucket_idx = read_transformed[i..i+n].to_vec();
         let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
+        entry.dedup();
         for query in entry.iter() {
-                if !bucket_seqs.contains(query) {
-                        aligner.global(query.to_vec());
-                        aligner.add_to_graph();
-                        pileup_seqs.push(query.to_vec());
-                        bucket_seqs.push(query.to_vec());
-                        let mut offset;	
-                        let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
-                        offset = offset_reg.unwrap();	
-                        if offset > prev_len {prev_len = offset;}	
-                        if offset < min_prev_len {min_prev_len = offset;}    
-                }
-               // }
-            // }
-            
-        }
+            //if !bucket_seqs.contains(query) {
+                    pileup_seqs.push(query.to_vec());
+                    //bucket_seqs.push(query.to_vec());
+                    let mut offset;	
+                    let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
+                    offset = offset_reg.unwrap();	
+                    if offset > prev_len {prev_len = offset;}	
+                    if offset < min_prev_len {min_prev_len = offset;}    
+            //}
+           // }
+        // }
         
-        /*for seq in pileup_seqs.iter() {	
+        }
+        for seq in pileup_seqs.iter() {	
             //print!("Seq\t");	
             //for min in seq.iter() {	
             //    print!("{}\t", min);	
@@ -81,11 +80,12 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
             let mut offset_reg = seq.iter().position(|&x| x == bucket_idx[0]);	
             offset = offset_reg.unwrap();	
             let mut new_seq = Vec::<u32>::new();	
-            if prev_len != offset {	
+            if prev_len+i != offset {	
                 for _ in offset..prev_len+i {	
                     new_seq.push(0)	
                 }	
-            }       	
+            }       
+            offset_hash.insert(seq.to_vec(), ((prev_len+i) as usize - offset) as u32);	
             for min in seq.iter() {	
                 new_seq.push(*min);	
             }     	
@@ -94,7 +94,17 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
                 print!("{}\t", min);	
             }	
             print!("\n");	
-        }/*
+        }
+        pileup_seqs.sort_by_key(|x| offset_hash[&x.to_vec()]);
+        
+        for i in 0..pileup_seqs.len() {	
+            aligner.global(pileup_seqs[i].to_vec());
+            aligner.add_to_graph();
+        }
+            
+        
+        
+        
         
         //println!("OG\t{:?}", og_kmer);
         //println!("After\t{:?}", consensus);

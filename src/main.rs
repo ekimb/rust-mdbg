@@ -332,8 +332,8 @@ fn main() {
         // some debug
         //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
-        if read_transformed.len() <= k { continue; }
-        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
+        if read_transformed.len() > k { read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false); }
+        
         if error_correct
         {
             //for i in 0..read_transformed.len()-n+1 {
@@ -341,7 +341,7 @@ fn main() {
               //  let count = sub_counts.entry(sub_mer.to_vec()).or_insert(0);
              //   *count += 1;
             //}
-            
+            if read_transformed.len() < n {continue;}
             buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
             ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
 
@@ -396,6 +396,7 @@ fn main() {
             }
             seq.truncate(seq.len()-1);
             read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, true);
+            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
             //println!("Seq {} done", counter);
             pb.add(seq_str.len() as u64 + record_len as u64); // get approx size of entry
             counter += 1;

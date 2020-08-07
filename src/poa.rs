@@ -711,13 +711,17 @@ impl<F: MatchFunc> Poa<F> {
     pub fn set_max_weight_scores(&mut self) -> (Vec<i32>, Vec<i32>) {
         let mut cons_scores = Vec::<i32>::new();
         let mut cons_next = Vec::<i32>::new();
+        let mut clone_nodes = Vec::<NodeIndex<usize>>::new();
         for i in 0..self.graph.node_count() {
             cons_scores.push(0);
             cons_next.push(0);
+            let node_index = NodeIndex::new(i);
+            clone_nodes.push(node_index);
         }
-        for i in 0..self.graph.node_count() {
-            let prev_index = self.graph.node_count()-i-1;
-            let prev = NodeIndex::new(self.graph.node_count()-i-1);
+        //clone_nodes.sort_by_key(|&x| self.graph.node_weight(x).unwrap());
+        for i in 0..clone_nodes.len() {
+            let prev = clone_nodes[(clone_nodes.len()-i-1)];
+            let prev_index = prev.index();
             let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(prev, Outgoing).collect();
             let mut max_weight = 0;
             let mut max_node = NodeIndex::new(0 as usize);
@@ -725,7 +729,10 @@ impl<F: MatchFunc> Poa<F> {
             let mut max_weight_nodes = Vec::<NodeIndex<usize>>::new();
             for node in next.iter() {
                 let edge = self.graph.find_edge(prev, *node).unwrap();
+                //let mut weight = self.graph.node_weight_mut(*node).unwrap();
+               // if weight == 0 {weight = 1;}
                 let weight = self.graph.edge_weight_mut(edge).unwrap();
+                //println!("Weight between {} and {} is {}", self.node_index[&prev], self.node_index[node], weight);
                 if *weight == max_weight && max_weight != -1 {
                     max_node = node.clone();
                     max_weight_nodes.push(max_node);
@@ -737,6 +744,13 @@ impl<F: MatchFunc> Poa<F> {
                     max_weight_nodes.push(max_node);
                 }
             }
+            //if max_weight == 1 {
+            //    let final_index = max_node.index();
+            //    let final_score = 0;
+            //    cons_scores[prev_index] = final_score;
+            //    cons_next[prev_index] = final_index as i32;
+            //    continue;
+            //}
             if max_weight_nodes.len() != 1 {
                 //println!("Here");
                 let mut max_score = 0;
