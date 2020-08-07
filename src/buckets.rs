@@ -54,17 +54,16 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
         let mut pileup_seqs = Vec::<Vec<u32>>::new();
         let bucket_idx = read_transformed[i..i+n].to_vec();
         let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
-        entry.dedup();
         for query in entry.iter() {
-            //if !bucket_seqs.contains(query) {
+            if !bucket_seqs.contains(query) {
                     pileup_seqs.push(query.to_vec());
-                    //bucket_seqs.push(query.to_vec());
+                    bucket_seqs.push(query.to_vec());
                     let mut offset;	
                     let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
                     offset = offset_reg.unwrap();	
                     if offset > prev_len {prev_len = offset;}	
                     if offset < min_prev_len {min_prev_len = offset;}    
-            //}
+            }
            // }
         // }
         

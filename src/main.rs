@@ -306,6 +306,7 @@ fn main() {
     let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
     let mut ec_file         = ec_reads::new_file(&output_prefix);
     let mut ec_file_postcor = ec_reads::new_file(&postcor_path);
+    
     let mut buckets : HashMap<Vec<u32>, Vec<Vec<u32>>> = HashMap::new();
     let mut dbg_nodes_all   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut sub_counts   : HashMap<Vec<u32>,u32> = HashMap::new(); // it's a Counter
@@ -334,8 +335,8 @@ fn main() {
         // some debug
         //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
-        if read_transformed.len() > k { read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false); }
-        
+        if read_transformed.len() <= k { continue; }
+        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
         if error_correct
         {
             //for i in 0..read_transformed.len()-n+1 {
@@ -343,9 +344,9 @@ fn main() {
               //  let count = sub_counts.entry(sub_mer.to_vec()).or_insert(0);
              //   *count += 1;
             //}
-            if read_transformed.len() < n {continue;}
-            if read_transformed.len() > k {ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);}
+            
             buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
+            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
 
         }
 
@@ -394,12 +395,10 @@ fn main() {
             for i in 0..read_minimizers.len() {
                 seq.push_str(&read_minimizers[i]);
                 seq.push_str("N");
-            }
 
-            // dump corrected reads to [prefix].postcor.ec_data
+            }
             ec_reads::record(&mut ec_file_postcor, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
             ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
-
             seq.truncate(seq.len()-1);
             read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, true);
             //println!("Seq {} done", counter);
