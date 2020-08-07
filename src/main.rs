@@ -344,7 +344,7 @@ fn main() {
              //   *count += 1;
             //}
             if read_transformed.len() < n {continue;}
-            if read_transformed.len() > k {ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);}            }
+            if read_transformed.len() > k {ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);}
             buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
 
         }
@@ -402,7 +402,6 @@ fn main() {
 
             seq.truncate(seq.len()-1);
             read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, true);
-            ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
             //println!("Seq {} done", counter);
             pb.add(seq_str.len() as u64 + record_len as u64); // get approx size of entry
             counter += 1;
