@@ -54,6 +54,7 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
         let mut pileup_seqs = Vec::<Vec<u32>>::new();
         let bucket_idx = read_transformed[i..i+n].to_vec();
         let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
+        //entry.dedup();
         for query in entry.iter() {
             if !bucket_seqs.contains(query) {
                     pileup_seqs.push(query.to_vec());
@@ -89,13 +90,12 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
                 new_seq.push(*min);	
             }     	
            // print!("New\t");	
-            for min in new_seq.iter() {	
+            /*for min in new_seq.iter() {	
                 print!("{}\t", min);	
             }	
-            print!("\n");	
+            print!("\n");	*/
         }
         pileup_seqs.sort_by_key(|x| offset_hash[&x.to_vec()]);
-        
         for i in 0..pileup_seqs.len() {	
             aligner.global(pileup_seqs[i].to_vec());
             aligner.add_to_graph();
