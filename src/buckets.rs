@@ -114,8 +114,8 @@ pub fn query_buckets(mut kmer_seqs_tot : &mut HashMap<Kmer,String>, read_transfo
             //println!("Consensus:\t{}", minimizers::normalize_minimizer(&std::str::from_utf8(&consensus).unwrap().to_string()));
         //}
     }
-    
-    let (mut cons_scores, mut cons_next) = aligner.poa.set_max_weight_scores();
+    //aligner.poa.get_max_path();
+    let (mut cons_scores, mut cons_next) = aligner.poa.set_max_weight_scores(&params);
     let mut consensus = aligner.poa.find_consensus(cons_scores, cons_next);
    /* for i in 0..bucket_seqs.len() {
         if i == 0 {

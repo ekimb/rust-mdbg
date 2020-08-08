@@ -38,9 +38,11 @@ use std::cmp::{max, Ordering};
 
 
 use std::collections::HashMap;
+use super::Params;
 
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Topo;
+use petgraph::visit::Dfs;
 
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 
@@ -697,6 +699,7 @@ impl<F: MatchFunc> Poa<F> {
         let mut consensus = Vec::<u32>::new();
         let max = cons_scores.iter().max().unwrap();
         let mut pos = cons_scores.iter().position(|element| element == max).unwrap() as usize;
+        //let mut pos = 0;
         let mut first : bool = true;
         while (pos != 0 && !first) || first {
             let min = self.graph.raw_nodes()[pos].weight;
@@ -708,7 +711,56 @@ impl<F: MatchFunc> Poa<F> {
         consensus
 
     }
-    pub fn set_max_weight_scores(&mut self) -> (Vec<i32>, Vec<i32>) {
+    pub fn dfs(&mut self, start : usize) {
+        let mut visited = Vec::<bool>::new(); 
+        let mut path = Vec::<usize>::new();
+            for i in 0..self.graph.node_count() {
+                visited.push(false);
+            }
+            self.dfs_util(start, visited, path); 
+    
+    }
+    pub fn dfs_util(&mut self, vertex : usize, mut visited : Vec<bool>, mut path : Vec<usize>) { 
+        visited[vertex] = true;
+        path.push(vertex);
+        //print!("{} ", vertex);
+        let mut prev = NodeIndex::new(vertex);
+        let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(prev, Outgoing).collect();
+        if next.len() == 0 {
+            println!("{:?}", path);
+        }
+        else {
+            for node in next.iter() {
+                if !visited.to_vec()[node.index()] {
+                    //println!("Prev {}, node {}", prev.index(), node.index());
+                    let edge = self.graph.find_edge(prev, *node).unwrap();
+                    let weight = self.graph.edge_weight_mut(edge).unwrap();
+                    //println!("Weight between {} and {} is {}", self.node_index[&prev], self.node_index[&node], weight);
+                    self.dfs_util(node.index(), visited.to_vec(), path.to_vec());
+                } 
+            }
+        }
+        path.pop();
+        visited[vertex] = false;
+         
+    }
+    pub fn get_max_path(&mut self) {
+        
+        let mut roots = Vec::<usize>::new();
+        for i in 0..self.graph.node_count() {
+            let node_index = NodeIndex::new(i);
+            let prev: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node_index, Incoming).collect();
+            let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node_index, Outgoing).collect();
+            if prev.len() == 0 && next.len() != 0 {
+                //println!("{}", i);
+                roots.push(i);
+            }
+        }
+        for root in roots.iter() {
+           self.dfs(*root);
+        }
+    }
+    pub fn set_max_weight_scores(&mut self, params : &Params) -> (Vec<i32>, Vec<i32>) {
         let mut cons_scores = Vec::<i32>::new();
         let mut cons_next = Vec::<i32>::new();
         let mut clone_nodes = Vec::<NodeIndex<usize>>::new();
@@ -751,9 +803,10 @@ impl<F: MatchFunc> Poa<F> {
             //    cons_next[prev_index] = final_index as i32;
             //    continue;
             //}
+            
             if max_weight_nodes.len() != 1 {
                 //println!("Here");
-                let mut max_score = 0;
+               let mut max_score = 0;
                 let mut max_score_node = NodeIndex::new(0 as usize);
                 for max_node in max_weight_nodes.iter() {
                     let max_index = max_node.index();
@@ -775,6 +828,11 @@ impl<F: MatchFunc> Poa<F> {
                 cons_next[prev_index] = final_index as i32;
             }
             
+            if max_weight < params.t as i32 {
+                cons_scores[prev_index] = 0;
+                cons_next[prev_index] = 0;
+                continue;
+            }
             //println!("Index : {}, score : {}, pointing to : {}", prev_index, cons_scores[prev_index], cons_next[prev_index]);
         }
         (cons_scores, cons_next)

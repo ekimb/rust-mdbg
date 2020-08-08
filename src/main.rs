@@ -38,6 +38,7 @@ pub struct Params
     l: usize,
     k: usize,
     n: usize,
+    t: usize,
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
@@ -195,6 +196,8 @@ struct Opt {
     l: Option<usize>,
     #[structopt(short, long)]
     n: Option<usize>,
+    #[structopt(short, long)]
+    t: Option<usize>,
     #[structopt(long)]
     density: Option<f64>,
     #[structopt(long)]
@@ -216,6 +219,7 @@ fn main() {
     let mut k: usize = 10;
     let mut l: usize = 12;
     let mut n: usize = 2;
+    let mut t: usize = 0;
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
@@ -236,6 +240,8 @@ fn main() {
     if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
     if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
     if !opt.n.is_none() { n = opt.n.unwrap() } else { println!("Warning: using default n value ({})",n); }
+    if !opt.t.is_none() { t = opt.t.unwrap() } else { println!("Warning: using default t value ({})",t); }
+
     if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
 
@@ -263,6 +269,7 @@ fn main() {
         l,
         k,
         n,
+        t,
         density,
         size_miniverse,
         average_lmer_count: 0.0,
