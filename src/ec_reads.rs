@@ -29,8 +29,9 @@ pub fn delete_file(output_prefix: &PathBuf)
     remove_file(path).unwrap();
 }
 
-pub fn record(file: &mut BufWriter<File>, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
+pub fn record(file: &mut BufWriter<File>, seq_id: &str, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
 {
+    write!(file, "{}\n", seq_id ).expect("error writing EC info");
     write!(file, "{}\n", seq_str).expect("error writing EC info");
     write!(file, "{}\n", read_transformed.iter().join(" ")).expect("error writing EC info");
     write!(file, "{}\n", read_minimizers.iter().join(" ")).expect("error writing EC info");
@@ -43,6 +44,7 @@ pub fn flush(file: &mut BufWriter<File>)
 
 pub struct EcRecord
 {
+    pub seq_id  :String,
     pub seq_str :String,
     pub read_transformed: Vec<u32>,
     pub read_minimizers: Vec<String>,
@@ -67,11 +69,12 @@ pub fn load(output_prefix: &PathBuf) -> Vec<EcRecord>
         let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
         if let Err(e) = br.read_line(&mut line) { break; }
         if line.len() == 0                      { break; }
-        let seq_str = line.clone();                           new_line(&mut line, &mut br);
+        let seq_id  = line.trim().to_string();                    new_line(&mut line, &mut br);
+        let seq_str = line.trim().to_string();                    new_line(&mut line, &mut br);
         let read_transformed: Vec<u32> = to_vec_int(&line);   new_line(&mut line, &mut br);
         let read_minimizers: Vec<String> = to_vec_str(&line); new_line(&mut line, &mut br);
         let read_minimizers_pos: Vec<u32> = to_vec_int(&line);
-        res.push( EcRecord { seq_str, read_transformed, read_minimizers, read_minimizers_pos } );
+        res.push( EcRecord { seq_id, seq_str, read_transformed, read_minimizers, read_minimizers_pos } );
     }
     res
 }

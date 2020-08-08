@@ -2,6 +2,7 @@
 #![allow(non_upper_case_globals)]
 use pbr::ProgressBar;
 use bio::io::fasta;
+use std::io::stderr;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use petgraph_graphml::GraphMl;
@@ -284,7 +285,7 @@ fn main() {
     // get file size for progress bar
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
-    let mut pb = ProgressBar::new(file_size);
+    let mut pb = ProgressBar::on(stderr(),file_size);
 
     let (mut minimizer_to_int, mut int_to_minimizer, mut lmer_counts) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
     //params.max_lmer_count = minimizers::get_max_count(&lmer_counts);
@@ -307,8 +308,6 @@ fn main() {
 
 
 
-
-
     let mut record_len = 0;
     let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
     let mut ec_file         = ec_reads::new_file(&output_prefix);
@@ -319,20 +318,19 @@ fn main() {
     let mut sub_counts   : HashMap<Vec<u32>,u32> = HashMap::new(); // it's a Counter
 
     for result in reader.records() {
-        let record = result.unwrap();
-        let seq = record.seq();
+        let record    = result.unwrap();
+        let seq       = record.seq();
+        let seq_id    = record.id();
 
         let seq_str = String::from_utf8_lossy(seq);
 
-        //println!("seq: {}", seq_str);
+        //println!("id: {}\nseq: {}", record.id(), seq_str);
 
         let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq_str, &params, &lmer_counts, &minimizer_to_int);
 
         //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
         //println!("{:?}", test_trans);
         
-
-
         // stats
         nb_minimizers_per_read += read_minimizers.len() as f64;
         nb_reads += 1;
@@ -343,10 +341,9 @@ fn main() {
         //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
         if read_transformed.len() > k {
-        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
-        ec_reads::record(&mut ec_file, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
+        }
 
-    }
         if error_correct
         {
             //for i in 0..read_transformed.len()-n+1 {
@@ -356,8 +353,8 @@ fn main() {
             //}
             if read_transformed.len() > n {
             buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
+            ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
             }
-
         }
 
     }
@@ -375,13 +372,14 @@ fn main() {
     dbg_nodes = HashMap::new(); // it's a Counter
     kmer_seqs = HashMap::new(); // associate a dBG node to its sequence
     minim_shift = HashMap::new(); // records position of second minimizer in sequence
-        let mut pb = ProgressBar::new(file_size);
+        let mut pb = ProgressBar::on(stderr(),file_size);
 
         // do error correction of reads 
         let mut counter = 1;
         
         for ec_record in ec_reads::load(&output_prefix) 
         {
+            let mut seq_id              = ec_record.seq_id;
             let mut seq_str             = ec_record.seq_str;
             let mut read_transformed    = ec_record.read_transformed;
             let mut read_minimizers     = ec_record.read_minimizers;
@@ -405,13 +403,16 @@ fn main() {
             for i in 0..read_minimizers.len() {
                 seq.push_str(&read_minimizers[i]);
                 seq.push_str("N");
-
             }
-            ec_reads::record(&mut ec_file_postcor, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
-            ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
+
             seq.truncate(seq.len()-1);
             read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, true);
             //println!("Seq {} done", counter);
+ 
+            // dump corrected reads to [prefix].postcor.ec_data
+            ec_reads::record(&mut ec_file_postcor, &seq_id, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
+            ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
+
             pb.add(seq_str.len() as u64 + record_len as u64); // get approx size of entry
             counter += 1;
         }
