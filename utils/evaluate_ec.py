@@ -189,3 +189,6 @@ for seq_id in id_r1:
 print(nb_better,"reads improved")
 print(nb_nochange,"reads unchanged")
 print(nb_worse,"reads made worse")
+id_r1, aln_r1, orig_r1 = process_reads(reads, file2)
+if reads2 is not None:
+    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3)

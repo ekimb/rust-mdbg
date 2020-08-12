@@ -29,6 +29,13 @@ pub fn delete_file(output_prefix: &PathBuf)
     remove_file(path).unwrap();
 }
 
+pub fn record_poa(file: &mut BufWriter<File>, seq_id: &str, poa_ids: Vec<String>)
+{
+write!(file, "{}\t", seq_id).expect("error writing EC info");
+write!(file, "{}\n", poa_ids.iter().join("\t")).expect("error writing EC info");
+
+
+}
 pub fn record(file: &mut BufWriter<File>, seq_id: &str, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
 {
     write!(file, "{}\n", seq_id ).expect("error writing EC info");

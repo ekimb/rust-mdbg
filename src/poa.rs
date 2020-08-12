@@ -33,6 +33,105 @@
 //! assert_eq!(aligner.global(z).alignment().score, 5);
 //! ```
 //!
+// Copyright 2014-2015 Johannes Köster, Vadim Nazarov, Patrick Marks
+// Licensed under the MIT license (http://opensource.org/licenses/MIT)
+// This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Calculate alignments with a generalized variant of the Smith Waterman algorithm.
+//! Complexity: O(n * m) for strings of length m and n.
+//!
+//! For quick computation of alignments and alignment scores there are 6 simple functions.
+//!
+//! # Example
+//!
+//! ```
+//! use bio::alignment::pairwise::*;
+//! use bio::alignment::AlignmentOperation::*;
+//!
+//! let x = b"ACCGTGGAT";
+//! let y = b"AAAAACCGTTGAT";
+//! let score = |a: u8, b: u8| if a == b {1i32} else {-1i32};
+//! let mut aligner = Aligner::with_capacity(x.len(), y.len(), -5, -1, &score);
+//! let alignment = aligner.semiglobal(x, y);
+//! // x is global (target sequence) and y is local (reference sequence)
+//! assert_eq!(alignment.ystart, 4);
+//! assert_eq!(alignment.xstart, 0);
+//! assert_eq!(alignment.operations,
+//!     [Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
+//!
+//! // If you don't known sizes of future sequences, you could
+//! // use Aligner::new().
+//! // Global alignment:
+//! let mut aligner = Aligner::new(-5, -1, &score);
+//! let x = b"ACCGTGGAT";
+//! let y = b"AAAAACCGTTGAT";
+//! let alignment = aligner.global(x, y);
+//! assert_eq!(alignment.ystart, 0);
+//! assert_eq!(alignment.xstart, 0);
+//! assert_eq!(aligner.local(x, y).score, 7);
+//!
+//! // In addition to the standard modes (Global, Semiglobal and Local), a custom alignment
+//! // mode is supported which supports a user-specified clipping penalty. Clipping is a
+//! // special boundary condition where you are allowed to clip off the beginning/end of
+//! // the sequence for a fixed penalty. As a starting example, we can use the custom mode
+//! // for achieving the three standard modes as follows.
+//!
+//! // scoring for semiglobal mode
+//! let scoring = Scoring::new( -5, -1, &score) // Gap open, gap extend and match score function
+//!    .xclip(MIN_SCORE) // Clipping penalty for x set to 'negative infinity', hence global in x
+//!    .yclip(0); // Clipping penalty for y set to 0, hence local in y
+//! let mut aligner = Aligner::with_scoring(scoring);
+//! let alignment = aligner.custom(x,y); // The custom aligner invocation
+//! assert_eq!(alignment.ystart, 4);
+//! assert_eq!(alignment.xstart, 0);
+//! // Note that in the custom mode, the clips are explicitly mentioned in the operations
+//! assert_eq!(alignment.operations,
+//!     [Yclip(4), Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
+//!
+//! // scoring for global mode
+//! // scoring can also be created usinf from_scores if the match and mismatch scores are constants
+//! let scoring = Scoring::from_scores( -5, -1, 1, -1) // Gap open, extend, match, mismatch score
+//!     .xclip(MIN_SCORE)  // Clipping penalty for x set to 'negative infinity', hence global in x
+//!     .yclip(MIN_SCORE); // Clipping penalty for y set to 'negative infinity', hence global in y
+//! let mut aligner = Aligner::with_scoring(scoring);
+//! let alignment = aligner.custom(x,y); // The custom aligner invocation
+//! assert_eq!(alignment.ystart, 0);
+//! assert_eq!(alignment.xstart, 0);
+//! // Note that in the custom mode, the clips are explicitly mentioned in the operations
+//! assert_eq!(alignment.operations,
+//!     [Del, Del, Del, Del, Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
+//!
+//! // Similarly if the clip penalties are both set to 0, we have local alignment mode. The scoring
+//! // struct also lets users set different penalties for prefix/suffix clipping, therby letting
+//! // users have the flexibility to create a wide variety of boundary conditions. The xclip() and
+//! // yclip() methods sets the prefix and suffix penalties to be equal. The scoring stuct can be
+//! // explicitly constructed fo full flexibility.
+//!
+//! // The following example considers a modification of the semiglobal mode where you are allowed
+//! // to skip a prefix of the target sequence x, for a penalty of -10, but you have to consume
+//! // the rest of the string in the alignment
+//!
+//! let scoring = Scoring {
+//!     gap_open: -5,
+//!     gap_extend: -1,
+//!     match_fn: |a: u8, b: u8| if a == b {1i32} else {-3i32},
+//!     match_scores: Some((1, -3)),
+//!     xclip_prefix: -10,
+//!     xclip_suffix: MIN_SCORE,
+//!     yclip_prefix: 0,
+//!     yclip_suffix: 0
+//! };
+//! let x = b"GGGGGGACGTACGTACGT";
+//! let y = b"AAAAACGTACGTACGTAAAA";
+//! let mut aligner = Aligner::with_capacity_and_scoring(x.len(), y.len(), scoring);
+//! let alignment = aligner.custom(x, y);
+//! println!("{}", alignment.pretty(x,y));
+//! assert_eq!(alignment.score, 2);
+//! assert_eq!(alignment.operations, [Yclip(4), Xclip(6), Match, Match, Match, Match,
+//!    Match, Match, Match, Match, Match, Match, Match, Match, Yclip(4)]);
+//! ```
+
 
 use std::cmp::{max, Ordering};
 
@@ -41,6 +140,9 @@ use std::collections::HashMap;
 use super::Params;
 
 use petgraph::graph::NodeIndex;
+use petgraph::graph::EdgeIndex;
+use petgraph::visit::EdgeRef;
+use petgraph::algo::toposort;
 use petgraph::visit::Topo;
 use petgraph::visit::Dfs;
 
@@ -56,7 +158,7 @@ pub const MIN_SCORE: i32 = -858_993_459;
 
 /// Trait required to instantiate a Scoring instance
 pub trait MatchFunc {
-    fn score(&self, a: u32, b: u32) -> i32;
+    fn score(&mut self, a: u32, b: u32) -> i32;
 }
 
 /// A concrete data structure which implements trait MatchFunc with constant
@@ -86,7 +188,7 @@ impl MatchParams {
 
 impl MatchFunc for MatchParams {
     #[inline]
-    fn score(&self, a: u32, b: u32) -> i32 {
+    fn score(&mut self, a: u32, b: u32) -> i32 {
         if a == b {
             self.match_score
         } else {
@@ -99,9 +201,9 @@ impl MatchFunc for MatchParams {
 /// can be instantiated using closures and custom user defined functions
 impl<F> MatchFunc for F
 where
-    F: Fn(u32, u32) -> i32,
+    F: FnMut(u32, u32) -> i32,
 {
-    fn score(&self, a: u32, b: u32) -> i32 {
+    fn score(&mut self, a: u32, b: u32) -> i32 {
         (self)(a, b)
     }
 }
@@ -535,6 +637,7 @@ pub struct Poa<F: MatchFunc> {
     pub graph: POAGraph,
     pub node_index : HashMap<NodeIndex<usize>, u32>,
     pub edge_index : HashMap<usize, (u32, u32)>,
+    pub seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>>,
 }
 
 impl<F: MatchFunc> Poa<F> {
@@ -548,8 +651,10 @@ impl<F: MatchFunc> Poa<F> {
     pub fn new(scoring: Scoring<F>, graph: POAGraph) -> Self {
         let mut node_index : HashMap<NodeIndex<usize>, u32> = HashMap::new();
         let mut edge_index : HashMap<usize, (u32, u32)> = HashMap::new();
+        let mut seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>> = HashMap::new();
 
-        Poa { scoring, graph, node_index, edge_index }
+
+        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
     }
 
     /// Create a new POA graph from an initial reference sequence and alignment penalties.
@@ -562,6 +667,8 @@ impl<F: MatchFunc> Poa<F> {
     pub fn from_string(scoring: Scoring<F>, seq: Vec<u32>) -> Self {
         let mut node_index : HashMap<NodeIndex<usize>, u32> = HashMap::new();
         let mut edge_index : HashMap<usize, (u32, u32)> = HashMap::new();
+        let mut seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>> = HashMap::new();
+        let mut entry = seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
         let mut graph: Graph<u32, i32, Directed, usize> =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
@@ -572,11 +679,12 @@ impl<F: MatchFunc> Poa<F> {
             node_index.insert(node, *base);
             graph.add_edge(prev, node, 1);
             let edge = graph.find_edge(prev, node).unwrap();
+            entry.push(edge);
             edge_index.insert(edge.index(),(node_index[&prev], node_index[&node]));
             prev = node;
         }
 
-        Poa { scoring, graph, node_index, edge_index }
+        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
     }
 
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
@@ -585,7 +693,7 @@ impl<F: MatchFunc> Poa<F> {
     /// * `query` - the query TextSlice to align against the internal graph member
     ///
 
-    pub fn global(&self, query: Vec<u32>) -> Traceback {
+    pub fn global(&mut self, query: Vec<u32>) -> Traceback {
         assert!(self.graph.node_count() != 0);
 
         // dimensions of the traceback matrix
@@ -695,152 +803,66 @@ impl<F: MatchFunc> Poa<F> {
     /// * `aln` - The alignment of the new sequence to the graph
     /// * `seq` - The sequence being incorporated
     ///
-    pub fn find_consensus(&mut self, cons_scores : Vec<i32>, cons_next : Vec<i32>) -> Vec<u32> {
-        let mut consensus = Vec::<u32>::new();
-        let max = cons_scores.iter().max().unwrap();
-        let mut pos = cons_scores.iter().position(|element| element == max).unwrap() as usize;
-        //let mut pos = 0;
-        let mut first : bool = true;
-        while (pos != 0 && !first) || first {
-            let min = self.graph.raw_nodes()[pos].weight;
-            //println!("Index : {}, min : {}", pos, min);
-            consensus.push(min);
-            first = false;
-            pos = cons_next[pos] as usize;
+    pub fn consensus(&mut self) -> Vec<u32> {
+        // If we've added no new nodes or edges since the last call, sort first
+        let mut cns = Vec::new();
+        for node in self.consensus_path().to_vec() {
+            cns.push(*self.graph.node_weight(node).unwrap() as u32);
         }
-        consensus
 
+        cns.to_vec()
     }
-    pub fn dfs(&mut self, start : usize) {
-        let mut visited = Vec::<bool>::new(); 
-        let mut path = Vec::<usize>::new();
-            for i in 0..self.graph.node_count() {
-                visited.push(false);
-            }
-            self.dfs_util(start, visited, path); 
-    
-    }
-    pub fn dfs_util(&mut self, vertex : usize, mut visited : Vec<bool>, mut path : Vec<usize>) { 
-        visited[vertex] = true;
-        path.push(vertex);
-        //print!("{} ", vertex);
-        let mut prev = NodeIndex::new(vertex);
-        let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(prev, Outgoing).collect();
-        if next.len() == 0 {
-            println!("{:?}", path);
-        }
-        else {
-            for node in next.iter() {
-                if !visited.to_vec()[node.index()] {
-                    //println!("Prev {}, node {}", prev.index(), node.index());
-                    let edge = self.graph.find_edge(prev, *node).unwrap();
-                    let weight = self.graph.edge_weight_mut(edge).unwrap();
-                    //println!("Weight between {} and {} is {}", self.node_index[&prev], self.node_index[&node], weight);
-                    self.dfs_util(node.index(), visited.to_vec(), path.to_vec());
-                } 
-            }
-        }
-        path.pop();
-        visited[vertex] = false;
-         
-    }
-    pub fn get_max_path(&mut self) {
-        
-        let mut roots = Vec::<usize>::new();
-        for i in 0..self.graph.node_count() {
-            let node_index = NodeIndex::new(i);
-            let prev: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node_index, Incoming).collect();
-            let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node_index, Outgoing).collect();
-            if prev.len() == 0 && next.len() != 0 {
-                //println!("{}", i);
-                roots.push(i);
-            }
-        }
-        for root in roots.iter() {
-           self.dfs(*root);
-        }
-    }
-    pub fn set_max_weight_scores(&mut self, params : &Params) -> (Vec<i32>, Vec<i32>) {
-        let mut cons_scores = Vec::<i32>::new();
-        let mut cons_next = Vec::<i32>::new();
-        let mut clone_nodes = Vec::<NodeIndex<usize>>::new();
-        for i in 0..self.graph.node_count() {
-            cons_scores.push(0);
-            cons_next.push(0);
-            let node_index = NodeIndex::new(i);
-            clone_nodes.push(node_index);
-        }
-        //clone_nodes.sort_by_key(|&x| self.graph.node_weight(x).unwrap());
-        for i in 0..clone_nodes.len() {
-            let prev = clone_nodes[(clone_nodes.len()-i-1)];
-            let prev_index = prev.index();
-            let next: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(prev, Outgoing).collect();
-            let mut max_weight = 0;
-            let mut max_node = NodeIndex::new(0 as usize);
-            let mut count = 0;
-            let mut max_weight_nodes = Vec::<NodeIndex<usize>>::new();
-            for node in next.iter() {
-                let edge = self.graph.find_edge(prev, *node).unwrap();
-                //let mut weight = self.graph.node_weight_mut(*node).unwrap();
-               // if weight == 0 {weight = 1;}
-                let weight = self.graph.edge_weight_mut(edge).unwrap();
-                //println!("Weight between {} and {} is {}", self.node_index[&prev], self.node_index[node], weight);
-                if *weight == max_weight && max_weight != -1 {
-                    max_node = node.clone();
-                    max_weight_nodes.push(max_node);
-                }
-                else if *weight > max_weight {
-                    max_weight = *weight;
-                    max_weight_nodes = Vec::<NodeIndex<usize>>::new();
-                    max_node = node.clone();
-                    max_weight_nodes.push(max_node);
+    pub fn consensus_path(&mut self) -> Vec<NodeIndex<usize>> {
+        // If we've added no new nodes or edges since the last call, sort first
+        let mut node_idx = toposort(&self.graph, None).unwrap();
+        // For each node find the best predecessor by edge-weight, breaking ties with path-weight
+        let mut scores = HashMap::<NodeIndex<usize>, i32>::new();
+        let mut next_in_path: HashMap<NodeIndex<usize>, Option<NodeIndex<usize>>> = HashMap::new();
+        for node in node_idx.iter().rev() {
+            let mut best_neighbor = None::<NodeIndex<usize>>;
+            let mut best_weights = (0, 0); // (Edge-weight, Path-weight)
+            for e_ref in self.graph.edges(*node) {
+                let weight = *e_ref.weight();
+                let target = e_ref.target();
+
+                if (weight, *scores.entry(target).or_insert(0)) > best_weights {
+                    best_neighbor = Some(target);
+                    best_weights = (weight, *scores.entry(target).or_insert(0));
                 }
             }
-            //if max_weight == 1 {
-            //    let final_index = max_node.index();
-            //    let final_score = 0;
-            //    cons_scores[prev_index] = final_score;
-            //    cons_next[prev_index] = final_index as i32;
-            //    continue;
-            //}
-            
-            if max_weight_nodes.len() != 1 {
-                //println!("Here");
-               let mut max_score = 0;
-                let mut max_score_node = NodeIndex::new(0 as usize);
-                for max_node in max_weight_nodes.iter() {
-                    let max_index = max_node.index();
-                    let score = &cons_scores[max_index];
-                    if score > &max_score {
-                        max_score = *score;
-                        max_score_node = max_node.clone();
-                    }
-                }
-                let final_index = max_score_node.index();
-                let final_score = max_weight + max_score;
-                cons_scores[prev_index] = final_score;
-                cons_next[prev_index] = final_index as i32;
-            }
-            else {
-                let final_index = max_node.index();
-                let final_score = max_weight + cons_scores[final_index];
-                cons_scores[prev_index] = final_score;
-                cons_next[prev_index] = final_index as i32;
-            }
-            
-            if max_weight < params.t as i32 {
-                cons_scores[prev_index] = 0;
-                cons_next[prev_index] = 0;
-                continue;
-            }
-            //println!("Index : {}, score : {}, pointing to : {}", prev_index, cons_scores[prev_index], cons_next[prev_index]);
+
+            scores.insert(*node, best_weights.0 + best_weights.1);
+            next_in_path.insert(*node, best_neighbor);
         }
-        (cons_scores, cons_next)
 
+        // Find the start position by locating the highest scoring node
+        let mut start_node = None::<NodeIndex<usize>>;
+        let mut best_score = 0;
+        for (node, score) in &scores {
+            if score > &best_score {
+                start_node = Some(*node);
+                best_score = *score;
+            }
+        }
 
+        // Traverse the graph from the start node, recording the path of nodes taken
+        let mut cns_path = Vec::new();
+        let mut curr_node = start_node;
+        loop {
+            if curr_node.is_some() {
+                let node = curr_node.unwrap();
+                cns_path.push(node);
+                curr_node = *next_in_path.get(&node).unwrap();
+            } else {
+                break;
+            }
+        }
+
+        cns_path
     }
     pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u32>) {
         let mut prev: NodeIndex<usize> = NodeIndex::new(0);
+        let mut entry = self.seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
         let mut i: usize = 0;
         for op in aln.operations.iter() {
             match op {
@@ -856,6 +878,7 @@ impl<F: MatchFunc> Poa<F> {
                         self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
+                        entry.push(edge);
                         self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                     } else {
@@ -886,6 +909,7 @@ impl<F: MatchFunc> Poa<F> {
                         self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
+                        entry.push(edge);
                         self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                         i += 1;

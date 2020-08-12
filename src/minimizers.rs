@@ -1,6 +1,7 @@
 //mod super::params;
 use super::utils;
 use super::Params;
+use rayon::prelude::*;
 use super::revcomp_aware;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -73,7 +74,7 @@ pub fn extract_hierarchical(read_minimizers : &Vec<String>, read_minimizers_pos 
         should_insert = Some(min_lmer.to_string());
         if !should_insert.is_none() && !res.contains(&min_lmer)     
         {
-            let lmer_pos = read_minimizers.iter().position(|r| r == &min_lmer).unwrap();
+            let lmer_pos = read_minimizers.par_iter().position(|r| r == &min_lmer).unwrap();
             pos.push(read_minimizers_pos[lmer_pos] as u32);
             //println!("selected lmer: {}", start);
             res.push(should_insert.unwrap());
@@ -283,7 +284,7 @@ pub fn minhash(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, mi
     }
         
     // convert minimizers to their integer representation
-    let read_transformed : Vec<u32> = res.iter().map(|minim| minimizer_to_int[minim]).collect();
+    let read_transformed : Vec<u32> = res.par_iter().map(|minim| minimizer_to_int[minim]).collect();
 
     (res, pos, read_transformed)
 }
