@@ -7,7 +7,7 @@ use itertools::Itertools;
 use std::io::{BufWriter, BufRead, BufReader};
 use std::path::PathBuf;
 
-fn make_filename(output_prefix: &PathBuf) -> String
+pub fn make_filename(output_prefix: &PathBuf) -> String
 {
     format!("{}.ec_data",output_prefix.to_str().unwrap())
 }

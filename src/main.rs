@@ -10,6 +10,8 @@ use std::collections::hash_map::Entry;
 use petgraph_graphml::GraphMl;
 use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
+use std::iter::FromIterator;
+use std::collections::HashSet;
 extern crate array_tool;
 //use adler32::RollingAdler32;
 use std::fs;
@@ -54,6 +56,13 @@ pub struct Params
     max_lmer_count : u32,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
+}
+fn jaccard_distance(s1: Vec<u32>, s2: Vec<u32>) -> f64 {
+    let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
+    let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
+    let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
+    let union: HashSet<_> = s2_set.union(&s2_set).collect();
+    (inter.len() as f64) / (union.len() as f64)
 }
 
 fn extract_minimizers(seq: &str, params: &Params, lmer_counts: &HashMap<String,u32>, minimizer_to_int: &HashMap<String,u32>) -> (Vec<String>, Vec<u32>, Vec<u32>)
@@ -130,18 +139,7 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
         //    assert_eq!(0, 1);
         //}
 
-        // decide if that kmer is finally solid
-        
-        let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
-            if seq_reversed {
-               seq = utils::revcomp(&seq);
-            }
-            
-         
-      
-            
-            
-      
+        // decide if that kmer is finally solid 
 
         if *entry == min_kmer_abundance as u32 {
             // record sequences associated to solid kmers
@@ -299,13 +297,14 @@ fn main() {
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
     let mut kmer_seqs_tot   : HashMap<Vec<u32>,String> = HashMap::new(); // associate a dBG node to its sequence
 
-    let mut seq_mins   = Vec::<Vec<u32>>::new(); // associate a dBG node to its sequence
+    let mut sketches   = Vec::<Vec<u32>>::new(); // vector of sketches
 
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
-    let mut kmers : Vec<Vec<u32>> = Vec::<Vec<u32>>::new();
+    let mut seq_mins : Vec<Vec<u32>> = Vec::<Vec<u32>>::new();
     let mut kmer_to_seq : HashMap<Vec<u32>, String> = HashMap::new();
     let mut counts :  HashMap<u32, u32> = HashMap::new();
     let mut read_ids : HashMap<Vec<u32>, String> = HashMap::new();
+    let mut pairwise_jaccard : HashMap<(Vec<u32>, Vec<u32>), f64> = HashMap::new();
 
 
     let mut record_len = 0;
@@ -338,14 +337,13 @@ fn main() {
                 nb_reads += 1;
                 pb.add(record.seq().len() as u64 + record.id().len() as u64); // get approx size of entry
                 record_len = record.id().len();
-
                 // some debug
                 //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
-                if read_transformed.len() > k {
+                //if read_transformed.len() > k {
                     //read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
                     
-                }
+                //}
 
                 if error_correct
                 {
@@ -354,7 +352,8 @@ fn main() {
                     //  let count = sub_counts.entry(sub_mer.to_vec()).or_insert(0);
                     //   *count += 1;
                     //}
-                    if read_transformed.len() >= k {
+                    if read_transformed.len() > n {
+                        seq_mins.push(read_transformed.to_vec());
                         ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
                         buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
@@ -374,10 +373,14 @@ fn main() {
 
     if error_correct
     {
+    
     dbg_nodes = HashMap::new(); // it's a Counter
     kmer_seqs = HashMap::new(); // associate a dBG node to its sequence
-    minim_shift = HashMap::new(); // records position of second minimizer in sequence
-        let mut pb = ProgressBar::on(stderr(),file_size);
+    minim_shift = HashMap::new();
+    let path = ec_reads::make_filename(&output_prefix); // records position of second minimizer in sequence
+    let metadata = fs::metadata(path).expect("error opening ec file");
+    let file_size = metadata.len();
+    let mut pb = ProgressBar::on(stderr(),file_size);
 
         // do error correction of reads 
         let mut counter = 1;
@@ -389,11 +392,12 @@ fn main() {
             let mut read_transformed    = ec_record.read_transformed;
             let mut read_minimizers     = ec_record.read_minimizers;
             let mut read_minimizers_pos = ec_record.read_minimizers_pos;
-            println!("OG:\t{:?}", read_transformed);
+            //println!("OG:\t{:?}", read_transformed);
+            pb.add(seq_str.len() as u64 + seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64); // get approx size of entry
             seq_str.truncate(seq_str.len()-1);
             //if !corrected.contains_key(&read_transformed) {
-                read_transformed = buckets::query_buckets(&mut ec_file_poa, &mut read_ids, &mut corrected, &mut kmer_seqs_tot, read_transformed, &mut sub_counts, &mut buckets, &mut seq_str, &params, &mut seq_mins, &lmer_counts, &minimizer_to_int, &int_to_minimizer);
-                println!("Cons:\t{:?}", read_transformed);
+                read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &mut kmer_seqs_tot, read_transformed, &mut sub_counts, &mut buckets, &mut seq_str, &params, &mut seq_mins, &lmer_counts, &minimizer_to_int, &int_to_minimizer);
+                //println!("Cons:\t{:?}", read_transformed);
             //}
            // else {
            //     read_transformed = corrected[&read_transformed].to_vec();
@@ -427,7 +431,6 @@ fn main() {
             ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
             ec_reads::flush(&mut ec_file_poa); // flush as we may stop earlier
 
-            pb.add(seq_str.len() as u64 + record_len as u64); // get approx size of entry
             counter += 1;
         }
     }
