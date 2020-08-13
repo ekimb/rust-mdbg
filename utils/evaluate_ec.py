@@ -7,6 +7,9 @@
  and outputs the needleman-wunch alignment of each read to the reference (semi-global aln)  
  and optionally outputs a comparison between the two set of reads (e.g. corrected vs uncorrected)
 """
+
+nb_processes = 8
+
 import sys
 if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
     exit("input: [reference.ec_data] [reads.ec_data]\n will evaluate accuracy of minimizers in reads\n")
@@ -123,24 +126,39 @@ print(res[0],res[1],res[2])
 """
 
 
+from multiprocessing import Pool
+from contextlib import closing # python/pypy 2 compat,  https://stackoverflow.com/questions/25968518/python-multiprocessing-lib-error-attributeerror-exit
+import time
+
+def align(arg):
+    read_id, read = arg
+    global reference
+    fwd = semiglobal_align(reference,read)
+    rev = semiglobal_align(reference,read[::-1])
+    aln = rev if rev[0] > fwd[0] else fwd
+    #time.sleep(0.0001)
+    #aln=(0,[0],[0],0)
+    aln_score = aln[0]
+    # my old identity definiton was:
+    #identity = ((100.0*aln_score)/(1.0*len(read)))
+    # this is more of a score than an identity.
+    # Will now compute BLAST identity, as per
+    # https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity
+    # i.e. number of matches divided by number of columns
+    identity = aln[3]
+    #print(read,aln_score)
+    #print("read identity: %.2f%%" % identity)
+    return identity, aln, read_id, read
+
 def process_reads(reads,filename):
     id_dict = dict() # stores identities
     aln_dict = dict() # stores alignments
     orig_dict = dict() # stores original read 'sequences' (of minimizers)
-    for read_id, read in reads:
-        fwd = semiglobal_align(reference,read)
-        rev = semiglobal_align(reference,read[::-1])
-        aln = rev if rev[0] > fwd[0] else fwd
-        aln_score = aln[0]
-        # my old identity definiton was:
-        #identity = ((100.0*aln_score)/(1.0*len(read)))
-        # this is more of a score than an identity.
-        # Will now compute BLAST identity, as per
-        # https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity
-        # i.e. number of matches divided by number of columns
-        identity = aln[3]
-        #print(read,aln_score)
-        #print("read identity: %.2f%%" % identity)
+
+    with closing(Pool(nb_processes)) as p:
+        aln_results = p.map(align,reads)
+
+    for (identity, aln, read_id, read) in aln_results:
         id_dict[read_id] = identity
         aln_dict[read_id] = (aln[1],aln[2])
         orig_dict[read_id] = read
