@@ -4,6 +4,8 @@
  - the .ec_data file for a set of reads 
  - and optionnally,
    the .ec_data file for the same set of reads, processed differently (e.g. corrected)
+ - and also optionnally,
+   the .poa.ec_data file that contains which reads are retrieved for the template
  and outputs the needleman-wunch alignment of each read to the reference (semi-global aln)  
  and optionally outputs a comparison between the two set of reads (e.g. corrected vs uncorrected)
 """
@@ -12,12 +14,19 @@ nb_processes = 8
 
 import sys
 if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
-    exit("input: [reference.ec_data] [reads.ec_data]\n will evaluate accuracy of minimizers in reads\n")
+    exit("input: <reference.ec_data> [reads.ec_data] [reads.corrected.ec_data] [reads.poa.ec_data]\n will evaluate accuracy of minimizers in reads\n")
+
+import evaluate_poa
 
 file1 = sys.argv[1]
 file2 = sys.argv[2]
 if len(sys.argv) > 3:
     file3 = sys.argv[3]
+if len(sys.argv) > 4:
+    file_poa = sys.argv[4]
+    poa_d, poa_d_itv, poa_reads = evaluate_poa.prepare_eval_poa(file_poa)
+else:
+    file_poa = None
 
 def parse_file(filename):
     res = []
@@ -189,7 +198,29 @@ for seq_id in id_r1:
             nb_worse += 1
         else:
             nb_nochange += 1
-        debug_aln = True
+    
+        # poa stats
+        if file_poa is not None:
+            tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
+            print("POA retrieval TP: %d  FP: %d  FN: %d" % (tp,fp,fn))
+
+        # jaccard stats
+        poa_template = set(orig_r1[seq_id])
+        mean_jac = 0
+        for poa_seq_id in set(poa_reads[seq_id]):
+            poa_r1 = set(orig_r1[poa_seq_id])
+            jac_r1 = len(poa_template & poa_r1) / len(poa_template | poa_r1)
+            if poa_seq_id in orig_r2:
+                poa_r2 = set(orig_r2[poa_seq_id])
+                jac_r2 = len(poa_template & poa_r2) / len(poa_template | poa_r2)
+            else:
+                jac_r2 = -1
+            #print("Jac uncor: %.2f    Jac cor: %.2f" % (jac_r1, jac_r2))
+            mean_jac += jac_r1
+        mean_jac /= len(set(poa_reads[seq_id]))
+        print("Mean Jaccard between template and POA reads: %.2f" % mean_jac)
+
+        debug_aln = True 
         if debug_aln:
             print("alignment of uncorrected read",short_name(seq_id)," (len %d) to ref:" % len(orig_r1[seq_id]))
             #print(orig_r1[seq_id]) # print original read sequence of minimizers
