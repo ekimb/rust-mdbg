@@ -11,3 +11,5 @@ src/trash.rs
 ref/
 *.graphml
 *.png
+*.pyc
+*.txt
