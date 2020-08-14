@@ -38,7 +38,7 @@ fn matches(seq1 :&str, seq2 :&str, levenshtein_minimizers: usize) -> bool
 
 // should be fairly easy to find, as both sequences should share exactly k-1 minimizers exactly in
 // common, and we even know which ones
-fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize) -> u32
+fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, kmer2 :&Kmer, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize) -> u32
 {
     // strategy: find the second minimizer at position 0 of seq2, by construction of the dbg
     /*
@@ -107,7 +107,7 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     (seq1.len() as u32) - (shift as u32)
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u32,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize)  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize)  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     

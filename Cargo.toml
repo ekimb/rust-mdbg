@@ -25,6 +25,6 @@ threadpool = "*"
 rayon = "*"
 crossbeam-utils = "*"
 fxhash = "*"
-
+nthash = "*"
 [profile.dev]
 opt-level = 3

@@ -18,32 +18,18 @@ use super::ec_reads;
 use std::fs::File;
 
 
-pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u32>, String>, mut corrected : &mut HashMap<Vec<u32>, Vec<u32>>, mut kmer_seqs_tot : &mut HashMap<Vec<u32>,String>, read_transformed : Vec<u32>, mut sub_counts: &mut HashMap<Vec<u32>,u32>, buckets : &mut HashMap<Vec<u32>, Vec<Vec<u32>>>, mut seq_str: &mut String, params : &Params, mut seq_mins: &mut Vec<Vec<u32>>, lmer_counts: &HashMap<String,u32>, minimizer_to_int : &HashMap<String,u32>, int_to_minimizer : &HashMap<u32,String>) -> Vec<u32>{
+pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, Vec<u64>>, read_transformed : Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> Vec<u64>{
     let n = params.n;
     let k = params.k;
-    let mut bucket_seqs = Vec::<Vec<u32>>::new();
-    let mut potential_kmers : HashMap<u32, Vec<Vec<u32>>> = HashMap::new();
-    let mut first : bool = true;
-    let mut final_cons = Vec::<u32>::new();
-    let mut scoring = poa::Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+    let mut bucket_seqs = Vec::<Vec<u64>>::new();
+    let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
     let mut aligner = poa::Aligner::new(scoring, read_transformed.to_vec());
-    let mut prev_len = 0;	
-    let mut min_prev_len = 99999;
-    let mut start_pos = 0;
-    let mut offset_hash : HashMap<Vec<u32>, u32> = HashMap::new(); 
-    let mut aligned : HashMap<Vec<u32>, bool> = HashMap::new();
+    let mut aligned : HashMap<Vec<u64>, bool> = HashMap::new();
     let mut poa_ids = Vec::<String>::new();
     let mut seq_id = read_ids[&read_transformed.to_vec()].to_string();
-    for other_sketch in seq_mins.iter() {
-        if other_sketch.to_vec() == read_transformed.to_vec() {continue;}
-        
-    }
-    //let mut poa_graph = poa_new::POAGraph::new_from_sequence(Some(vec![0]), Some(read_transformed.to_vec()));
-    //let mut consensus = poa_graph.consensus();
     for i in 0..read_transformed.len()-n+1 {
-        let mut pileup_seqs = Vec::<Vec<u32>>::new();
         let bucket_idx = read_transformed[i..i+n].to_vec();
-        let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
+        let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u64>>::new());
         //entry.dedup();
         for query in entry.iter() {
             if query.to_vec() == read_transformed.to_vec() {continue;}
@@ -65,7 +51,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
                     pairwise_jaccard.insert(tuple_rev, similarity);
                 }
                 *entry = true;   
-                if similarity < 0.25 {
+                if similarity < 0.33 {
                     //println!("Jaccard Similarity: {}", similarity);
                     continue;
                 }
@@ -78,7 +64,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
                     //consensus = poa_graph.consensus();
                 aligner.global(query.to_vec());
                 aligner.add_to_graph();
-                if similarity >= 0.35 {
+                if similarity >= 0.33 {
                     bucket_seqs.push(query.to_vec());
                 }
                 //let mut offset;	
@@ -91,123 +77,21 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
         // }
         
         }
-        /*for seq in pileup_seqs.iter() {	
-            //print!("Seq\t");	
-            //for min in seq.iter() {	
-            //    print!("{}\t", min);	
-        // }	            // }
-            //print!("\n");	
-            let mut new_seq = Vec::<u32>::new();	
-            let mut offset;	
-            let mut offset_reg = seq.iter().position(|&x| x == bucket_idx[0]);	
-            offset = offset_reg.unwrap();	
-            let mut new_seq = Vec::<u32>::new();	
-            if prev_len+i != offset {	
-                for _ in offset..prev_len+i {	
-                    new_seq.push(0)	
-                }	
-            }       
-            offset_hash.insert(seq.to_vec(), ((prev_len+i) as usize - offset) as u32);	
-            for min in seq.iter() {	
-                new_seq.push(*min);	
-            }     	
-           // print!("New\t");	
-            /*for min in new_seq.iter() {	
-                print!("{}\t", min);	
-            }	
-            print!("\n");	*/
-        }*/
-        //pileup_seqs.sort_by_key(|x| offset_hash[&x.to_vec()]);
-        
-            
-        
-        
-        
-        
-        //println!("OG\t{:?}", og_kmer);
-        //println!("After\t{:?}", consensus);
-        //bucket_seqs.push(consensus.to_vec());
-        
-       // let graphml = GraphMl::new(&aligner.poa.graph).pretty_print(true);
-        //std::fs::write("graph.graphml", graphml.to_string()).unwrap();
-            //println!("Consensus:\t{}", minimizers::normalize_minimizer(&std::str::from_utf8(&consensus).unwrap().to_string()));
-        //}
     }
-    //aligner.poa.get_max_path();
     let mut consensus = aligner.poa.consensus();
-    //let mut consensus = poa_graph.consensus();
-    //consensus.reverse();
-    
-   // println!("Cons\t{:?}", consensus);
-    //let (mut cons_scores, mut cons_next) = aligner.poa.set_max_weight_scores(&params, exclusions.to_vec());
-    //let mut consensus = aligner.poa.find_consensus(cons_scores, cons_next);
-   // consensus.reverse();
-
-
-   // let (mut cons_scores, mut cons_next) = aligner.poa.set_max_weight_scores();
-    //let mut consensus = aligner.poa.find_consensus(cons_scores, cons_next);
-   // println!("OG\t{:?}", read_transformed);
-    //println!("After\t{:?}", consensus);
-    /*let mut start_pos = 0;
-    let mut end_pos = consensus.len();
-    
-    for i in 0..read_transformed.len() {
-        let pos = consensus.iter().position(|element| element == &read_transformed[read_transformed.len()-i-1]);
-        if pos == None {continue;}
-        else {
-            end_pos = pos.unwrap()+1;
-            break;
-        }
-    }
-    if end_pos >= read_transformed.len() {start_pos = end_pos - read_transformed.len();}
-    let new_consensus = &consensus[start_pos..end_pos];
-    println!("Before\t{:?}", consensus);
-    println!("After\t{:?}", new_consensus);
-
-    new_consensus.to_vec()*/
     for seq in bucket_seqs.iter() {
-        *corrected.entry(seq.to_vec()).or_insert(Vec::<u32>::new()) = consensus.to_vec();
+        *corrected.entry(seq.to_vec()).or_insert(Vec::<u64>::new()) = consensus.to_vec();
     }
     ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
     consensus.to_vec()
     
 }
-/*pub fn query_buckets_base(mut buckets_base : &mut HashMap<Vec<u32>, Vec<String>>, read_transformed : Vec<u32>, params : &Params) -> String {
-    let n = params.n;
-    let k = params.k;
-    let mut bucket_seqs = Vec::<Vec<u8>>::new();
-    let mut aligned : HashMap<String, bool> = HashMap::new();
-    for i in 0..read_transformed.len()-n+1 {
-        let mut pileup_seqs = Vec::<Vec<u32>>::new();
-        let bucket_idx = read_transformed[i..i+n].to_vec();
-        let entry = buckets_base.entry(bucket_idx.to_vec()).or_insert(Vec::<String>::new());
-        for query in entry.iter_mut() {
-            let entry = aligned.entry(query.to_string()).or_insert(false);
-            if !*entry {
-                query.push_str(&'\0'.to_string());
-                bucket_seqs.push((*query).bytes().map(|x|{x as u8}).collect::<Vec<u8>>());
-                *entry = true;   
-            }
-
-        }
-    }
-    let consensus = poa_consensus(&bucket_seqs, 101, 1, 5, -4, -3, -1);
-    std::str::from_utf8(&consensus).unwrap().to_string()
     
-}*/
-pub fn buckets_insert(seq : Vec<u32>, i : usize, buckets : &mut HashMap<Vec<u32>, Vec<Vec<u32>>>, mut dbg_nodes : &mut HashMap<Kmer, u32>, mut sub_counts : &mut HashMap<Vec<u32>, u32>, kmer_seqs_tot : &HashMap<Vec<u32>, String>) {
-    /*let mut node : Kmer = Kmer::make_from(&seq);
-    let mut seq_reversed = false;
-    let (node_norm, reversed) = node.normalize(); 
-    node = node_norm;
-    seq_reversed = reversed;
-    let entry_num = dbg_nodes_all.entry(node.clone()).or_insert(0);
-    *entry_num = dbg_nodes[&node];*/
-    
+pub fn buckets_insert(seq : Vec<u64>, i : usize, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, mut dbg_nodes : &mut HashMap<Kmer, u32>) { 
     for j in 0..seq.len()-i+1 {
-        let mut bucket_idx = Vec::<u32>::new();
+        let mut bucket_idx = Vec::<u64>::new();
         bucket_idx = seq[j..i+j].to_vec();
-        let mut entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
+        let mut entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u64>>::new());
        // for _ in 0..sub_counts[&bucket_idx] {
             entry.push(seq.to_vec());
         //}
@@ -216,17 +100,3 @@ pub fn buckets_insert(seq : Vec<u32>, i : usize, buckets : &mut HashMap<Vec<u32>
     
 
 }
-/*pub fn buckets_insert_base(seq_str : &str, seq : Vec<u32>, i : usize, buckets_base : &mut HashMap<Vec<u32>, Vec<String>>) {
-    
-    for j in 0..seq.len()-i+1 {
-        let mut bucket_idx = Vec::<u32>::new();
-        bucket_idx = seq[j..i+j].to_vec();
-        let mut entry = buckets_base.entry(bucket_idx.to_vec()).or_insert(Vec::<String>::new());
-       // for _ in 0..sub_counts[&bucket_idx] {
-            entry.push(seq_str.to_string());
-        //}
-
-    }
-    
-
-}*/
