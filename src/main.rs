@@ -352,7 +352,7 @@ fn main() {
                     //  let count = sub_counts.entry(sub_mer.to_vec()).or_insert(0);
                     //   *count += 1;
                     //}
-                    if read_transformed.len() > n {
+                    if read_transformed.len() >=n {
                         seq_mins.push(read_transformed.to_vec());
                         ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
                         buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
@@ -393,17 +393,17 @@ fn main() {
             let mut read_minimizers     = ec_record.read_minimizers;
             let mut read_minimizers_pos = ec_record.read_minimizers_pos;
             //println!("OG:\t{:?}", read_transformed);
-            pb.add(seq_str.len() as u64 + seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64); // get approx size of entry
+            pb.add(6 + seq_str.len() as u64 + seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64); // get approx size of entry
             seq_str.truncate(seq_str.len()-1);
-            //if !corrected.contains_key(&read_transformed) {
+            if !corrected.contains_key(&read_transformed) {
                 read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &mut kmer_seqs_tot, read_transformed, &mut sub_counts, &mut buckets, &mut seq_str, &params, &mut seq_mins, &lmer_counts, &minimizer_to_int, &int_to_minimizer);
-                //println!("Cons:\t{:?}", read_transformed);
-            //}
-           // else {
-           //     read_transformed = corrected[&read_transformed].to_vec();
-           //     println!("Already corrected");
+                println!("Cons:\t{:?}", read_transformed);
+            }
+            else {
+                read_transformed = corrected[&read_transformed].to_vec();
+                println!("Already corrected");
 
-            //}
+            }
             //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
             //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
             if read_transformed.len() <= k { continue; }

@@ -46,6 +46,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
         let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u32>>::new());
         //entry.dedup();
         for query in entry.iter() {
+            if query.to_vec() == read_transformed.to_vec() {continue;}
             let entry = aligned.entry(query.to_vec()).or_insert(false);
             if !*entry {
                 poa_ids.push(read_ids[&query.to_vec()].to_string());
@@ -63,7 +64,8 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
                     pairwise_jaccard.insert(tuple, similarity);
                     pairwise_jaccard.insert(tuple_rev, similarity);
                 }
-                if similarity < 0.4 {
+                *entry = true;   
+                if similarity < 0.25 {
                     //println!("Jaccard Similarity: {}", similarity);
                     continue;
                 }
@@ -76,13 +78,14 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
                     //consensus = poa_graph.consensus();
                 aligner.global(query.to_vec());
                 aligner.add_to_graph();
-                bucket_seqs.push(query.to_vec());
+                if similarity >= 0.35 {
+                    bucket_seqs.push(query.to_vec());
+                }
                 //let mut offset;	
                 //let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
                 //offset = offset_reg.unwrap();	
                 //if offset > prev_len {prev_len = offset;}	
                 //if offset < min_prev_len {min_prev_len = offset;} 
-                *entry = true;   
             }
            // }
         // }
@@ -162,9 +165,9 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u32>, Vec<u32>), f64>,
     println!("After\t{:?}", new_consensus);
 
     new_consensus.to_vec()*/
-    /*for seq in bucket_seqs.iter() {
+    for seq in bucket_seqs.iter() {
         *corrected.entry(seq.to_vec()).or_insert(Vec::<u32>::new()) = consensus.to_vec();
-    }*/
+    }
     ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
     consensus.to_vec()
     

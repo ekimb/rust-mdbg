@@ -10,3 +10,4 @@ src/trash.rs
 *.gz
 ref/
 *.graphml
+*.png

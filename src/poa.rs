@@ -493,7 +493,7 @@ impl Traceback {
         {
             // TODO: these should be -1 * distance from head node
             row[0] = TracebackCell {
-                score: (i as i32) * gap_open, // gap_open penalty
+                score: (i as i32) * 0, // gap_open penalty //semi-global
                 op: AlignmentOperation::Del(None),
             };
         }
