@@ -13,3 +13,5 @@ ref/
 *.png
 *.pyc
 *.txt
+*.svg
+perf*

@@ -26,5 +26,6 @@ rayon = "*"
 crossbeam-utils = "*"
 fxhash = "*"
 nthash = "*"
+sourmash = "*"
 [profile.dev]
 opt-level = 3

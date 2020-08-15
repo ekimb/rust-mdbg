@@ -18,26 +18,27 @@ use super::ec_reads;
 use std::fs::File;
 
 
-pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, Vec<u64>>, read_transformed : Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> Vec<u64>{
+
+pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, Vec<u64>>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> Vec<u64>{
     let n = params.n;
     let k = params.k;
-    let mut bucket_seqs = Vec::<Vec<u64>>::new();
+    let mut bucket_seqs = Vec::<&Vec<u64>>::new();
     let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
     let mut aligner = poa::Aligner::new(scoring, read_transformed.to_vec());
-    let mut aligned : HashMap<Vec<u64>, bool> = HashMap::new();
+    let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
     let mut poa_ids = Vec::<String>::new();
     let mut seq_id = read_ids[&read_transformed.to_vec()].to_string();
     for i in 0..read_transformed.len()-n+1 {
         let bucket_idx = read_transformed[i..i+n].to_vec();
-        let entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u64>>::new());
+        let entry = &buckets[&bucket_idx];
         //entry.dedup();
         for query in entry.iter() {
-            if query.to_vec() == read_transformed.to_vec() {continue;}
-            let entry = aligned.entry(query.to_vec()).or_insert(false);
+            if query == read_transformed {continue;}
+            let entry = aligned.entry(query).or_insert(false);
             if !*entry {
-                poa_ids.push(read_ids[&query.to_vec()].to_string());
+                poa_ids.push(read_ids[query].to_string());
                 let tuple = (read_transformed.to_vec(), query.to_vec());
-                let tuple_rev = (tuple.1.to_vec(), tuple.0.to_vec());
+                let tuple_rev = (tuple.1.clone(), tuple.0.clone());
                 let mut similarity = 0.0;
                 if pairwise_jaccard.contains_key(&tuple) {
                     similarity = pairwise_jaccard[&tuple];
@@ -46,9 +47,9 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
                     similarity = pairwise_jaccard[&tuple_rev];
                 }
                 else {
-                    similarity = jaccard_distance(read_transformed.to_vec(), query.to_vec());
-                    pairwise_jaccard.insert(tuple, similarity);
-                    pairwise_jaccard.insert(tuple_rev, similarity);
+                    similarity = jaccard_distance(&read_transformed, query);
+                    pairwise_jaccard.insert(tuple.clone(), similarity);
+                    pairwise_jaccard.insert(tuple_rev.clone(), similarity);
                 }
                 *entry = true;   
                 if similarity < 0.33 {
@@ -65,7 +66,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
                 aligner.global(query.to_vec());
                 aligner.add_to_graph();
                 if similarity >= 0.33 {
-                    bucket_seqs.push(query.to_vec());
+                    bucket_seqs.push(query);
                 }
                 //let mut offset;	
                 //let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	

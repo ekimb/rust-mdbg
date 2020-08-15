@@ -57,7 +57,7 @@ pub struct Params
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
-fn jaccard_distance(s1: Vec<u64>, s2: Vec<u64>) -> f64 {
+fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> f64 {
     let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
     let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
     let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
@@ -65,9 +65,9 @@ fn jaccard_distance(s1: Vec<u64>, s2: Vec<u64>) -> f64 {
     (inter.len() as f64) / (union.len() as f64)
 }
 
-fn extract_minimizers(seq: &str, params: &Params, max_hash : u64) -> Vec<u64>
+fn extract_minimizers(seq: &str, params: &Params) -> Vec<u64>
 {
-    minimizers::minhash(seq, params, max_hash)
+    minimizers::minhash(seq.as_bytes(), params)
         //wk_minimizers(seq, density) // unfinished
 }
 
@@ -113,6 +113,7 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 // so it just performs revcomp normalization and solidy check
 fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u64>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (u32, u32)>, params: &Params)
 {
+    let pool = ThreadPool::new(4);
     let k = params.k;
     let l = params.l;
     let n = params.n;
@@ -284,7 +285,7 @@ fn main() {
     let file_size = metadata.len();
     let mut pb = ProgressBar::on(stderr(),file_size);
 
-    let (mut minimizer_to_int, mut int_to_minimizer, max_hash) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
+    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
     //params.max_lmer_count = minimizers::get_max_count(&lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
@@ -317,7 +318,7 @@ fn main() {
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let read_transformed = extract_minimizers(&seq_str, &params, max_hash);
+                let read_transformed = extract_minimizers(&seq_str, &params);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
@@ -360,7 +361,7 @@ fn main() {
                     if read_transformed.len() >= n {
                         seq_mins.push(read_transformed.to_vec());
                         ec_reads::record(&mut ec_file, &seq_id, &read_transformed);
-                        buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes);
+                        buckets::buckets_insert(read_transformed, params.n, &mut buckets, &mut dbg_nodes);
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
     
                     }
@@ -403,7 +404,7 @@ fn main() {
             //println!("OG:\t{:?}", read_transformed);
             pb.add(seq_id.len() as u64 + read_transformed.len() as u64);
             if !corrected.contains_key(&read_transformed) {
-                read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, read_transformed, &mut buckets, &params);
+                read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
                 //println!("Cons:\t{:?}", read_transformed);
             }
             else {
