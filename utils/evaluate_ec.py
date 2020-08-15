@@ -136,14 +136,6 @@ def semiglobal_align(a, b):
     blast_identity = 100.0 * nb_matches / nb_columns if nb_columns > 0 else 0
     return best_score, align_a[::-1], align_b[::-1], blast_identity
 
-"""
-read1 = reads[0]
-print("testing",read1)
-res = semiglobal_align(reference,read1)
-res = semiglobal_align(reference,read1[::-1])
-print(res[0],res[1],res[2])
-"""
-
 
 from multiprocessing import Pool
 from contextlib import closing # python/pypy 2 compat,  https://stackoverflow.com/questions/25968518/python-multiprocessing-lib-error-attributeerror-exit
@@ -169,18 +161,22 @@ def align(arg):
     #print("read identity: %.2f%%" % identity)
     return identity, aln, read_id, read
 
-def process_reads(reads,filename):
+def process_reads(reads,filename, only_those_reads = None):
     id_dict = dict() # stores identities
     aln_dict = dict() # stores alignments
     orig_dict = dict() # stores original read 'sequences' (of minimizers)
 
+    reads_to_align = [read for read in reads if only_those_reads is None or read[0] in only_those_reads] 
+
     with closing(Pool(nb_processes)) as p:
-        aln_results = p.map(align,reads)
+        aln_results = p.map(align,reads_to_align)
 
     for (identity, aln, read_id, read) in aln_results:
         id_dict[read_id] = identity
         aln_dict[read_id] = (aln[1],aln[2])
-        orig_dict[read_id] = read
+
+    for read_id, minims in reads:
+        orig_dict[read_id] = minims 
 
     identities = id_dict.values()
     mean_identity = sum(identities) / (1.0*len(identities))
@@ -189,9 +185,9 @@ def process_reads(reads,filename):
 
 print("about to process",len(reads),"reads")
 
-id_r1, aln_r1, orig_r1 = process_reads(reads, file2)
+id_r1, aln_r1, orig_r1 = process_reads(reads, file2, only_those_reads)
 if reads2 is not None:
-    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3)
+    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3, only_those_reads)
 
 def short_name(read_id):
     return read_id[:12]+".." if len(read_id) > 12 else read_id
@@ -249,6 +245,3 @@ for seq_id in id_r1:
 print(nb_better,"reads improved")
 print(nb_nochange,"reads unchanged")
 print(nb_worse,"reads made worse")
-id_r1, aln_r1, orig_r1 = process_reads(reads, file2)
-if reads2 is not None:
-    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3)

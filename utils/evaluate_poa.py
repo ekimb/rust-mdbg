@@ -62,6 +62,10 @@ def prepare_eval_poa(filename,only_those_reads=None):
     return d, whole_it, poa_reads
 
 def eval_poa(template, d, d_itv):
+    if template not in d:
+        print("read",template,"isn't a POA template")
+        return [],[],[]
+
     template_start = int(template.split('_')[2])
     template_end   = int(template.split('_')[3])
 
