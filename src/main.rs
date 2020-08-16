@@ -66,9 +66,9 @@ fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> (f64, f64) {
     ((inter.len() as f64) / (union.len() as f64), (inter.len() as f64) / (s1.len() as f64))
 }
 
-fn extract_minimizers(seq: &str, params: &Params) -> Vec<u64>
+fn extract_minimizers(seq: &str, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Vec<u64>
 {
-    minimizers::minhash(seq.as_bytes(), params)
+    minimizers::minhash(&seq.to_string(), params, &minimizer_to_int)
         //wk_minimizers(seq, density) // unfinished
 }
 
@@ -319,7 +319,7 @@ fn main() {
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let read_transformed = extract_minimizers(&seq_str, &params);
+                let read_transformed = extract_minimizers(&seq_str, &params, &minimizer_to_int);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
