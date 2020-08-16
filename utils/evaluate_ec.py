@@ -10,7 +10,7 @@
  and optionally outputs a comparison between the two set of reads (e.g. corrected vs uncorrected)
 """
 
-nb_processes = 8
+nb_processes = 2
 
 import sys
 if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
@@ -22,35 +22,45 @@ file1 = sys.argv[1]
 file2 = sys.argv[2]
 if len(sys.argv) > 3:
     file3 = sys.argv[3]
-if len(sys.argv) > 4:
-    file_poa = sys.argv[4]
-    poa_d, poa_d_itv, poa_reads = evaluate_poa.prepare_eval_poa(file_poa)
-else:
-    file_poa = None
 
-def parse_file(filename):
+def parse_file(filename, only_those_reads = None, max_reads = 100):
     res = []
     counter = 0
     seq_id = ""
+    parsed_reads = set()
     for line in open(filename):
         if counter % 5 == 0:
             seq_id = line.strip()
+            if len(res) <= max_reads:
+                parsed_reads.add(seq_id)
         if counter % 5 != 2:
             counter += 1 
             continue
         spl = line.split()
         minims = list(map(int,spl))
-        res += [(seq_id,minims)]
+        if only_those_reads is None or seq_id in only_those_reads:
+            res += [(seq_id,minims)]
         counter += 1
-    return res
+        #if len(res) > max_reads: break
+    return res, parsed_reads
 
 
-reference = parse_file(file1)
+reference, osef          = parse_file(file1)
 assert(len(reference)==1)
-reads  = parse_file(file2)
-reads2 = parse_file(file3) if len(sys.argv) > 3 else None
+reads, only_those_reads  = parse_file(file2)
+reads2, osef             = parse_file(file3, only_those_reads) if len(sys.argv) > 3 else None
 
-print("loaded",len(reference),"reference,",len(reads),"reads")
+print("loaded",len(reference),"reference, and",len(reads),"reads")
+
+if len(sys.argv) > 4:
+    file_poa = sys.argv[4]
+    poa_d, poa_d_itv, poa_reads = evaluate_poa.prepare_eval_poa(file_poa, only_those_reads)
+else:
+    file_poa = None
+
+print("loaded",len(poa_d),"POA templates")
+
+
 
 reference = reference[0][1]
 
@@ -126,14 +136,6 @@ def semiglobal_align(a, b):
     blast_identity = 100.0 * nb_matches / nb_columns if nb_columns > 0 else 0
     return best_score, align_a[::-1], align_b[::-1], blast_identity
 
-"""
-read1 = reads[0]
-print("testing",read1)
-res = semiglobal_align(reference,read1)
-res = semiglobal_align(reference,read1[::-1])
-print(res[0],res[1],res[2])
-"""
-
 
 from multiprocessing import Pool
 from contextlib import closing # python/pypy 2 compat,  https://stackoverflow.com/questions/25968518/python-multiprocessing-lib-error-attributeerror-exit
@@ -159,30 +161,47 @@ def align(arg):
     #print("read identity: %.2f%%" % identity)
     return identity, aln, read_id, read
 
-def process_reads(reads,filename):
+def process_reads(reads,filename, only_those_reads = None):
     id_dict = dict() # stores identities
     aln_dict = dict() # stores alignments
     orig_dict = dict() # stores original read 'sequences' (of minimizers)
 
+    reads_to_align = [read for read in reads if only_those_reads is None or read[0] in only_those_reads] 
+
     with closing(Pool(nb_processes)) as p:
-        aln_results = p.map(align,reads)
+        aln_results = p.map(align,reads_to_align)
 
     for (identity, aln, read_id, read) in aln_results:
         id_dict[read_id] = identity
         aln_dict[read_id] = (aln[1],aln[2])
-        orig_dict[read_id] = read
+
+    for read_id, minims in reads:
+        orig_dict[read_id] = minims 
 
     identities = id_dict.values()
     mean_identity = sum(identities) / (1.0*len(identities))
     print("for",filename,"mean read identity: %.2f%%" % mean_identity)
     return id_dict, aln_dict, orig_dict
 
-id_r1, aln_r1, orig_r1 = process_reads(reads, file2)
+print("about to process",len(reads),"reads")
+
+id_r1, aln_r1, orig_r1 = process_reads(reads, file2, only_those_reads)
 if reads2 is not None:
-    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3)
+    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3, only_those_reads)
 
 def short_name(read_id):
     return read_id[:12]+".." if len(read_id) > 12 else read_id
+
+def jac(poa_template,lst):
+    mean_jac = 0
+    nb_included = 0
+    for poa_seq_id in lst:
+        poa_r1 = set(orig_r1[poa_seq_id])
+        mean_jac += len(poa_template & poa_r1) / len(poa_template | poa_r1)
+        nb_included += 1
+    if nb_included > 0:
+        mean_jac /= nb_included
+    return mean_jac
 
 nb_better = 0
 nb_nochange = 0
@@ -199,26 +218,14 @@ for seq_id in id_r1:
         else:
             nb_nochange += 1
     
-        # poa stats
+        # poa & Jaccard stats
         if file_poa is not None:
+            poa_template = set(orig_r1[seq_id])
             tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
-            print("POA retrieval TP: %d  FP: %d  FN: %d" % (tp,fp,fn))
-
-        # jaccard stats
-        poa_template = set(orig_r1[seq_id])
-        mean_jac = 0
-        for poa_seq_id in set(poa_reads[seq_id]):
-            poa_r1 = set(orig_r1[poa_seq_id])
-            jac_r1 = len(poa_template & poa_r1) / len(poa_template | poa_r1)
-            if poa_seq_id in orig_r2:
-                poa_r2 = set(orig_r2[poa_seq_id])
-                jac_r2 = len(poa_template & poa_r2) / len(poa_template | poa_r2)
-            else:
-                jac_r2 = -1
-            #print("Jac uncor: %.2f    Jac cor: %.2f" % (jac_r1, jac_r2))
-            mean_jac += jac_r1
-        mean_jac /= len(set(poa_reads[seq_id]))
-        print("Mean Jaccard between template and POA reads: %.2f" % mean_jac)
+            print("POA retrieval TP: %d (Jac %.2f)    FP: %d (Jac %.2f)   FN: %d (Jac %.2f)" \
+                    % (len(tp),jac(poa_template,tp),
+                        len(fp),jac(poa_template,fp),
+                        len(fn),jac(poa_template,fn)))
 
         debug_aln = True 
         if debug_aln:
@@ -238,6 +245,3 @@ for seq_id in id_r1:
 print(nb_better,"reads improved")
 print(nb_nochange,"reads unchanged")
 print(nb_worse,"reads made worse")
-id_r1, aln_r1, orig_r1 = process_reads(reads, file2)
-if reads2 is not None:
-    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3)
