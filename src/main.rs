@@ -359,7 +359,7 @@ fn main() {
                     //}
                     if read_transformed.len() >= n {
                         seq_mins.push(read_transformed.to_vec());
-                        ec_reads::record(&mut ec_file, &seq_id, &read_transformed);
+                        ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
                         buckets::buckets_insert(read_transformed, params.n, &mut buckets, &mut dbg_nodes);
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
     
@@ -434,7 +434,7 @@ fn main() {
             //println!("Seq {} done", counter);
  
             // dump corrected reads to [prefix].postcor.ec_data
-            ec_reads::record(&mut ec_file_postcor, &seq_id, &read_transformed);
+            ec_reads::record(&mut ec_file_postcor, &seq_id, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
             ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
             ec_reads::flush(&mut ec_file_poa); // flush as we may stop earlier
 
