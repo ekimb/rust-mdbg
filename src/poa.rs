@@ -594,7 +594,7 @@ pub struct Aligner<F: MatchFunc> {
 
 impl<F: MatchFunc> Aligner<F> {
     /// Create new instance.
-    pub fn new(scoring: Scoring<F>, reference: Vec<u64>) -> Self {
+    pub fn new(scoring: Scoring<F>, reference: &Vec<u64>) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
@@ -615,9 +615,9 @@ impl<F: MatchFunc> Aligner<F> {
     }
 
     /// Globally align a given query against the graph.
-    pub fn global(&mut self, query: Vec<u64>) -> &mut Self {
+    pub fn global(&mut self, query: &Vec<u64>) -> &mut Self {
         self.query = query.to_vec();
-        self.traceback = self.poa.global(query);
+        self.traceback = self.poa.global(&query);
         self
     }
 
@@ -635,9 +635,6 @@ impl<F: MatchFunc> Aligner<F> {
 pub struct Poa<F: MatchFunc> {
     scoring: Scoring<F>,
     pub graph: POAGraph,
-    pub node_index : HashMap<NodeIndex<usize>, u64>,
-    pub edge_index : HashMap<usize, (u64, u64)>,
-    pub seq_to_edges : HashMap<Vec<u64>, Vec<EdgeIndex<usize>>>,
 }
 
 impl<F: MatchFunc> Poa<F> {
@@ -649,12 +646,9 @@ impl<F: MatchFunc> Poa<F> {
     /// * `poa` - the partially ordered reference alignment
     ///
     pub fn new(scoring: Scoring<F>, graph: POAGraph) -> Self {
-        let mut node_index : HashMap<NodeIndex<usize>, u64> = HashMap::new();
-        let mut edge_index : HashMap<usize, (u64, u64)> = HashMap::new();
-        let mut seq_to_edges : HashMap<Vec<u64>, Vec<EdgeIndex<usize>>> = HashMap::new();
 
 
-        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
+        Poa { scoring, graph}
     }
 
     /// Create a new POA graph from an initial reference sequence and alignment penalties.
@@ -664,27 +658,19 @@ impl<F: MatchFunc> Poa<F> {
     /// * `scoring` - the score struct
     /// * `reference` - a reference TextSlice to populate the initial reference graph
     ///
-    pub fn from_string(scoring: Scoring<F>, seq: Vec<u64>) -> Self {
-        let mut node_index : HashMap<NodeIndex<usize>, u64> = HashMap::new();
-        let mut edge_index : HashMap<usize, (u64, u64)> = HashMap::new();
-        let mut seq_to_edges : HashMap<Vec<u64>, Vec<EdgeIndex<usize>>> = HashMap::new();
-        let mut entry = seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
+    pub fn from_string(scoring: Scoring<F>, seq: &Vec<u64>) -> Self {
         let mut graph: Graph<u64, i32, Directed, usize> =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
-        node_index.insert(prev, seq[0]);
         let mut node: NodeIndex<usize>;
         for base in seq.iter().skip(1) {
             node = graph.add_node(*base);
-            node_index.insert(node, *base);
             graph.add_edge(prev, node, 1);
             let edge = graph.find_edge(prev, node).unwrap();
-            entry.push(edge);
-            edge_index.insert(edge.index(),(node_index[&prev], node_index[&node]));
             prev = node;
         }
 
-        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
+        Poa { scoring, graph }
     }
 
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
@@ -693,7 +679,7 @@ impl<F: MatchFunc> Poa<F> {
     /// * `query` - the query TextSlice to align against the internal graph member
     ///
 
-    pub fn global(&mut self, query: Vec<u64>) -> Traceback {
+    pub fn global(&mut self, query: &Vec<u64>) -> Traceback {
         assert!(self.graph.node_count() != 0);
 
         // dimensions of the traceback matrix
@@ -862,7 +848,6 @@ impl<F: MatchFunc> Poa<F> {
     }
     pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u64>) {
         let mut prev: NodeIndex<usize> = NodeIndex::new(0);
-        let mut entry = self.seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
         let mut i: usize = 0;
         for op in aln.operations.iter() {
             match op {
@@ -875,11 +860,8 @@ impl<F: MatchFunc> Poa<F> {
                     //println!("Node : {:?}", seq[i]);
                     if (seq[i] != self.graph.raw_nodes()[*p].weight) {
                         let node = self.graph.add_node(seq[i]);
-                        self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
-                        entry.push(edge);
-                        self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                     } else {
                         // increment node weight
@@ -892,11 +874,8 @@ impl<F: MatchFunc> Poa<F> {
                                 self.graph.add_edge(prev, node, 1);
                                 let edge = self.graph.find_edge(prev, node).unwrap();
                                 //println!("Edge added {:?}", (self.node_index[&prev], self.node_index[&node]));
-                                self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                             }
                         }
-                        let node = NodeIndex::new(*p);
-                        self.node_index.insert(node, seq[i]);
                         prev = node;
                     }
                     i += 1;
@@ -906,11 +885,8 @@ impl<F: MatchFunc> Poa<F> {
                 }
                 AlignmentOperation::Ins(Some(_)) => {
                         let node = self.graph.add_node(seq[i]);
-                        self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
-                        entry.push(edge);
-                        self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                         i += 1;
                 }

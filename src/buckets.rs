@@ -24,10 +24,10 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
     let k = params.k;
     let mut bucket_seqs = Vec::<&Vec<u64>>::new();
     let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-    let mut aligner = poa::Aligner::new(scoring, read_transformed.to_vec());
+    let mut aligner = poa::Aligner::new(scoring, read_transformed);
     let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
     let mut poa_ids = Vec::<String>::new();
-    let mut seq_id = read_ids[&read_transformed.to_vec()].to_string();
+    let mut seq_id = read_ids[read_transformed].to_string();
     for i in 0..read_transformed.len()-n+1 {
         let bucket_idx = read_transformed[i..i+n].to_vec();
         let entry = &buckets[&bucket_idx];
@@ -37,19 +37,14 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
             let entry = aligned.entry(query).or_insert(false);
             if !*entry {
                 poa_ids.push(read_ids[query].to_string());
-                let tuple = (read_transformed.to_vec(), query.to_vec());
-                let tuple_rev = (tuple.1.clone(), tuple.0.clone());
+                let tuple = (query.to_vec(), read_transformed.to_vec());
                 let mut similarity = 0.0;
                 if pairwise_jaccard.contains_key(&tuple) {
                     similarity = pairwise_jaccard[&tuple];
                 }
-                else if pairwise_jaccard.contains_key(&tuple_rev) {
-                    similarity = pairwise_jaccard[&tuple_rev];
-                }
                 else {
-                    similarity = jaccard_distance(&read_transformed, query);
+                    similarity = jaccard_distance(query, &read_transformed);
                     pairwise_jaccard.insert(tuple.clone(), similarity);
-                    pairwise_jaccard.insert(tuple_rev.clone(), similarity);
                 }
                 *entry = true;   
                 if similarity < 0.33 {
@@ -63,7 +58,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
                     //let aln = poa_graph.align_sequence(query.to_vec());
                     //poa_graph.incorporate_alignment(aln, &vec![1], query.to_vec());
                     //consensus = poa_graph.consensus();
-                aligner.global(query.to_vec());
+                aligner.global(query);
                 aligner.add_to_graph();
                 if similarity >= 0.33 {
                     bucket_seqs.push(query);

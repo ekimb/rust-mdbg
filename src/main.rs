@@ -61,8 +61,7 @@ fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> f64 {
     let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
     let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
     let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
-    let union: HashSet<_> = s2_set.union(&s2_set).collect();
-    (inter.len() as f64) / (union.len() as f64)
+    (inter.len() as f64) / (s1.len() as f64)
 }
 
 fn extract_minimizers(seq: &str, params: &Params) -> Vec<u64>
