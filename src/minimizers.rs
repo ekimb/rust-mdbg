@@ -78,19 +78,24 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         let lmer :String = lmer_vec.into_iter().collect();
         //println!("testing minimizer {}",lmer.to_string());
         //println!("found minimizer {}",lmer.to_string());
-
+        if revcomp_aware {
+            let lmer_rev = utils::revcomp(&lmer);
+            if lmer > lmer_rev {continue;} // skip if not canonical
+        }
         list_minimizers.push(lmer);
     }
    
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();
+    let hash_to_idx : HashMap<u64, u64> = HashMap::new();
     let mut minim_idx : u32 = 0;
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
             let hash = (nthash(lmer.as_bytes(), l)[0]) as u64;
-            minimizer_to_int.insert(lmer.to_string(),  hash);
-            int_to_minimizer.insert(hash,         lmer.to_string());
+            hash_to_idx.insert(hash, minim_idx);
+            minimizer_to_int.insert(lmer.to_string(),  minim_idx);
+            int_to_minimizer.insert(minim_idx,         lmer.to_string());
             minim_idx += 1;
         }
     

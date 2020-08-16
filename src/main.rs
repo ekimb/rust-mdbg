@@ -402,17 +402,17 @@ fn main() {
         {
             let mut seq_id              = ec_record.seq_id;
             let mut read_transformed    = ec_record.read_transformed;
+            let mut seq_str             = ec_record.seq_str;
             //println!("OG:\t{:?}", read_transformed);
-            pb.add(seq_id.len() as u64 + read_transformed.len() as u64);
-            //if !corrected.contains_key(&read_transformed) {
+            if !corrected.contains_key(&read_transformed) {
                 read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
                 //println!("Cons:\t{:?}", read_transformed);
-            //}
-            //else {
-                //read_transformed = corrected[&read_transformed].to_vec();
-                //println!("Already corrected");
+            }
+            else {
+                read_transformed = corrected[&read_transformed].to_vec();
+               // println!("Already corrected");
 
-           // }
+            }
             //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
             //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
             if read_transformed.len() <= k { continue; }
@@ -433,6 +433,7 @@ fn main() {
 
             seq.truncate(seq.len()-1);
             read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+            pb.add(seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64 + seq_str.len() as u64);
             //println!("Seq {} done", counter);
  
             // dump corrected reads to [prefix].postcor.ec_data
