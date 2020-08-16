@@ -19,7 +19,7 @@ use std::fs::File;
 
 
 
-pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, Vec<u64>>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> Vec<u64>{
+pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64, f64)>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, Vec<u64>>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> Vec<u64>{
     let n = params.n;
     let k = params.k;
     let mut bucket_seqs = Vec::<&Vec<u64>>::new();
@@ -39,15 +39,18 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
                 poa_ids.push(read_ids[query].to_string());
                 let tuple = (query.to_vec(), read_transformed.to_vec());
                 let mut similarity = 0.0;
+                let mut containment = 0.0;
                 if pairwise_jaccard.contains_key(&tuple) {
-                    similarity = pairwise_jaccard[&tuple];
+                    similarity = pairwise_jaccard[&tuple].0;
+                    containment = pairwise_jaccard[&tuple].1;
                 }
                 else {
-                    similarity = jaccard_distance(query, &read_transformed);
-                    pairwise_jaccard.insert(tuple.clone(), similarity);
+                    similarity = jaccard_distance(query, &read_transformed).0;
+                    containment = jaccard_distance(query, &read_transformed).1; 
+                    pairwise_jaccard.insert(tuple.clone(), (similarity, containment));
                 }
                 *entry = true;   
-                if similarity < 0.33 {
+                if similarity < 0.05 || containment < 0.33 {
                     //println!("Jaccard Similarity: {}", similarity);
                     continue;
                 }
@@ -60,7 +63,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), f64>,
                     //consensus = poa_graph.consensus();
                 aligner.global(query);
                 aligner.add_to_graph();
-                if similarity >= 0.33 {
+                if containment >= 0.33 {
                     bucket_seqs.push(query);
                 }
                 //let mut offset;	

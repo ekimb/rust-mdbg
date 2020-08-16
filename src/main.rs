@@ -57,11 +57,13 @@ pub struct Params
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
 }
-fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> f64 {
+fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> (f64, f64) {
     let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
     let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
     let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
-    (inter.len() as f64) / (s1.len() as f64)
+    let union: HashSet<_> = s1_set.union(&s2_set).collect();
+
+    ((inter.len() as f64) / (union.len() as f64), (inter.len() as f64) / (s1.len() as f64))
 }
 
 fn extract_minimizers(seq: &str, params: &Params) -> Vec<u64>
@@ -297,7 +299,7 @@ fn main() {
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
     let mut seq_mins = Vec::<Vec<u64>>::new();
     let mut read_ids : HashMap<Vec<u64>, String> = HashMap::new();
-    let mut pairwise_jaccard : HashMap<(Vec<u64>, Vec<u64>), f64> = HashMap::new();
+    let mut pairwise_jaccard : HashMap<(Vec<u64>, Vec<u64>), (f64, f64)> = HashMap::new();
 
 
     let mut record_len = 0;
