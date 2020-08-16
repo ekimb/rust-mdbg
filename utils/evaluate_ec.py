@@ -194,14 +194,17 @@ def short_name(read_id):
 
 def jac(poa_template,lst):
     mean_jac = 0
+    mean_cont = 0
     nb_included = 0
     for poa_seq_id in lst:
         poa_r1 = set(orig_r1[poa_seq_id])
         mean_jac += len(poa_template & poa_r1) / len(poa_template | poa_r1)
+        mean_cont += len(poa_template & poa_r1) / len(poa_r1)
         nb_included += 1
     if nb_included > 0:
         mean_jac /= nb_included
-    return mean_jac
+        mean_cont /= nb_included
+    return mean_jac, mean_cont
 
 nb_better = 0
 nb_nochange = 0
@@ -222,10 +225,7 @@ for seq_id in id_r1:
         if file_poa is not None:
             poa_template = set(orig_r1[seq_id])
             tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
-            print("POA retrieval TP: %d (Jac %.2f)    FP: %d (Jac %.2f)   FN: %d (Jac %.2f)" \
-                    % (len(tp),jac(poa_template,tp),
-                        len(fp),jac(poa_template,fp),
-                        len(fn),jac(poa_template,fn)))
+            print("POA retrieval TP: " + str(len(tp)) + " " + str(jac(poa_template,tp)) + " FP: " + str(len(fp)) + " " + str(jac(poa_template,fp)) + " FN: " + str(len(fn)) + " " + str(jac(poa_template,fn)))
 
         debug_aln = True 
         if debug_aln:

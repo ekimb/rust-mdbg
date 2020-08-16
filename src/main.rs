@@ -404,15 +404,15 @@ fn main() {
             let mut read_transformed    = ec_record.read_transformed;
             //println!("OG:\t{:?}", read_transformed);
             pb.add(seq_id.len() as u64 + read_transformed.len() as u64);
-            if !corrected.contains_key(&read_transformed) {
+            //if !corrected.contains_key(&read_transformed) {
                 read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
                 //println!("Cons:\t{:?}", read_transformed);
-            }
-            else {
-                read_transformed = corrected[&read_transformed].to_vec();
+            //}
+            //else {
+                //read_transformed = corrected[&read_transformed].to_vec();
                 //println!("Already corrected");
 
-            }
+           // }
             //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
             //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
             if read_transformed.len() <= k { continue; }
