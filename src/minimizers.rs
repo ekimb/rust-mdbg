@@ -45,45 +45,21 @@ pub fn normalize_minimizer(lmer: &String) -> String
     res
 }
 
-pub fn minhash(seq: &String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Vec<u64>
+pub fn minhash(seq: &[u8], params: &Params) -> Vec<u64>
 {
     let size_miniverse = params.size_miniverse;
     let density = params.density;
     let l = params.l;
-    let mut read_transformed = Vec::<u64>::new();
-    let mut res = Vec::<String>::new();
-
-    let l = params.l;
-    if seq.len() < l { return read_transformed }
-
+    let mut res = Vec::<u64>::new();
+    let iter = NtHashIterator::new(seq, l).unwrap();
+    let res = iter.filter(|&hash| (hash != 0) && hash < ((u64::max_value() as f64 * (density/(l as f64))) as u64 )).collect::<Vec<u64>>();
+    
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-    for start in 0..(&seq.len()-l+1) {
-        let mut lmer = seq[start..start+l].to_string();
-        if lmer.contains("N") {continue;}
-        if revcomp_aware {
-            let lmer_rev = utils::revcomp(&lmer);
-            if lmer_rev < lmer { lmer = lmer_rev } // skip if not canonical
-        }
-        let mut should_insert : Option<String> = None;
-        if decide(&lmer.as_bytes(), params) {
-            should_insert = Some(lmer.to_string());
-        }
-        if !should_insert.is_none(){res.push(should_insert.unwrap());}
-    }
-    let read_transformed : Vec<u64> = res.par_iter().map(|minim| minimizer_to_int[minim]).collect();
+    // convert minimizers to their integer representation
 
-    (read_transformed)
+    res
 }
-pub fn decide(seq : &[u8], params: &Params) -> bool {
-    let size_miniverse = params.size_miniverse;
-    let density = params.density;
-    let l = params.l;
-    let max_count = params.max_lmer_count;
 
-    let mut hash = (nthash(seq, l)[0] % size_miniverse as u64) as f64 / size_miniverse as f64;
-    hash < (density/(l as f64))
-
-}
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
 
@@ -111,18 +87,17 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
    
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();
-    let mut hash_to_idx : HashMap<u64, u64> = HashMap::new();
-    let mut minim_idx : u64 = 0;
+    let mut minim_idx : u32 = 0;
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
-            let mut hash = (nthash(lmer.as_bytes(), l)[0] % params.size_miniverse as u64) / params.size_miniverse as u64;
-            hash_to_idx.insert(hash, minim_idx);
-            minimizer_to_int.insert(lmer.to_string(),  minim_idx);
-            int_to_minimizer.insert(minim_idx,         lmer.to_string());
+            let hash = (nthash(lmer.as_bytes(), l)[0]) as u64;
+            minimizer_to_int.insert(lmer.to_string(),  hash);
+            int_to_minimizer.insert(hash,         lmer.to_string());
             minim_idx += 1;
         }
     
     println!("selected {} minimizer ID's, {} sequences",int_to_minimizer.len(), minimizer_to_int.len());
     (minimizer_to_int, int_to_minimizer)
 }
+
