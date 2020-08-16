@@ -35,10 +35,13 @@ pub fn record_poa(file: &mut BufWriter<File>, seq_id: &str, poa_ids: Vec<String>
     write!(file, "{}\n", poa_ids.iter().join("\t")).expect("error writing EC info");
 }
 
-pub fn record(file: &mut BufWriter<File>, seq_id: &str, read_transformed: &Vec<u64>)
+pub fn record(file: &mut BufWriter<File>, seq_id: &str, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>)
 {
-    write!(file, "{}\n", seq_id).expect("error writing EC info");
+    write!(file, "{}\n", seq_id ).expect("error writing EC info");
+    write!(file, "{}\n", seq_str).expect("error writing EC info");
     write!(file, "{}\n", read_transformed.iter().join(" ")).expect("error writing EC info");
+    write!(file, "{}\n", read_minimizers.iter().join(" ")).expect("error writing EC info");
+    write!(file, "{}\n", read_minimizers_pos.iter().join(" ")).expect("error writing EC info");
 }
 pub fn flush(file: &mut BufWriter<File>)
 {
@@ -48,7 +51,10 @@ pub fn flush(file: &mut BufWriter<File>)
 pub struct EcRecord
 {
     pub seq_id  :String,
-    pub read_transformed: Vec<u64>,
+    pub seq_str :String,
+    pub read_transformed: Vec<u32>,
+    pub read_minimizers: Vec<String>,
+    pub read_minimizers_pos: Vec<u32>
 }
 
 pub fn load(output_prefix: &PathBuf) -> Vec<EcRecord>
@@ -60,19 +66,21 @@ pub fn load(output_prefix: &PathBuf) -> Vec<EcRecord>
     }; 
     let mut br = BufReader::new(file);
     let mut res : Vec<EcRecord> = vec![];
-    let to_vec_int = |s: &String| -> Vec<u64> { s.trim().split(" ").map(|s| s.parse().unwrap()).collect::<Vec<u64>>() };
+    let to_vec_int = |s: &String| -> Vec<u32> { s.trim().split(' ').map(|s| s.parse().unwrap()).collect::<Vec<u32>>() };
+    let to_vec_str = |s: &String| -> Vec<String> { s.trim().split(' ').map(String::from).collect::<Vec<String>>() };
 
     loop
     {
         let mut line = String::new();
-
         let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
         if let Err(e) = br.read_line(&mut line) { break; }
         if line.len() == 0                      { break; }
-        //println!("{}", line);
         let seq_id  = line.trim().to_string();                    new_line(&mut line, &mut br);
-        let read_transformed: Vec<u64> = to_vec_int(&line);
-        res.push( EcRecord { seq_id, read_transformed } );
+        let seq_str = line.trim().to_string();                    new_line(&mut line, &mut br);
+        let read_transformed: Vec<u32> = to_vec_int(&line);   new_line(&mut line, &mut br);
+        let read_minimizers: Vec<String> = to_vec_str(&line); new_line(&mut line, &mut br);
+        let read_minimizers_pos: Vec<u32> = to_vec_int(&line);
+        res.push( EcRecord { seq_id, seq_str, read_transformed, read_minimizers, read_minimizers_pos } );
     }
     res
 }
