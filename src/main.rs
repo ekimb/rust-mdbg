@@ -66,9 +66,9 @@ fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> (f64, f64) {
     ((inter.len() as f64) / (union.len() as f64), (inter.len() as f64) / (s1.len() as f64))
 }
 
-fn extract_minimizers(seq: &str, params: &Params) -> Vec<u64>
+fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer : &HashMap<u64, String>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
-    minimizers::minhash(seq.as_bytes(), params)
+    minimizers::minhash(seq.to_string(), params, int_to_minimizer)
         //wk_minimizers(seq, density) // unfinished
 }
 
@@ -300,7 +300,7 @@ fn main() {
     let mut seq_mins = Vec::<Vec<u64>>::new();
     let mut read_ids : HashMap<Vec<u64>, String> = HashMap::new();
     let mut pairwise_jaccard : HashMap<(Vec<u64>, Vec<u64>), (f64, f64)> = HashMap::new();
-
+    let mut read_map : HashMap<Vec<u64>, String> = HashMap::new();
 
     let mut record_len = 0;
     let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
@@ -311,7 +311,7 @@ fn main() {
 
     
     let mut buckets : HashMap<Vec<u64>, Vec<Vec<u64>>> = HashMap::new();
-    let mut corrected : HashMap<Vec<u64>, Vec<u64>> = HashMap::new();
+    let mut corrected : HashMap<Vec<u64>, String> = HashMap::new();
 
         for result in reader.records() {
                 let record    = result.unwrap();
@@ -319,26 +319,11 @@ fn main() {
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let read_transformed = extract_minimizers(&seq_str, &params);
+                let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
+                read_map.insert(read_transformed.to_vec(), (seq_str.to_string()));
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
-                let mut read_minimizers : Vec<String> = read_transformed.iter().map(|minim| int_to_minimizer[minim].to_string()).collect();
-            let mut read_minimizers_pos = Vec::<u32>::new();
-            let mut pos = 0;
-
-            for min in read_transformed.iter() {
-                read_minimizers_pos.push(pos);
-                pos += (params.l as u32 +1);
-                
-            }
-            let mut seq = String::new();
-            for i in 0..read_minimizers.len() {
-                seq.push_str(&read_minimizers[i]);
-                seq.push_str("N");
-            }
-
-            seq.truncate(seq.len()-1);
                 // stats
                 nb_minimizers_per_read += read_transformed.len() as f64;
                 nb_reads += 1;
@@ -362,14 +347,14 @@ fn main() {
                     if read_transformed.len() > k {
                         seq_mins.push(read_transformed.to_vec());
                         ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
-                        buckets::buckets_insert(read_transformed, params.n, &mut buckets, &mut dbg_nodes);
+                        buckets::buckets_insert(&seq_str, read_transformed, params.n, &mut buckets, &mut dbg_nodes);
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
     
                     }
                 }
                 else {
                     if read_transformed.len() > k {
-                        read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+                        read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
 
                     }
                 }
@@ -403,42 +388,23 @@ fn main() {
             let mut seq_id              = ec_record.seq_id;
             let mut read_transformed    = ec_record.read_transformed;
             let mut seq_str             = ec_record.seq_str;
-            //println!("OG:\t{:?}", read_transformed);
+            seq_str.truncate(seq_str.len()-1);
             if !corrected.contains_key(&read_transformed) {
-                read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
-                //println!("Cons:\t{:?}", read_transformed);
+                seq_str = buckets::query_buckets(&mut read_map, &mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
             }
             else {
-                read_transformed = corrected[&read_transformed].to_vec();
-               // println!("Already corrected");
+                seq_str = corrected[&read_transformed].to_string();
 
             }
-            //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
-            //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
-            let mut read_minimizers : Vec<String> = read_transformed.iter().map(|minim| int_to_minimizer[minim].to_string()).collect();
-            let mut read_minimizers_pos = Vec::<u32>::new();
-            let mut pos = 0;
-
-            for min in read_transformed.iter() {
-                read_minimizers_pos.push(pos);
-                pos += (params.l as u32 +1);
-                
-            }
-            let mut seq = String::new();
-            for i in 0..read_minimizers.len() {
-                seq.push_str(&read_minimizers[i]);
-                seq.push_str("N");
-            }
-
-            seq.truncate(seq.len()-1);
+            let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer);
             pb.add(seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64 + seq_str.len() as u64);
-            ec_reads::record(&mut ec_file_postcor, &seq_id, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
+            ec_reads::record(&mut ec_file_postcor, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
             ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
             ec_reads::flush(&mut ec_file_poa); // flush as we may stop earlier
 
             if read_transformed.len() <= k { continue; }
 
-            read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
+            read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
             //println!("Seq {} done", counter);
  
             // dump corrected reads to [prefix].postcor.ec_data
