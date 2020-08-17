@@ -319,10 +319,26 @@ fn main() {
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
+                let read_transformed = extract_minimizers(&seq_str, &params);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
+                let mut read_minimizers : Vec<String> = read_transformed.iter().map(|minim| int_to_minimizer[minim].to_string()).collect();
+            let mut read_minimizers_pos = Vec::<u32>::new();
+            let mut pos = 0;
+
+            for min in read_transformed.iter() {
+                read_minimizers_pos.push(pos);
+                pos += (params.l as u32 +1);
+                
+            }
+            let mut seq = String::new();
+            for i in 0..read_minimizers.len() {
+                seq.push_str(&read_minimizers[i]);
+                seq.push_str("N");
+            }
+
+            seq.truncate(seq.len()-1);
                 // stats
                 nb_minimizers_per_read += read_transformed.len() as f64;
                 nb_reads += 1;
@@ -387,14 +403,25 @@ fn main() {
             let mut seq_id              = ec_record.seq_id;
             let mut read_transformed    = ec_record.read_transformed;
             let mut seq_str             = ec_record.seq_str;
-            seq_str.truncate(seq_str.len()-1);
+            //println!("OG:\t{:?}", read_transformed);
             if !corrected.contains_key(&read_transformed) {
                 read_transformed = buckets::query_buckets(&mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed, &mut buckets, &params);
+<<<<<<< HEAD
             }
             else {
                 read_transformed = corrected[&read_transformed].to_vec();
 
             }
+=======
+                //println!("Cons:\t{:?}", read_transformed);
+            }
+            else {
+                read_transformed = corrected[&read_transformed].to_vec();
+               // println!("Already corrected");
+
+            }
+            //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
+>>>>>>> parent of f1307cb... adding minimizer strs to minhash
             //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
             let mut read_minimizers : Vec<String> = read_transformed.iter().map(|minim| int_to_minimizer[minim].to_string()).collect();
             let mut read_minimizers_pos = Vec::<u32>::new();
