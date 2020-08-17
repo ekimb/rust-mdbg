@@ -493,7 +493,7 @@ impl Traceback {
         {
             // TODO: these should be -1 * distance from head node
             row[0] = TracebackCell {
-                score: (i as i32) * 0, // gap_open penalty //semi-global
+                score: (i as i32) * gap_open, // gap_open penalty //semi-global
                 op: AlignmentOperation::Del(None),
             };
         }
@@ -789,16 +789,16 @@ impl<F: MatchFunc> Poa<F> {
     /// * `aln` - The alignment of the new sequence to the graph
     /// * `seq` - The sequence being incorporated
     ///
-    pub fn consensus(&mut self) -> Vec<u64> {
+    pub fn consensus(&mut self, params : &Params) -> Vec<u64> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut cns = Vec::new();
-        for node in self.consensus_path().to_vec() {
+        for node in self.consensus_path(&params).to_vec() {
             cns.push(*self.graph.node_weight(node).unwrap() as u64);
         }
 
         cns.to_vec()
     }
-    pub fn consensus_path(&mut self) -> Vec<NodeIndex<usize>> {
+    pub fn consensus_path(&mut self, params : &Params) -> Vec<NodeIndex<usize>> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut node_idx = toposort(&self.graph, None).unwrap();
         // For each node find the best predecessor by edge-weight, breaking ties with path-weight
@@ -808,7 +808,10 @@ impl<F: MatchFunc> Poa<F> {
             let mut best_neighbor = None::<NodeIndex<usize>>;
             let mut best_weights = (0, 0); // (Edge-weight, Path-weight)
             for e_ref in self.graph.edges(*node) {
-                let weight = *e_ref.weight();
+                let mut weight = *e_ref.weight();
+                if weight < params.t as i32 {
+                    weight = 0;
+                }
                 let target = e_ref.target();
 
                 if (weight, *scores.entry(target).or_insert(0)) > best_weights {

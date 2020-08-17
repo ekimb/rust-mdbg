@@ -23,7 +23,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64,
     let n = params.n;
     let k = params.k;
     let mut bucket_seqs = Vec::<&Vec<u64>>::new();
-    let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
+    let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 }).xclip(0).yclip(0);
     let mut aligner = poa::Aligner::new(scoring, read_transformed);
     let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
     let mut poa_ids = Vec::<String>::new();
@@ -62,10 +62,10 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64,
         
         }
     }
-    let mut new = bucket_seqs.iter().map(|&seq| (seq.to_vec(), jaccard_distance(seq, &read_transformed))).filter(|tuple| (tuple.1).0 > 0.15 && (tuple.1).1 > 0.25).collect::<Vec<(Vec<u64>, (f64, f64))>>();
+    let mut new = bucket_seqs.iter().map(|&seq| (seq.to_vec(), jaccard_distance(seq, &read_transformed))).filter(|tuple| ((tuple.1).0 > 0.15 && (tuple.1).1 > 0.25)).collect::<Vec<(Vec<u64>, (f64, f64))>>();
     new.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     new.reverse();
-    let mut max_len = 70;
+    let mut max_len = 200;
     if new.len() < max_len {max_len = new.len();}
     for i in 0..max_len {
         poa_ids.push(read_ids[&new[i].0].to_string());
@@ -76,7 +76,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64,
     }
     
 
-    let mut consensus = aligner.poa.consensus();
+    let mut consensus = aligner.poa.consensus(&params);
     for (vec, tuple) in new.iter() {
         *corrected.entry(vec.to_vec()).or_insert(Vec::<u64>::new()) = consensus.to_vec();
     }
@@ -87,9 +87,7 @@ pub fn query_buckets(pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64,
     
 pub fn buckets_insert(seq : Vec<u64>, i : usize, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, mut dbg_nodes : &mut HashMap<Kmer, u32>) { 
     for j in 0..seq.len()-i+1 {
-        let mut bucket_idx = Vec::<u64>::new();
-        bucket_idx = seq[j..i+j].to_vec();
-        let mut entry = buckets.entry(bucket_idx.to_vec()).or_insert(Vec::<Vec<u64>>::new());
+        let mut entry = buckets.entry(seq[j..i+j].to_vec()).or_insert(Vec::<Vec<u64>>::new());
        // for _ in 0..sub_counts[&bucket_idx] {
             entry.push(seq.to_vec());
         //}

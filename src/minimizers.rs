@@ -13,7 +13,7 @@ use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
 
-use nthash::{nthash, NtHashIterator};
+use nthash::{ntc64, NtHashIterator};
 
 const lmer_frequency_based : bool = false;
 
@@ -47,12 +47,12 @@ pub fn normalize_minimizer(lmer: &String) -> String
 
 pub fn minhash(seq: &[u8], params: &Params) -> Vec<u64>
 {
-    let size_miniverse = params.size_miniverse;
+    let size_miniverse = params.size_miniverse as u64;
     let density = params.density;
     let l = params.l;
     let mut res = Vec::<u64>::new();
     let iter = NtHashIterator::new(seq, l).unwrap();
-    let res = iter.filter(|&hash| (hash != 0) && hash < ((u64::max_value() as f64 * (density/(l as f64))) as u64 )).collect::<Vec<u64>>();
+    let res = iter.filter(|&hash| (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64)).collect::<Vec<u64>>();
     
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
     // convert minimizers to their integer representation
@@ -81,7 +81,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         if revcomp_aware {
             let lmer_rev = utils::revcomp(&lmer);
             if lmer > lmer_rev {continue;} // skip if not canonical
-        }
+       }
         list_minimizers.push(lmer);
     }
    
@@ -91,7 +91,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
-            let hash = (nthash(lmer.as_bytes(), l)[0]) as u64;
+            let hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
             minimizer_to_int.insert(lmer.to_string(),  hash);
             int_to_minimizer.insert(hash,         lmer.to_string());
             minim_idx += 1;
