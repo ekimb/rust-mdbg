@@ -166,7 +166,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         // so for now we'll just do this dirty 'fix'
         // since anyway the importance of overlap length field in GFA is quite relative in this
         // pipeline
-        //let overlap_length = std::cmp::min(overlap_length as usize, seq2.len()-1);
+        let overlap_length = std::cmp::min(overlap_length as usize, seq2.len()-1);
 
         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
         write!(file, "{}", l_line).expect("error writing l_line");
