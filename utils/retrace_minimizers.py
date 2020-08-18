@@ -4,20 +4,9 @@ if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.arg
 
 # read [origin.sequences] file
 d_minims = dict()
-k, l = 0, 0
-for line in open(sys.argv[1]):
-    # ignore #'s lines except for getting the k value
-    if line.startswith('#'):
-        if line.startswith('# k = '):
-            k = int(line.split()[-1])
-        if line.startswith('# l = '):
-            l = int(line.split()[-1])
-        continue
-    spl = line.split()
-    node_id = spl[0]
-    end_spl = -1 if spl[-1] == "PLACEHOLDER" else -2 # takes care of the fact that some .sequence files end up with PLACEHOLDER and no abundance, some with a sequence and an abundance
-    minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:end_spl]))
-    d_minims[node_id] = minims
+from parse_sequences_file import parse
+k, l, kmer_seq, osef, origins1 = parse(sys.argv[1])
+d_minims = kmer_seq
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     chain = []
@@ -68,7 +57,7 @@ output.write("# l = %d\n" % l)
 def process_unitig(name, info):
     #print("new chain",name,"len",len(info),"contents:",info)
     minims = chain_minimizers(info, name)
-    output.write("%s\t%s\tPLACEHOLDER\n"% (name,minims))
+    output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
 
 # read [target.gfa] file
 current_unitig_name = ""

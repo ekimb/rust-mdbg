@@ -38,7 +38,6 @@ use std::env;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 
-const error_correct: bool = true; // fix errors within kmers before assembly
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -111,7 +110,7 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 // here, keep in mind a kmer is in minimizer-space, not base-space
 // this code presupposes that the read has already been transformed into a sequence of minimizers
 // so it just performs revcomp normalization and solidy check
-fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String> , kmer_seqs_tot: &mut HashMap<Vec<u32>,String> , seq_mins: &mut Vec<Vec<u32>> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params, corr : bool)
+fn read_to_kmers(seq_id: &str, seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, kmer_seqs_tot: &mut HashMap<Vec<u32>,String>, kmer_origin: &mut HashMap<Kmer,String>, seq_mins: &mut Vec<Vec<u32>> , minim_shift : &mut HashMap<Kmer,(u32,u32)>, params: &Params, corr : bool)
 {
     let pool = ThreadPool::new(4);
     let k = params.k;
@@ -150,6 +149,9 @@ fn read_to_kmers(seq_str :&str, read_transformed: &Vec<u32>, read_minimizers: &V
             }
                
             kmer_seqs.insert(node.clone(), seq.clone());
+
+            let origin = format!("{}_{}_{}", seq_id, read_minimizers_pos[i].to_string(), read_minimizers_pos[i+k-1].to_string());
+            kmer_origin.insert(node.clone(), origin);
             
             let position_of_second_minimizer = match seq_reversed {
                 true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
@@ -205,6 +207,8 @@ struct Opt {
     #[structopt(long)]
     levenshtein_minimizers: Option<usize>,
     #[structopt(long)]
+    no_error_correct: bool,
+    #[structopt(long)]
     test1: bool,
     #[structopt(long)]
     test2: bool,
@@ -223,6 +227,11 @@ fn main() {
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
+    let mut error_correct: bool = true;
+
+    if opt.no_error_correct {
+        error_correct = false;
+    }
 
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -295,7 +304,8 @@ fn main() {
     // then will keep only those with count > 1
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
-    let mut kmer_seqs_tot   : HashMap<Vec<u32>,String> = HashMap::new(); // associate a dBG node to its sequence
+    let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
+    let mut kmer_seqs_tot : HashMap<Vec<u32>,String> = HashMap::new(); // associate a dBG node to its sequence
 
     let mut sketches   = Vec::<Vec<u32>>::new(); // vector of sketches
 
@@ -340,11 +350,6 @@ fn main() {
                 // some debug
                 //debug_output_read_minimizers(&seq_str.to_string(), &read_minimizers, &read_minimizers_pos);
 
-                //if read_transformed.len() > k {
-                    //read_to_kmers(&seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, false);
-                    
-                //}
-
                 if error_correct
                 {
                     //for i in 0..read_transformed.len()-n+1 {
@@ -358,6 +363,12 @@ fn main() {
                         buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes, &mut sub_counts, &kmer_seqs_tot);
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
     
+                    }
+                }
+                else
+                {
+                    if read_transformed.len() > k {
+                        read_to_kmers(&seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut kmer_origin, &mut seq_mins, &mut minim_shift, &params, false);
                     }
                 }
 
@@ -376,6 +387,7 @@ fn main() {
     
     dbg_nodes = HashMap::new(); // it's a Counter
     kmer_seqs = HashMap::new(); // associate a dBG node to its sequence
+    kmer_origin = HashMap::new(); // associate a dBG node to its sequence
     minim_shift = HashMap::new();
     let path = ec_reads::make_filename(&output_prefix); // records position of second minimizer in sequence
     let metadata = fs::metadata(path).expect("error opening ec file");
@@ -423,7 +435,7 @@ fn main() {
             }
 
             seq.truncate(seq.len()-1);
-            read_to_kmers(&seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut seq_mins, &mut minim_shift, &params, true);
+            read_to_kmers(&seq_id, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_tot, &mut kmer_origin, &mut seq_mins, &mut minim_shift, &params, true);
             //println!("Seq {} done", counter);
  
             // dump corrected reads to [prefix].postcor.ec_data
@@ -529,5 +541,5 @@ fn main() {
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
     println!("writing sequences..");
-    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &dbg_nodes, k, l);
+    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
 }
