@@ -45,19 +45,28 @@ pub fn normalize_minimizer(lmer: &String) -> String
     res
 }
 
-pub fn minhash(seq: &[u8], params: &Params) -> Vec<u64>
+pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     let size_miniverse = params.size_miniverse as u64;
     let density = params.density;
     let l = params.l;
-    let mut res = Vec::<u64>::new();
-    let iter = NtHashIterator::new(seq, l).unwrap();
-    let res = iter.filter(|&hash| (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64)).collect::<Vec<u64>>();
+    let mut read_minimizers = Vec::<String>::new();
+    let mut read_minimizers_pos = Vec::<u32>::new();
+    let mut read_transformed = Vec::<u64>::new();
+    for i in 0..seq.len()-l+1 {
+        let lmer = &seq[i..i+l];
+        let hash = ntc64(lmer.as_bytes(), 0, l);
+        if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
+            read_minimizers.push(normalize_minimizer(&lmer.to_string()));
+            read_minimizers_pos.push(i as u32);
+            read_transformed.push(hash);
+        }
+    }
     
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
     // convert minimizers to their integer representation
 
-    res
+    (read_minimizers, read_minimizers_pos, read_transformed)
 }
 
 

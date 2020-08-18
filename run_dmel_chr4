@@ -8,7 +8,7 @@ echo "Running reference..."
 cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- dmel_chr4.fa -k $K -l $L -n $N -t 1 --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix dmel_chr4
 start=`date +%s`
 echo "Running reads..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund 2 --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund 2 --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05 --error-correct
 end=`date +%s`
 echo "Running evaluation..."
 pypy3 utils/evaluate_ec.py  dmel_chr4.ec_data  dmel_chr4_reads-0.05.ec_data  dmel_chr4_reads-0.05.postcor.ec_data dmel_chr4_reads-0.05.poa.ec_data | tee ec.txt

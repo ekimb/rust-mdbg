@@ -31,7 +31,7 @@ fi
 
 #gfaview $base.gfa -u > $base.unitigs.gfa
 #gfaview $base.gfa -t -u > $base.notips.gfa
-gfaview $base.gfa                  $GFAVIEW_PARAMS > $base.notips.nobubbles.gfa
+gfatools asm $base.gfa                  $GFAVIEW_PARAMS > $base.notips.nobubbles.gfa
 #gfaview $base.notips.nobubbles.gfa $GFAVIEW_PARAMS > $base.notips.nobubbles.again.gfa  #FIXME there is a loss of info, it seems, when doing compaction twice. It's not an idempotent operation in gfaview?! removing it until i understand what's going on. To restore: just uncomment all commented #FIXME's and remove all uncommented FIXME's
 #echo ~/tools/Bandage/Bandage load $base.notips.nobubbles.again.gfa 
 
