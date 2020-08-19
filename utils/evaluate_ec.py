@@ -12,17 +12,6 @@
 
 nb_processes = 2
 
-import sys
-if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
-    exit("input: <reference.ec_data> [reads.ec_data] [reads.corrected.ec_data] [reads.poa.ec_data]\n will evaluate accuracy of minimizers in reads\n")
-
-import evaluate_poa
-
-file1 = sys.argv[1]
-file2 = sys.argv[2]
-if len(sys.argv) > 3:
-    file3 = sys.argv[3]
-
 def parse_file(filename, only_those_reads = None, max_reads = 100):
     res = []
     counter = 0
@@ -43,26 +32,6 @@ def parse_file(filename, only_those_reads = None, max_reads = 100):
         counter += 1
         #if len(res) > max_reads: break
     return res, parsed_reads
-
-
-reference, osef          = parse_file(file1)
-assert(len(reference)==1)
-reads, only_those_reads  = parse_file(file2)
-reads2, osef             = parse_file(file3, only_those_reads) if len(sys.argv) > 3 else None
-
-print("loaded",len(reference),"reference, and",len(reads),"reads")
-
-if len(sys.argv) > 4:
-    file_poa = sys.argv[4]
-    poa_d, poa_d_itv, poa_reads = evaluate_poa.prepare_eval_poa(file_poa, only_those_reads)
-else:
-    file_poa = None
-
-print("loaded",len(poa_d),"POA templates")
-
-
-
-reference = reference[0][1]
 
 # adapted from NW code here https://stackoverflow.com/questions/2718809/how-to-diff-align-python-lists-using-arbitrary-matching-function
 # 
@@ -183,65 +152,99 @@ def process_reads(reads,filename, only_those_reads = None):
     print("for",filename,"mean read identity: %.2f%%" % mean_identity)
     return id_dict, aln_dict, orig_dict
 
-print("about to process",len(reads),"reads")
-
-id_r1, aln_r1, orig_r1 = process_reads(reads, file2, only_those_reads)
-if reads2 is not None:
-    id_r2, aln_r2, orig_r2 = process_reads(reads2, file3, only_those_reads)
-
 def short_name(read_id):
     return read_id[:12]+".." if len(read_id) > 12 else read_id
 
 def jac(poa_template,lst):
     mean_jac = 0
-    mean_cont = 0
     nb_included = 0
     for poa_seq_id in lst:
         poa_r1 = set(orig_r1[poa_seq_id])
         mean_jac += len(poa_template & poa_r1) / len(poa_template | poa_r1)
-        mean_cont += len(poa_template & poa_r1) / len(poa_r1)
         nb_included += 1
     if nb_included > 0:
         mean_jac /= nb_included
-        mean_cont /= nb_included
-    return mean_jac, mean_cont
+    return mean_jac
 
-nb_better = 0
-nb_nochange = 0
-nb_worse  = 0
-for seq_id in id_r1:
-    if seq_id in id_r2:
-        ir1 = id_r1[seq_id]
-        ir2 = id_r2[seq_id]
-        print("read",short_name(seq_id),"uncor: %0.2f" % ir1,"cor: %0.2f" % ir2)
-        if ir1 < ir2:
-            nb_better += 1
-        elif ir2 < ir1:
-            nb_worse += 1
-        else:
-            nb_nochange += 1
-    
-        # poa & Jaccard stats
-        if file_poa is not None:
-            poa_template = set(orig_r1[seq_id])
-            tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
-            print("POA retrieval TP: " + str(len(tp)) + " " + str(jac(poa_template,tp)) + " FP: " + str(len(fp)) + " " + str(jac(poa_template,fp)) + " FN: " + str(len(fn)) + " " + str(jac(poa_template,fn)))
 
-        debug_aln = True 
-        if debug_aln:
-            print("alignment of uncorrected read",short_name(seq_id)," (len %d) to ref:" % len(orig_r1[seq_id]))
-            #print(orig_r1[seq_id]) # print original read sequence of minimizers
-            aln = aln_r1[seq_id]
-            print("\t".join(map(str,aln[0])))
-            print("\t".join(map(str,aln[1])))
-            print("and now the corrected read (len %d) alignment:" % len(orig_r2[seq_id]))
-            #print(orig_r2[seq_id])
-            aln = aln_r2[seq_id]
-            print("\t".join(map(str,aln[0])))
-            print("\t".join(map(str,aln[1])))
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 3 or ".ec_data" not in sys.argv[2] or ".ec_data" not in sys.argv[1]:
+        exit("input: <reference.ec_data> [reads.ec_data] [reads.corrected.ec_data] [reads.poa.ec_data]\n will evaluate accuracy of minimizers in reads\n")
 
-            print("---")
+    import evaluate_poa
 
-print(nb_better,"reads improved")
-print(nb_nochange,"reads unchanged")
-print(nb_worse,"reads made worse")
+    file1 = sys.argv[1]
+    file2 = sys.argv[2]
+    if len(sys.argv) > 3:
+        file3 = sys.argv[3]
+
+
+    reference, osef          = parse_file(file1)
+    assert(len(reference)==1)
+    reads, only_those_reads  = parse_file(file2)
+    reads2, osef             = parse_file(file3, only_those_reads) if len(sys.argv) > 3 else None
+
+    print("loaded",len(reference),"reference, and",len(reads),"reads")
+
+    if len(sys.argv) > 4:
+        file_poa = sys.argv[4]
+        poa_d, poa_d_itv, poa_reads = evaluate_poa.prepare_eval_poa(file_poa, only_those_reads)
+    else:
+        file_poa = None
+
+    print("loaded",len(poa_d),"POA templates")
+
+
+
+    reference = reference[0][1]
+
+
+    print("about to process",len(reads),"reads")
+
+    id_r1, aln_r1, orig_r1 = process_reads(reads, file2, only_those_reads)
+    if reads2 is not None:
+        id_r2, aln_r2, orig_r2 = process_reads(reads2, file3, only_those_reads)
+
+    nb_better = 0
+    nb_nochange = 0
+    nb_worse  = 0
+    for seq_id in id_r1:
+        if seq_id in id_r2:
+            ir1 = id_r1[seq_id]
+            ir2 = id_r2[seq_id]
+            print("read",short_name(seq_id),"uncor: %0.2f" % ir1,"cor: %0.2f" % ir2)
+            if ir1 < ir2:
+                nb_better += 1
+            elif ir2 < ir1:
+                nb_worse += 1
+            else:
+                nb_nochange += 1
+        
+            # poa & Jaccard stats
+            if file_poa is not None:
+                poa_template = set(orig_r1[seq_id])
+                tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
+                print("POA retrieval TP: %d (Jac %.2f)    FP: %d (Jac %.2f)   FN: %d (Jac %.2f)" \
+                        % (len(tp),jac(poa_template,tp),
+                            len(fp),jac(poa_template,fp),
+                            len(fn),jac(poa_template,fn)))
+
+            debug_aln = True 
+            if debug_aln:
+                print("alignment of uncorrected read",short_name(seq_id)," (len %d) to ref:" % len(orig_r1[seq_id]))
+                #print(orig_r1[seq_id]) # print original read sequence of minimizers
+                aln = aln_r1[seq_id]
+                print("\t".join(map(str,aln[0])))
+                print("\t".join(map(str,aln[1])))
+                print("and now the corrected read (len %d) alignment:" % len(orig_r2[seq_id]))
+                #print(orig_r2[seq_id])
+                aln = aln_r2[seq_id]
+                print("\t".join(map(str,aln[0])))
+                print("\t".join(map(str,aln[1])))
+
+                print("---")
+
+    print(nb_better,"reads improved")
+    print(nb_nochange,"reads unchanged")
+    print(nb_worse,"reads made worse")
