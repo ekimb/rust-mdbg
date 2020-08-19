@@ -108,12 +108,13 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
             matches(&seq1[shift_p.1..shift_p.1+l], &minim_str_rev, levenshtein_minimizers)
             { 
                 shift = shift_p.1 as i32;
+                //print!("seq {} minim {} (rc {}) ori1 {} shift_p {:?}\n",&seq1,minim_str,minim_str_rev,ori1,shift_p);
             }
    }
     
     assert!(shift != -1);
     assert!((shift as usize) < seq1.len());
-    (seq1.len() as u32) - (shift as u32)
+    shift as u32
 }
 
 pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(u32,u32)>, levenshtein_minimizers: usize)  {
@@ -125,12 +126,14 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         Err(why) => panic!("couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
     };
-    write!(file, "H\tVZ:Z:1\n").expect("error writing GFA header");
+    //write!(file, "H\tVN:Z:2.0\n").expect("error writing GFA header");
+     write!(file, "H\tVZ:Z:1\n").expect("error writing GFA header");
+
 
     for node in gr.node_indices() {
         let idx = node.index();
         let seq = &kmer_seqs[nodes_vect[idx]];
-        let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
+        let s_line = format!("S\t{}\t{}\t{}\n",idx,seq, seq.len());
         write!(file, "{}", s_line).expect("error writing s_line");
     }
 
@@ -151,7 +154,8 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             seq2 = revcomp(&seq2);
             kmer2 = kmer2.reverse();
         }
-        let overlap_length = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
+        let shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
+        let mut overlap_length = seq1.len() as u32 -shift;
 
         //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
         //if (overlap_length as usize) > seq2.len()
@@ -166,9 +170,27 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         // so for now we'll just do this dirty 'fix'
         // since anyway the importance of overlap length field in GFA is quite relative in this
         // pipeline
-        let overlap_length = std::cmp::min(overlap_length as usize, seq2.len()-1);
-
+        overlap_length = std::cmp::min(overlap_length, (seq2.len()-1) as u32);
+        let id1_beg = shift;
+        let id1_end = shift+overlap_length;
+        let id2_beg = 0;
+        let id2_end = overlap_length;
+        let mut id1_str = String::new();
+        let mut id2_str = String::new();
+        if ori1 == "+" {id1_str = id1.to_string() + "\t+";} else { id1_str = id1.to_string() + "\t-";}
+        if ori2 == "+" {id2_str = id2.to_string() + "\t+";} else { id2_str = id2.to_string() + "\t-";}
+        //gfa2 : s1+ s2- b1 e1 b2 e2
         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
+        /*if overlap_length as usize == seq2.len()-1 {
+            let e_line = format!("E\t*\t{}\t{}\t{}\t{}\t{}\t{}$\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
+            write!(file, "{}", e_line).expect("error writing e_line");
+
+        }
+        else {
+            let e_line = format!("E\t*\t{}\t{}\t{}\t{}$\t{}\t{}\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
+            write!(file, "{}", e_line).expect("error writing e_line");
+        }*/
         write!(file, "{}", l_line).expect("error writing l_line");
+
     }
 }

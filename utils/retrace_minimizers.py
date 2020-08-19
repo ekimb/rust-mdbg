@@ -15,6 +15,7 @@ for line in open(sys.argv[1]):
         continue
     spl = line.split()
     node_id = spl[0]
+    print(node_id)
     end_spl = -1 if spl[-1] == "PLACEHOLDER" else -2 # takes care of the fact that some .sequence files end up with PLACEHOLDER and no abundance, some with a sequence and an abundance
     minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:end_spl]))
     d_minims[node_id] = minims
@@ -51,7 +52,8 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
                     print(", so tested overlap:",chain[-(k-1):])
                     print("        with either:",ms[:k-1])
                     print("                 or:",ms[::-1][:k-1])
-                    exit("unexpected element to chain (unitig %s)" % unitig_name)
+                    continue
+                    #exit("unexpected element to chain (unitig %s)" % unitig_name)
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
@@ -66,7 +68,7 @@ output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
-    #print("new chain",name,"len",len(info),"contents:",info)
+    print("new chain",name,"len",len(info),"contents:",info)
     minims = chain_minimizers(info, name)
     output.write("%s\t%s\tPLACEHOLDER\n"% (name,minims))
 
@@ -74,13 +76,14 @@ def process_unitig(name, info):
 current_unitig_name = ""
 current_unitig_info = []
 for line in open(sys.argv[2]):
-    if not line.startswith('a'): continue
+    if not line.startswith('A'): continue
     # a       utg0010623      0       490197  +       100
     spl = line.split()
+    print(spl)
     unitig_name = spl[1]
-    unitig_pos = spl[2]
-    seq_id = spl[3]
-    ori = spl[4]
+    unitig_pos = spl[6]
+    seq_id = spl[4][:-1]
+    ori = spl[3]
     if unitig_name != current_unitig_name:
         if current_unitig_name != "":
             process_unitig(current_unitig_name, current_unitig_info)
