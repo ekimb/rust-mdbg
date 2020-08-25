@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
-
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
 use nthash::{ntc64, NtHashIterator};
 
 const lmer_frequency_based : bool = false;
@@ -34,7 +36,35 @@ number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-
 
 bottom line: with k=10, couldn't retrieve enough solid (minabund>=2) kmers (at read error rate is 2%)
 */
+pub fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
+    let l = params.l;
+    let mut pb = ProgressBar::new(file_size);
+    let reader = fasta::Reader::from_file(&filename).unwrap();
 
+    for record in reader.records() {
+        let record = record.unwrap();
+        let seq = record.seq();
+
+        let seq_str = String::from_utf8_lossy(seq);
+        pb.add(record.seq().len() as u64 + record.id().len() as u64); // approx size of entry
+
+        if seq_str.len() < l { continue; }
+    
+        //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
+        for start in 0..(&seq_str.len()-l+1)
+        {
+            let mut lmer = String::from(&seq_str[start..start+l]);
+            if revcomp_aware {
+                let lmer_rev = utils::revcomp(&lmer);
+                lmer = std::cmp::min(lmer, lmer_rev);
+            }
+            let count = lmer_counts.entry(lmer).or_insert(0);
+            *count += 1;
+        }
+    }
+    params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
+    println!("average lmer count: {}",params.average_lmer_count);
+}
 pub fn normalize_minimizer(lmer: &String) -> String
 {
     let mut res = lmer.clone();
@@ -45,7 +75,7 @@ pub fn normalize_minimizer(lmer: &String) -> String
     res
 }
 
-pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>) -> (Vec<String>, Vec<u32>, Vec<u64>)
+pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, lmer_counts: &mut HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     let size_miniverse = params.size_miniverse as u64;
     let density = params.density;
@@ -54,10 +84,36 @@ pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, St
     let mut read_minimizers_pos = Vec::<u32>::new();
     let mut read_transformed = Vec::<u64>::new();
     for i in 0..seq.len()-l+1 {
-        let lmer = &seq[i..i+l];
+        let mut lmer = &seq[i..i+l];
+        let lmer_rev = utils::revcomp(&lmer);
+        lmer = std::cmp::min(lmer, &lmer_rev);
         let hash = ntc64(lmer.as_bytes(), 0, l);
         if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
-            read_minimizers.push(normalize_minimizer(&lmer.to_string()));
+            read_minimizers.push(lmer.to_string());
+            read_minimizers_pos.push(i as u32);
+            read_transformed.push(hash);
+        }
+    }
+    
+    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
+    // convert minimizers to their integer representation
+
+    (read_minimizers, read_minimizers_pos, read_transformed)
+}
+pub fn minhash_uhs(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
+{
+    let size_miniverse = params.size_miniverse as u64;
+    let density = params.density;
+    let l = params.l;
+    let mut read_minimizers = Vec::<String>::new();
+    let mut read_minimizers_pos = Vec::<u32>::new();
+    let mut read_transformed = Vec::<u64>::new();
+    for i in 0..seq.len()-l+1 {
+        let mut lmer = &seq[i..i+l];
+        let mut lmer = normalize_minimizer(&lmer.to_string());
+        let hash = ntc64(lmer.as_bytes(), 0, l);
+        if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) && uhs_kmers[&lmer] == 1 {
+            read_minimizers.push(lmer.to_string());
             read_minimizers_pos.push(i as u32);
             read_transformed.push(hash);
         }
@@ -110,3 +166,40 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     (minimizer_to_int, int_to_minimizer)
 }
 
+pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> HashMap<String, u32> {
+
+    let l = params.l;
+    let mut uhs_kmers = HashMap::<String, u32>::new();
+    let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
+            .multi_cartesian_product();
+
+//    for lmer in kproduct("ACTG".to_string(), l as u32) {
+    for lmer_vec in multi_prod {
+        let lmer :String = lmer_vec.into_iter().collect();
+        //println!("testing minimizer {}",lmer.to_string());
+        //println!("found minimizer {}",lmer.to_string());
+        if revcomp_aware {
+            let lmer_rev = utils::revcomp(&lmer);
+            if lmer > lmer_rev {continue;} // skip if not canonical
+       }
+        uhs_kmers.insert(lmer, 0);
+    }
+    let mut count = 0;
+    if let Ok(lines) = read_lines(uhs_filename) {
+        // Consumes the iterator, returns an (Optional) String
+        for line in lines {
+            if let Ok(mut ip) = line {
+                *uhs_kmers.entry(normalize_minimizer(&ip)).or_insert(0) = 1;
+                count += 1;
+            }
+        }
+    }
+    println!("selected {} umers", count);
+    uhs_kmers
+}
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}

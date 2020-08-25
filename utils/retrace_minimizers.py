@@ -15,14 +15,14 @@ for line in open(sys.argv[1]):
         continue
     spl = line.split()
     node_id = spl[0]
-    end_spl = -1 if spl[-1] == "PLACEHOLDER" else -2 # takes care of the fact that some .sequence files end up with PLACEHOLDER and no abundance, some with a sequence and an abundance
+    #end_spl = -1 if spl[-1] == "PLACEHOLDER" else -2 # takes care of the fact that some .sequence files end up with PLACEHOLDER and no abundance, some with a sequence and an abundance
+    end_spl = -3
     minims = list(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:end_spl]))
     d_minims[node_id] = minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     chain = []
     for (chain_number,(pos, node_id, ori)) in enumerate(info):
-        print(info)
         # FIXME for some reason I didn't use the 'ori' field but it could actually help
         ms = d_minims[node_id]
         if len(chain) > 0:
@@ -68,7 +68,7 @@ output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
-    print("new chain",name,"len",len(info),"contents:",info)
+    #print("new chain",name,"len",len(info),"contents:",info)
     minims = chain_minimizers(info, name)
     output.write("%s\t%s\tPLACEHOLDER\n"% (name,minims))
 
@@ -79,7 +79,6 @@ for line in open(sys.argv[2]):
     if not line.startswith('a'): continue
     # a       utg0010623      0       490197  +       100
     spl = line.split()
-    print(spl)
     unitig_name = spl[1]
     unitig_pos = spl[2]
     seq_id = spl[3]

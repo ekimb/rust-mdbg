@@ -18,9 +18,11 @@ extern crate array_tool;
 use std::fs;
 use crossbeam_utils::thread;
 use structopt::StructOpt;
+use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use strsim::levenshtein;
 use rayon::prelude::*;
+use editdistancewf as wf;
 mod utils;
 mod banded;
 mod gfa_output;
@@ -56,19 +58,43 @@ pub struct Params
     max_lmer_count : u32,
     min_kmer_abundance : usize,
     levenshtein_minimizers : usize,
+    correction_threshold: i32,
+    distance: usize,
+    reference: bool,
+    uhs: bool,
 }
-fn jaccard_distance(s1: &Vec<u64>, s2: &Vec<u64>) -> (f64, f64) {
+pub fn dist(s1: &Vec<u64>, s2: &Vec<u64>, params: &Params) -> f64 {
     let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
     let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
     let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
     let union: HashSet<_> = s1_set.union(&s2_set).collect();
-
-    ((inter.len() as f64) / (union.len() as f64), (inter.len() as f64) / (s1.len() as f64))
+    let distance = params.distance;
+    match distance {
+        0 => {
+            return 1.0 - ((inter.len() as f64) / (union.len() as f64))
+        }
+        1 => {
+            return 1.0 - ((inter.len() as f64) / (s1.len() as f64))
+        }
+        2 => {
+            let jaccard = (inter.len() as f64) / (union.len() as f64);
+            let mash: f64 = -1.0 * ((2.0 * jaccard) / (1.0 + jaccard)).ln() / params.l as f64;
+            return mash
+        }
+        _ => {
+            let jaccard = (inter.len() as f64) / (union.len() as f64);
+            let mash: f64 = (-1.0 / params.k as f64) * ((2.0 * jaccard) / (1.0 + jaccard)).ln();
+            return mash
+        }
+    }
 }
 
-fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>) -> (Vec<String>, Vec<u32>, Vec<u64>)
+fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
-    minimizers::minhash(seq.to_string(), params, int_to_minimizer)
+    if params.uhs {
+        return minimizers::minhash_uhs(seq.to_string(), params, int_to_minimizer, &mut lmer_counts, uhs_kmers)
+    }
+    minimizers::minhash(seq.to_string(), params, int_to_minimizer, &mut lmer_counts)
         //wk_minimizers(seq, density) // unfinished
 }
 
@@ -250,6 +276,8 @@ struct Opt {
     /// Input file
     #[structopt(parse(from_os_str))]
     reads: Option<PathBuf>,
+    #[structopt(long)]
+    uhs: Option<String>,
 
     /// Output graph/sequences prefix 
     #[structopt(parse(from_os_str), short, long)]
@@ -268,6 +296,10 @@ struct Opt {
     #[structopt(long)]
     minabund: Option<usize>,
     #[structopt(long)]
+    distance: Option<usize>,
+    #[structopt(long)]
+    correction_threshold: Option<i32>,
+    #[structopt(long)]
     levenshtein_minimizers: Option<usize>,
     #[structopt(long)]
     test1: bool,
@@ -275,13 +307,16 @@ struct Opt {
     test2: bool,
     #[structopt(long)]
     no_error_correct: bool,
+    #[structopt(long)]
+    reference: bool,
 }
 
 
 fn main() {
     let opt = Opt::from_args();      
-
+    let mut uhs : bool = false;
     let mut filename = PathBuf::new();
+    let mut uhs_filename = String::new();
     let mut output_prefix;
     let mut k: usize = 10;
     let mut l: usize = 12;
@@ -290,10 +325,15 @@ fn main() {
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
+    let mut distance: usize = 0;
     let mut error_correct: bool = true;
-
+    let mut correction_threshold : i32 = 0;
+    let mut reference : bool = false;
     if opt.no_error_correct {
         error_correct = false;
+    }
+    if opt.reference {
+        reference = true;
     }
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -314,15 +354,25 @@ fn main() {
 
     if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
+    if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
+    if !opt.distance.is_none() { distance = opt.distance.unwrap() }
+    if distance > 2 {distance = 2;}
+    let distance_type = match distance { 0 => "jaccard", 1 => "containment", 2 => "mash",_ => "mash" };
     let minimizer_type = match levenshtein_minimizers { 0 => "reg", 1 => "lev1", 2 => "lev2",_ => "levX" };
     if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
+    if opt.distance.is_none() { println!("Warning: using default distance metric ({})",distance_type); }
+
 
 
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
+    if !opt.uhs.is_none() { 
+        uhs = true;
+        uhs_filename = opt.uhs.unwrap(); 
+    } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
     
     if filename.as_os_str().is_empty() { panic!("please specify an input file"); }
@@ -346,6 +396,10 @@ fn main() {
         max_lmer_count: 0,
         min_kmer_abundance,
         levenshtein_minimizers,
+        distance,
+        correction_threshold,
+        reference,
+        uhs,
     };
     // init some useful objects
     let mut nb_minimizers_per_read : f64 = 0.0;
@@ -356,7 +410,6 @@ fn main() {
     let mut pb = ProgressBar::on(stderr(),file_size);
 
     let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
-    //params.max_lmer_count = minimizers::get_max_count(&lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
@@ -371,27 +424,32 @@ fn main() {
     let mut minim_shift : HashMap<Kmer,(u32,u32)> = HashMap::new(); // records position of second minimizer in sequence
     let mut seq_mins = Vec::<Vec<u64>>::new();
     let mut read_ids : HashMap<Vec<u64>, String> = HashMap::new();
-    let mut pairwise_jaccard : HashMap<(Vec<u64>, Vec<u64>), (f64, f64)> = HashMap::new();
-    let mut read_to_seq_pos : HashMap<Vec<u64>, (String, Vec<u32>)> = HashMap::new();
+    let mut pairwise_jaccard = HashMap::new();
 
+    let mut read_to_seq_pos : HashMap<Vec<u64>, (String, Vec<u32>)> = HashMap::new();
     let mut record_len = 0;
     let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
     let mut ec_file         = ec_reads::new_file(&output_prefix);
     let mut ec_file_postcor = ec_reads::new_file(&postcor_path);
     let poa_path = PathBuf::from(format!("{}.poa",output_prefix.to_str().unwrap()));
     let mut ec_file_poa = ec_reads::new_file(&poa_path);
+    let mut lmer_counts : HashMap<String, u32> = HashMap::new();
+    let mut pairwise_edit : HashMap<(Vec<u64>, Vec<u64>), u32> = HashMap::new();
 
-    
     let mut buckets : HashMap<Vec<u64>, Vec<Vec<u64>>> = HashMap::new();
     let mut corrected : HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)> = HashMap::new();
-
+    //minimizers::lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
+    let mut uhs_kmers = HashMap::<String, u32>::new();
+    if params.uhs {
+        uhs_kmers = minimizers::uhs_preparation(&mut params, &uhs_filename)
+    }
         for result in reader.records() {
                 let record    = result.unwrap();
                 let seq_inp       = record.seq();
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer);
+                let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer, &mut lmer_counts, &uhs_kmers);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
@@ -450,6 +508,7 @@ fn main() {
     let mut rec_seqs = 0;
     let mut ins_seqs = 0;
     kmer_origin = HashMap::new(); // associate a dBG node to its sequence
+    let mut pb2 = ProgressBar::on(stderr(),seq_mins.len() as u64);
 
         // do error correction of reads 
         let mut counter = 1;
@@ -465,10 +524,9 @@ fn main() {
             let mut seq = String::new();
             let mut read_minimizers = Vec::<String>::new();
             let mut read_minimizers_pos = Vec::<u32>::new();
-
             //println!("OG:\t{:?}", read_transformed);
             if !corrected.contains_key(&read_transformed_org) {
-                let tuple = buckets::query_buckets(&mut int_to_minimizer, &mut read_to_seq_pos, &mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed_org, &mut buckets, &params);
+                let tuple = buckets::query_buckets(&seq_mins, &mut int_to_minimizer, &mut read_to_seq_pos, &mut pairwise_jaccard, &mut ec_file_poa, &mut read_ids, &mut corrected, &read_transformed_org, &mut buckets, &params);
                 seq = tuple.0.to_string();
                 read_minimizers = tuple.1.to_vec();
                 read_minimizers_pos = tuple.2.to_vec();
@@ -581,7 +639,7 @@ fn main() {
         let index = gr.add_node(node.clone());
         node_indices.insert(node.clone(),index);
     }
-    let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
+    let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.par_iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
 
     gr.extend_with_edges( vec_edges );
 

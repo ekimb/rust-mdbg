@@ -373,6 +373,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "editdistancewf"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "625a162865825622719bd5d7c903ef55887f600f2f78ef5388044e893a9cb314"
+
+[[package]]
 name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1056,6 +1062,7 @@ dependencies = [
  "arrayvec",
  "bio",
  "crossbeam-utils",
+ "editdistancewf",
  "fasthash",
  "fxhash",
  "itertools 0.8.2",

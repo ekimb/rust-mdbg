@@ -27,5 +27,6 @@ crossbeam-utils = "*"
 fxhash = "*"
 nthash = "*"
 sourmash = "*"
+editdistancewf = "0.1.0"
 [profile.dev]
 opt-level = 3

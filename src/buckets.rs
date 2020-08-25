@@ -13,20 +13,23 @@ use petgraph::graph::EdgeIndex;
 use std::io::BufWriter;
 use super::poa;
 use super::poa_new;
-use super::jaccard_distance;
+use super::dist;
 use super::ec_reads;
 use std::fs::File;
+use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 
-
-pub fn query_buckets(int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_pos: &mut HashMap<Vec<u64>, (String, Vec<u32>)>, pairwise_jaccard : &mut HashMap<(Vec<u64>, Vec<u64>), (f64, f64)>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> (String, Vec<String>, Vec<u32>, Vec<u64>) {
+pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_pos: &mut HashMap<Vec<u64>, (String, Vec<u32>)>, pairwise_jaccard : &mut HashMap<(&Vec<u64>, &Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> (String, Vec<String>, Vec<u32>, Vec<u64>) {
     let n = params.n;
     let k = params.k;
     let l = params.l;
-    let mut bucket_seqs = Vec::<&Vec<u64>>::new();
-    let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 }).xclip(0).yclip(0);
+    let mut trim = 20;
+    if params.reference {trim = 0;}
+    let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
     let mut aligner = poa::Aligner::new(scoring, read_transformed);
     let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
+    let mut bucket_seqs = Vec::new();
     let mut poa_ids = Vec::<String>::new();
     let mut seq_id = read_ids[read_transformed].to_string();
     let mut pair_map : HashMap<(u64, u64), String> = HashMap::new();
@@ -37,10 +40,18 @@ pub fn query_buckets(int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_po
         //println!("{:?}", ((read_transformed[i], read_transformed[i+1]), seq_str[read_minimizers_pos[i] as usize ..read_minimizers_pos[i+1] as usize].to_string()));
 
     }
+    /*for min in read_transformed.iter() {	
+        print!("{}\t", min % params.size_miniverse as u64);	
+    } 
+    print!("\n"); */
+    let mut prev_len = 0;
+    let mut min_prev_len = 0;	
     for i in 0..read_transformed.len()-n+1 {
+        let mut pileup_seqs = Vec::new();
         let mut max_seqs = 0;
         let bucket_idx = read_transformed[i..i+n].to_vec();
         let entry = &buckets[&bucket_idx];
+
         //entry.dedup();
         for query in entry.iter() {
             if query == read_transformed {continue;}
@@ -61,21 +72,48 @@ pub fn query_buckets(int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_po
                 //if containment > 0.6 {
                 //    bucket_seqs.push(query);
                 //}
-                //let mut offset;	
-                //let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
-                //offset = offset_reg.unwrap();	
-                //if offset > prev_len {prev_len = offset;}	
-                //if offset < min_prev_len {min_prev_len = offset;} 
+                pileup_seqs.push(query);
+                let mut offset;	
+                let mut offset_reg = query.iter().position(|&x| x == bucket_idx[0]);	
+                offset = offset_reg.unwrap();	
+                if offset > prev_len {prev_len = offset;}	
+                if offset < min_prev_len {min_prev_len = offset;}
             }
-           // }
-        // }
-        
         }
+         /*  // }
+           for seq in pileup_seqs.iter() {	
+            //print!("Seq\t");	
+            //for min in seq.iter() {	
+            //    print!("{}\t", min);	
+        // }	            // }
+            //print!("\n");	
+            let mut new_seq = Vec::<u64>::new();	
+            let mut offset;	
+            let mut offset_reg = seq.iter().position(|&x| x == bucket_idx[0]);	
+            offset = offset_reg.unwrap();	
+            let mut new_seq = Vec::<u64>::new();	
+            if prev_len+i != offset {	
+                for _ in offset..prev_len+i {	
+                    new_seq.push(0)	
+                }	
+            }       	
+            for min in seq.iter() {	
+                new_seq.push(*min);	
+            }     	
+           // print!("New\t");	
+            for min in new_seq.iter() {	
+                print!("{}\t", min % params.size_miniverse as u64);	
+            }	
+            print!("\n");	
+        }
+          */
+        
+       
     }
-    let mut new = bucket_seqs.iter().map(|&seq| (seq.to_vec(), jaccard_distance(seq, &read_transformed))).filter(|tuple| ((tuple.1).0 > 0.15 && (tuple.1).1 > 0.25)).collect::<Vec<(Vec<u64>, (f64, f64))>>();
-    new.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-    new.reverse();
-    for seq in new.iter() {
+    
+    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.15).collect();
+    bucket_seqs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    for seq in bucket_seqs.iter() {
         let query = seq.0.to_vec();
         let seq_str = read_to_seq_pos[&query.to_vec()].0.to_string();
         let read_minimizers_pos = read_to_seq_pos[&query.to_vec()].1.to_vec();
@@ -85,19 +123,19 @@ pub fn query_buckets(int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_po
         }
     }
     let mut max_len = 200;
-    if new.len() < max_len {max_len = new.len();}
-    for i in 0..max_len {
-        poa_ids.push(read_ids[&new[i].0].to_string());
+    
+    if bucket_seqs.len() > max_len {bucket_seqs = bucket_seqs[0..max_len].to_vec();}
+    for i in 0..bucket_seqs.len() {
+        poa_ids.push(read_ids[&bucket_seqs[i].0].to_string());
        //println!("Containment: {}", (new[i].1).0);
         //println!("Similarity: {}", (new[i].1).1);
-        aligner.global(&new[i].0);
+        aligner.global(&bucket_seqs[i].0);
         aligner.add_to_graph();
     }
     
 
-    let mut consensus = aligner.poa.consensus(&params);
-    
-    let consensus_read = consensus.iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
+    let mut consensus = aligner.poa.consensus(&params, read_transformed.len());
+    let consensus_read = consensus.par_iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
     let mut consensus_str = String::new();
     let mut pos_idx = 0;
     let mut consensus_pos = Vec::<u32>::new();
@@ -119,8 +157,13 @@ pub fn query_buckets(int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_po
     }
     consensus_pos.push(pos_idx as u32);
     consensus_str.push_str(&int_to_minimizer[&consensus[consensus.len()-1]]);
-    for (vec, tuple) in new.iter() {
+    let mut corrected_count = 0;
+    let mut threshold = params.correction_threshold;
+    if params.correction_threshold == 0 {threshold = bucket_seqs.len() as i32;}
+    for (vec, tuple) in bucket_seqs.iter() {
+        if corrected_count >= threshold {break;}
         *corrected.entry(vec.to_vec()).or_insert((String::new(), Vec::<String>::new(), Vec::<u32>::new(), Vec::<u64>::new())) = (consensus_str.to_string(), consensus_read.to_vec(), consensus_pos.to_vec(), consensus.to_vec());
+        corrected_count += 1;
     }
     ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
     //println!("{} {} {} {}", consensus_str.len(), consensus_read.len(), consensus_pos.len(), consensus.len());
@@ -137,5 +180,22 @@ pub fn buckets_insert(seq : Vec<u64>, i : usize, buckets : &mut HashMap<Vec<u64>
     }
     
 
+}
+pub fn trim_consensus(read_transformed : &Vec<u64>, consensus: &Vec<u64>) -> Vec<u64> {
+    let mut start_pos = 0;
+    let mut end_pos = consensus.len();
+    let start_pos_find = consensus.iter().position(|x| x == &read_transformed[0]);
+    match start_pos_find {
+        Some(pos) => {
+            start_pos = start_pos_find.unwrap();
+        }
+        _ => {
+            start_pos = 0;
+        }
+    }
+    if consensus.len() - start_pos < read_transformed.len() {
+        return consensus[start_pos..consensus.len()].to_vec()
+    }
+    return consensus[start_pos..start_pos+read_transformed.len()].to_vec()
 }
 

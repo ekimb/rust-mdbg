@@ -789,10 +789,11 @@ impl<F: MatchFunc> Poa<F> {
     /// * `aln` - The alignment of the new sequence to the graph
     /// * `seq` - The sequence being incorporated
     ///
-    pub fn consensus(&mut self, params : &Params) -> Vec<u64> {
+    pub fn consensus(&mut self, params : &Params, length : usize) -> Vec<u64> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut cns = Vec::new();
         for node in self.consensus_path(&params).to_vec() {
+            //if cns.len() == length {break;}
             cns.push(*self.graph.node_weight(node).unwrap() as u64);
         }
 

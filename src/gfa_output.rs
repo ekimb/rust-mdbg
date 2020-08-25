@@ -122,19 +122,31 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     
     let path = format!("{}{}",output_prefix.to_str().unwrap(),".gfa");
+    let paf_path = format!("{}{}",output_prefix.to_str().unwrap(),".paf");
+    let fasta_path = format!("{}{}",output_prefix.to_str().unwrap(),".nodes.fasta");
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
     };
+    let mut paf_file = match File::create(&paf_path) {
+        Err(why) => panic!("couldn't create {}: {}", paf_path, why.description()),
+        Ok(paf_file) => paf_file,
+    };
+    let mut fasta_file = match File::create(&fasta_path) {
+        Err(why) => panic!("couldn't create {}: {}", fasta_path, why.description()),
+        Ok(fasta_file) => fasta_file,
+    };
     //write!(file, "H\tVN:Z:2.0\n").expect("error writing GFA header");
-     write!(file, "H\tVZ:Z:1\n").expect("error writing GFA header");
+     write!(file, "H\tVN:Z:1\n").expect("error writing GFA header");
 
 
     for node in gr.node_indices() {
         let idx = node.index();
         let seq = &kmer_seqs[nodes_vect[idx]];
+        let f_line = format!(">{}\n{}\n", idx, seq);
         let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
         write!(file, "{}", s_line).expect("error writing s_line");
+        write!(fasta_file, "{}", f_line).expect("error writing f_line");
        // let s_line = format!("S\t{}\t{}\t{}\n",idx,seq.len(),seq);
        // write!(file, "{}", s_line).expect("error writing s_line");
     }
@@ -179,10 +191,23 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         let id2_end = overlap_length;
         let mut id1_str = String::new();
         let mut id2_str = String::new();
-        if ori1 == "+" {id1_str = id1.to_string() + "\t+";} else { id1_str = id1.to_string() + "\t-";}
-        if ori2 == "+" {id2_str = id2.to_string() + "\t+";} else { id2_str = id2.to_string() + "\t-";}
+        let mut ori_fin = "+";
+        if ori1 != ori2 {ori_fin = "-";}
+        if ori1 == "+" {id1_str = id1.to_string() + "+";} else { id1_str = id1.to_string() + "-";}
+
+        //paf format 
+//Query sequence name Query sequence length Query start (0-based) Query end (0-based) Relative strand: "+" or "-" Target sequence name Target sequence length Target start on original strand (0-based) Target end on original strand (0-based) Number of residue matches Alignment block length Mapping quality (0-255; 255 for missing)
+let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_str, seq1.len(), id1_beg, id1_end, ori_fin, id2, seq2.len(), id2_beg, id2_end, overlap_length, overlap_length);
         //gfa2 : s1+ s2- b1 e1 b2 e2
-        let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
+        if overlap_length != (seq2.len()-1) as u32 {
+            let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
+            write!(file, "{}", l_line).expect("error writing l_line");
+        }
+        else {
+            let c_line = format!("C\t{}\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, id1_beg, overlap_length);
+            write!(file, "{}", c_line).expect("error writing c_line");
+        }
+
         /*if overlap_length as usize == seq2.len()-1 {
             let e_line = format!("E\t*\t{}\t{}\t{}\t{}\t{}\t{}$\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
             write!(file, "{}", e_line).expect("error writing e_line");
@@ -192,7 +217,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             let e_line = format!("E\t*\t{}\t{}\t{}\t{}$\t{}\t{}\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
             write!(file, "{}", e_line).expect("error writing e_line");
         }*/
-        write!(file, "{}", l_line).expect("error writing l_line");
+        write!(paf_file, "{}", paf_line).expect("error writing paf_line");
 
     }
 }
