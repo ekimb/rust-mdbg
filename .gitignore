@@ -16,3 +16,4 @@ ref/
 *.svg
 perf*
 runs
+*.paf

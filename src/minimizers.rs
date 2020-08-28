@@ -15,6 +15,7 @@ use itertools::Itertools;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+
 use nthash::{ntc64, NtHashIterator};
 
 const lmer_frequency_based : bool = false;
@@ -119,6 +120,46 @@ pub fn minhash_uhs(seq: String, params: &Params, int_to_minimizer : &HashMap<u64
         }
     }
     
+    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
+    // convert minimizers to their integer representation
+
+    (read_minimizers, read_minimizers_pos, read_transformed)
+}
+pub fn minhash_window(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, minimizer_to_int : &HashMap<String, u64>, lmer_counts: &mut HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
+{
+    let l = params.l;
+    let w = params.w;
+    let mut read_minimizers = Vec::<String>::new();
+    let mut read_minimizers_pos = Vec::<u32>::new();
+    let mut read_transformed = Vec::<u64>::new();
+    for i in 0..seq.len()-w+1 {
+        let window = &seq[i..i+w];
+        let mut min = String::new();
+        let mut min_hash = u64::max_value();
+        let mut min_pos = usize::max_value();
+        for j in 0..w-l+1 {
+            let mut lmer = &window[j..j+l];
+            let mut lmer = normalize_minimizer(&lmer.to_string());
+            let hash = minimizer_to_int[&lmer];
+            if !lmer.contains("N") && hash < min_hash {
+                min = lmer.to_string();
+                min_hash = hash;
+                min_pos = i+j;
+            }
+        }
+        if (read_minimizers_pos.len() != 0) && min_pos != usize::max_value() {
+            if min_pos as u32 != read_minimizers_pos[read_minimizers_pos.len()-1] {
+                read_minimizers.push(min.to_string());
+                read_minimizers_pos.push(min_pos as u32);
+                read_transformed.push(min_hash);
+            }
+        }
+        else if min_pos != usize::max_value() {
+            read_minimizers.push(min.to_string());
+            read_minimizers_pos.push(min_pos as u32);
+            read_transformed.push(min_hash);
+        }
+    }
     //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
     // convert minimizers to their integer representation
 

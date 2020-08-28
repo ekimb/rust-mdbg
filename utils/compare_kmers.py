@@ -44,8 +44,11 @@ if debug_missing_kmers:
     for kmer in [x for x in kmers1 if x not in kmers2]:
         if kmer in origins1:
             origin = origins1[kmer]
-            #print(kmer,origin)
+            f = open("missing_kmers.txt", "a")
+            f.write((kmer,origin))
+            print(kmer,origin)
         else:
             print(kmer,"not found in reference '.sequences' file, but should have been")
         if kmer[::-1] in origins1:
             print("Reverse complement in reference")
+    f.close()

@@ -12,6 +12,7 @@ use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
+use crate::kmer_vec::KmerVec;
 use std::collections::HashSet;
 extern crate array_tool;
 //use adler32::RollingAdler32;
@@ -52,6 +53,7 @@ pub struct Params
     k: usize,
     n: usize,
     t: usize,
+    w: usize,
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
@@ -89,10 +91,13 @@ pub fn dist(s1: &Vec<u64>, s2: &Vec<u64>, params: &Params) -> f64 {
     }
 }
 
-fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
+fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, minimizer_to_int: &HashMap<String, u64>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     if params.uhs {
         return minimizers::minhash_uhs(seq.to_string(), params, int_to_minimizer, &mut lmer_counts, uhs_kmers)
+    }
+    if params.w != 0 {
+        return minimizers::minhash_window(seq.to_string(), params, int_to_minimizer, minimizer_to_int, &mut lmer_counts)
     }
     minimizers::minhash(seq.to_string(), params, int_to_minimizer, &mut lmer_counts)
         //wk_minimizers(seq, density) // unfinished
@@ -295,6 +300,8 @@ struct Opt {
     density: Option<f64>,
     #[structopt(long)]
     minabund: Option<usize>,
+    #[structopt(short, long)]
+    w: Option<usize>,
     #[structopt(long)]
     distance: Option<usize>,
     #[structopt(long)]
@@ -322,6 +329,7 @@ fn main() {
     let mut l: usize = 12;
     let mut n: usize = 2;
     let mut t: usize = 0;
+    let mut w: usize = 0;
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
@@ -329,6 +337,7 @@ fn main() {
     let mut error_correct: bool = true;
     let mut correction_threshold : i32 = 0;
     let mut reference : bool = false;
+    let mut windowed : bool = false;
     if opt.no_error_correct {
         error_correct = false;
     }
@@ -354,6 +363,7 @@ fn main() {
 
     if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
+    if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
@@ -390,6 +400,7 @@ fn main() {
         k,
         n,
         t,
+        w,
         density,
         size_miniverse,
         average_lmer_count: 0.0,
@@ -449,7 +460,7 @@ fn main() {
                 let seq_id    = record.id();
 
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer, &mut lmer_counts, &uhs_kmers);
+                let (mut read_minimizers, mut read_minimizers_pos, mut read_transformed) = extract_minimizers(&seq_str, &params, &int_to_minimizer, &minimizer_to_int, &mut lmer_counts, &uhs_kmers);
                 read_ids.insert(read_transformed.to_vec(), seq_id.to_string());
                 //let (test_min, test_pos, test_trans) = extract_minimizers(&test_str, &params, &lmer_counts, &minimizer_to_int);
                 //println!("{:?}", test_trans);
@@ -468,7 +479,9 @@ fn main() {
                if read_transformed.len() > k {
 
                read_to_kmers(&mut kmer_origin, &seq_id, false, &mut kmer_pos, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
-               }
+               ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
+
+            }
                 if error_correct
                 {
                     //for i in 0..read_transformed.len()-n+1 {
@@ -476,10 +489,11 @@ fn main() {
                     //  let count = sub_counts.entry(sub_mer.to_vec()).or_insert(0);
                     //   *count += 1;
                     //}
-                    if read_transformed.len() > k {
-                        ec_reads::record(&mut ec_file, &seq_id, &seq_str, &read_transformed, &read_minimizers, &read_minimizers_pos);
+                    if read_transformed.len() >= k {
                         buckets::buckets_insert(read_transformed.to_vec(), params.n, &mut buckets, &mut dbg_nodes);
                         read_to_seq_pos.insert(read_transformed.to_vec(), (seq_str.to_string(), read_minimizers_pos.to_vec()));
+                        seq_mins.push(read_transformed.to_vec());
+
                         //buckets::buckets_insert_base(&seq_str, read_transformed.to_vec(), params.n, &mut buckets_base);
     
                     }
@@ -490,10 +504,11 @@ fn main() {
     
     pb.finish_print("done converting reads to minimizers");
     nb_minimizers_per_read /= nb_reads as f64;
-    if error_correct { ec_reads::flush(&mut ec_file); }
-    else { ec_reads::delete_file(&output_prefix); } // hacky
+    ec_reads::flush(&mut ec_file);
 
     println!("avg number of minimizers/read: {}",nb_minimizers_per_read);
+    println!("number of transformed reads: {}",seq_mins.len());
+
 
     if error_correct
     {
@@ -544,16 +559,14 @@ fn main() {
             }
             //let mut seq = buckets::query_buckets_base(&mut buckets_base, read_transformed, &params);
             //let (read_minimizers, read_minimizers_pos, read_transformed) = extract_minimizers(&seq, &params, &lmer_counts, &minimizer_to_int);
-            if read_transformed.len() <= k { continue; }
             //let (mut seq, mut read_minimizers, mut read_minimizers_pos, rec, ins) = get_seq(&int_to_minimizer, &mut kmer_pos, &read_transformed, &mut kmer_seqs_prev, &params);
             //rec_seqs += rec;
             //ins_seqs += ins;
+            if read_transformed.len() <= k { continue; }
             pb.add(seq_id.len() as u64 + read_transformed.len() as u64 + read_minimizers.len() as u64 + read_minimizers_pos.len() as u64 + seq_str.len() as u64);
             ec_reads::record(&mut ec_file_postcor, &seq_id, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos);
             ec_reads::flush(&mut ec_file_postcor); // flush as we may stop earlier
             ec_reads::flush(&mut ec_file_poa); // flush as we may stop earlier
-
-
             read_to_kmers(&mut kmer_origin, &seq_id, true, &mut kmer_pos, &seq, &read_transformed, &read_minimizers, &read_minimizers_pos, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
             //println!("Seq {} done", counter);
  
@@ -594,13 +607,14 @@ fn main() {
     {
         let rev_n1 = n1.reverse();
 
-        /*
-           let maybe_insert_edge = |n1 :&[u32;k], n2 :&[u32;k]| {
-           if n1[1..] == n2[0..k-1] {
-           dbg_edges.push((n1,n2));
+        
+           let mut maybe_insert_edge = |n1 :&Kmer, n2 :&Kmer| {
+           if get(n1)[1..] == get(n2)[0..k-1] {
+           return true;
            }
+           else {return false;}
            };
-           */
+           
 
         // bit of a rust noob way to code this, because i'm not too familiar with types yet..
         let key1=n1.suffix().normalize().0;
@@ -612,20 +626,9 @@ fn main() {
                 let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
                 for n2 in list_of_n2s {
                     let rev_n2 = n2.reverse();
-                    if n1.suffix() == n2.prefix() {
-                        dbg_edges.push((n1,n2));
-                    }
                     // I wanted to do this closure, but try it, it doesn't work. A borrowed data problem
                     // apparently.
-                    //maybe_insert_edge(n1,n2);
-                    if revcomp_aware {
-                        if n1.suffix() == rev_n2.prefix()
-                            || rev_n1.suffix() == n2.prefix()
-                                || rev_n1.suffix() == rev_n2.prefix() {
-                                    dbg_edges.push((n1,n2));
-                        }
-
-                    }
+                    if maybe_insert_edge(n1,n2) || maybe_insert_edge(&rev_n1, n2) || maybe_insert_edge(&rev_n1, &rev_n2) || maybe_insert_edge(n1, &rev_n2) {dbg_edges.push((n1, n2));}
                 }
             }
         }

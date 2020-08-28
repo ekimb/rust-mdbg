@@ -9,7 +9,11 @@ use super::minimizers;
 use super::extract_minimizers;
 use rust_spoa::poa_consensus;
 use petgraph_graphml::GraphMl;
-use petgraph::graph::EdgeIndex;
+use petgraph::Graph;
+use petgraph::graph::{NodeIndex, EdgeIndex};
+use petgraph::algo::toposort;
+use petgraph::visit::depth_first_search;
+use petgraph::visit::{DfsEvent, Control};
 use std::io::BufWriter;
 use super::poa;
 use super::poa_new;
@@ -18,6 +22,9 @@ use super::ec_reads;
 use std::fs::File;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
+use petgraph::algo::astar;
+use petgraph::visit::Dfs;
+use petgraph::visit::EdgeRef;
 
 
 pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_pos: &mut HashMap<Vec<u64>, (String, Vec<u32>)>, pairwise_jaccard : &mut HashMap<(&Vec<u64>, &Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> (String, Vec<String>, Vec<u32>, Vec<u64>) {
@@ -55,10 +62,10 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
         //entry.dedup();
         for query in entry.iter() {
             if query == read_transformed {continue;}
-            let entry = aligned.entry(query).or_insert(false);
-            if !*entry {
+            let aligned_entry = aligned.entry(query).or_insert(false);
+            if !*aligned_entry {
                 bucket_seqs.push(query);
-                *entry = true;  
+                *aligned_entry = true;  
 
 
 
@@ -111,7 +118,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
        
     }
     
-    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.15).collect();
+    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.2).collect();
     bucket_seqs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     for seq in bucket_seqs.iter() {
         let query = seq.0.to_vec();
@@ -122,13 +129,16 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
             pair_map.insert((query[i], query[i+1]), seq_str[read_minimizers_pos[i] as usize ..read_minimizers_pos[i+1] as usize].to_string());
         }
     }
-    let mut max_len = 200;
+    let mut max_len = 100;
     
     if bucket_seqs.len() > max_len {bucket_seqs = bucket_seqs[0..max_len].to_vec();}
+    let mut scale_dist = 1.0;
+    if bucket_seqs.len() == 0 {println!("Read has no neighbors");}
+    else {scale_dist = bucket_seqs[bucket_seqs.len()-1].1;}
     for i in 0..bucket_seqs.len() {
         poa_ids.push(read_ids[&bucket_seqs[i].0].to_string());
-       //println!("Containment: {}", (new[i].1).0);
         //println!("Similarity: {}", (new[i].1).1);
+        let repeat = (scale_dist / bucket_seqs[i].1) as usize;
         aligner.global(&bucket_seqs[i].0);
         aligner.add_to_graph();
     }
@@ -147,7 +157,6 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
         //println!("\n{:?}", (consensus[i], consensus[i+1]));
         if !pair_map.contains_key(&(consensus[i], consensus[i+1])) {
             let alts : Vec<String> = pair_map.clone().into_iter().filter(|(a, b)| a.0 == consensus[i]).map(|tuple| tuple.1).collect();
-            //println!("{}", alts.len());
             insert = int_to_minimizer[&consensus[i]].to_string();
             for _ in 0..alts[0].len() {insert.push_str("N")};
         }
@@ -159,11 +168,13 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
     consensus_str.push_str(&int_to_minimizer[&consensus[consensus.len()-1]]);
     let mut corrected_count = 0;
     let mut threshold = params.correction_threshold;
-    if params.correction_threshold == 0 {threshold = bucket_seqs.len() as i32;}
+    if params.correction_threshold == 0 {threshold = 0 as i32;}
     for (vec, tuple) in bucket_seqs.iter() {
         if corrected_count >= threshold {break;}
-        *corrected.entry(vec.to_vec()).or_insert((String::new(), Vec::<String>::new(), Vec::<u32>::new(), Vec::<u64>::new())) = (consensus_str.to_string(), consensus_read.to_vec(), consensus_pos.to_vec(), consensus.to_vec());
-        corrected_count += 1;
+        if !corrected.contains_key(&vec.to_vec()) {
+            *corrected.entry(vec.to_vec()).or_insert((String::new(), Vec::<String>::new(), Vec::<u32>::new(), Vec::<u64>::new())) = (consensus_str.to_string(), consensus_read.to_vec(), consensus_pos.to_vec(), consensus.to_vec());
+            corrected_count += 1;
+        }
     }
     ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
     //println!("{} {} {} {}", consensus_str.len(), consensus_read.len(), consensus_pos.len(), consensus.len());
