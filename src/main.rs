@@ -12,7 +12,6 @@ use petgraph::graph::DiGraph;
 use petgraph::graph::NodeIndex;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
-use crate::kmer_vec::KmerVec;
 use std::collections::HashSet;
 extern crate array_tool;
 //use adler32::RollingAdler32;
@@ -218,9 +217,11 @@ fn read_to_kmers(kmer_origin: &mut HashMap<Kmer,String>, seq_id: &str, corr : bo
             let (node_norm, reversed) = node.normalize(); 
             node = node_norm;
             seq_reversed = reversed;
-        }
+        } 
         let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-        *entry += 1;
+        if *entry < 2 {
+            *entry += 1;
+        }
         
        // let s = node.print_as_string();
         //println!("{:?}", s);
@@ -607,14 +608,13 @@ fn main() {
     {
         let rev_n1 = n1.reverse();
 
-        
-           let mut maybe_insert_edge = |n1 :&Kmer, n2 :&Kmer| {
-           if get(n1)[1..] == get(n2)[0..k-1] {
-           return true;
+        /*
+           let maybe_insert_edge = |n1 :&[u32;k], n2 :&[u32;k]| {
+           if n1[1..] == n2[0..k-1] {
+           dbg_edges.push((n1,n2));
            }
-           else {return false;}
            };
-           
+           */
 
         // bit of a rust noob way to code this, because i'm not too familiar with types yet..
         let key1=n1.suffix().normalize().0;
@@ -626,9 +626,20 @@ fn main() {
                 let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
                 for n2 in list_of_n2s {
                     let rev_n2 = n2.reverse();
+                    if n1.suffix() == n2.prefix() {
+                        dbg_edges.push((n1,n2));
+                    }
                     // I wanted to do this closure, but try it, it doesn't work. A borrowed data problem
                     // apparently.
-                    if maybe_insert_edge(n1,n2) || maybe_insert_edge(&rev_n1, n2) || maybe_insert_edge(&rev_n1, &rev_n2) || maybe_insert_edge(n1, &rev_n2) {dbg_edges.push((n1, n2));}
+                    //maybe_insert_edge(n1,n2);
+                    if revcomp_aware {
+                        if n1.suffix() == rev_n2.prefix()
+                            || rev_n1.suffix() == n2.prefix()
+                                || rev_n1.suffix() == rev_n2.prefix() {
+                                    dbg_edges.push((n1,n2));
+                        }
+
+                    }
                 }
             }
         }

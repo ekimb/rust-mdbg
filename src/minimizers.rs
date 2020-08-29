@@ -101,6 +101,7 @@ pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, St
 
     (read_minimizers, read_minimizers_pos, read_transformed)
 }
+
 pub fn minhash_uhs(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     let size_miniverse = params.size_miniverse as u64;
