@@ -118,7 +118,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
        
     }
     
-    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.2).collect();
+    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.15).collect();
     bucket_seqs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     for seq in bucket_seqs.iter() {
         let query = seq.0.to_vec();
@@ -129,7 +129,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
             pair_map.insert((query[i], query[i+1]), seq_str[read_minimizers_pos[i] as usize ..read_minimizers_pos[i+1] as usize].to_string());
         }
     }
-    let mut max_len = 300;
+    let mut max_len = 60;
     
     if bucket_seqs.len() > max_len {bucket_seqs = bucket_seqs[0..max_len].to_vec();}
     let mut scale_dist = 1.0;

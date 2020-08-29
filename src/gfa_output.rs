@@ -133,10 +133,8 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
     for node in gr.node_indices() {
         let idx = node.index();
         let seq = &kmer_seqs[nodes_vect[idx]];
-        let f_line = format!(">{}\n{}\n", idx, seq);
         let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
         write!(file, "{}", s_line).expect("error writing s_line");
-        write!(fasta_file, "{}", f_line).expect("error writing f_line");
        // let s_line = format!("S\t{}\t{}\t{}\n",idx,seq.len(),seq);
        // write!(file, "{}", s_line).expect("error writing s_line");
     }
