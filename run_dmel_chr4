@@ -24,6 +24,5 @@ python utils/compare_kmers.py dmel_chr4.sequences dmel_chr4_reads-0.05.sequences
 runtime=$((end-start))
 echo "Runtime was $runtime seconds."
 utils/simplify dmel_chr4_reads-0.05
-python utils/sequences_file_to_fasta.py dmel_chr4_reads-0.05.sequences dmel_chr4_reads-0.05.fasta
 
 

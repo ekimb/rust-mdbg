@@ -122,19 +122,9 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     
     let path = format!("{}{}",output_prefix.to_str().unwrap(),".gfa");
-    let paf_path = format!("{}{}",output_prefix.to_str().unwrap(),".paf");
-    let fasta_path = format!("{}{}",output_prefix.to_str().unwrap(),".nodes.fasta");
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
-    };
-    let mut paf_file = match File::create(&paf_path) {
-        Err(why) => panic!("couldn't create {}: {}", paf_path, why.description()),
-        Ok(paf_file) => paf_file,
-    };
-    let mut fasta_file = match File::create(&fasta_path) {
-        Err(why) => panic!("couldn't create {}: {}", fasta_path, why.description()),
-        Ok(fasta_file) => fasta_file,
     };
     //write!(file, "H\tVN:Z:2.0\n").expect("error writing GFA header");
      write!(file, "H\tVN:Z:1\n").expect("error writing GFA header");
@@ -197,16 +187,10 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
 
         //paf format 
 //Query sequence name Query sequence length Query start (0-based) Query end (0-based) Relative strand: "+" or "-" Target sequence name Target sequence length Target start on original strand (0-based) Target end on original strand (0-based) Number of residue matches Alignment block length Mapping quality (0-255; 255 for missing)
-let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_str, seq1.len(), id1_beg, id1_end, ori_fin, id2, seq2.len(), id2_beg, id2_end, overlap_length, overlap_length);
+//let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_str, seq1.len(), id1_beg, id1_end, ori_fin, id2, seq2.len(), id2_beg, id2_end, overlap_length, overlap_length);
         //gfa2 : s1+ s2- b1 e1 b2 e2
-        if overlap_length != (seq2.len()-1) as u32 {
-            let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
-            write!(file, "{}", l_line).expect("error writing l_line");
-        }
-        else {
-            let c_line = format!("C\t{}\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, id1_beg, overlap_length);
-            write!(file, "{}", c_line).expect("error writing c_line");
-        }
+        let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
+        write!(file, "{}", l_line).expect("error writing l_line");
 
         /*if overlap_length as usize == seq2.len()-1 {
             let e_line = format!("E\t*\t{}\t{}\t{}\t{}\t{}\t{}$\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
@@ -217,7 +201,7 @@ let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_
             let e_line = format!("E\t*\t{}\t{}\t{}\t{}$\t{}\t{}\t*\n", id1_str, id2_str, id1_beg, id1_end, id2_beg, id2_end);
             write!(file, "{}", e_line).expect("error writing e_line");
         }*/
-        write!(paf_file, "{}", paf_line).expect("error writing paf_line");
+        //write!(paf_file, "{}", paf_line).expect("error writing paf_line");
 
     }
 }
