@@ -15,7 +15,8 @@ use itertools::Itertools;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-
+use std::iter::FromIterator;
+use super::read::Read;
 use nthash::{ntc64, NtHashIterator};
 
 const lmer_frequency_based : bool = false;
@@ -37,6 +38,31 @@ number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-
 
 bottom line: with k=10, couldn't retrieve enough solid (minabund>=2) kmers (at read error rate is 2%)
 */
+pub fn dist(temp: &Read, other: &Read, params: &Params) -> f64 {
+    let s1_set: HashSet<_> = HashSet::from_iter(temp.transformed.iter());
+    let s2_set: HashSet<_> = HashSet::from_iter(other.transformed.iter());
+    let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
+    let union: HashSet<_> = s1_set.union(&s2_set).collect();
+    let distance = params.distance;
+    match distance {
+        0 => {
+            return 1.0 - ((inter.len() as f64) / (union.len() as f64))
+        }
+        1 => {
+            return 1.0 - ((inter.len() as f64) / (s1_set.len() as f64))
+        }
+        2 => {
+            let jaccard = (inter.len() as f64) / (union.len() as f64);
+            let mash: f64 = -1.0 * ((2.0 * jaccard) / (1.0 + jaccard)).ln() / params.l as f64;
+            return mash
+        }
+        _ => {
+            let jaccard = (inter.len() as f64) / (union.len() as f64);
+            let mash: f64 = (-1.0 / params.k as f64) * ((2.0 * jaccard) / (1.0 + jaccard)).ln();
+            return mash
+        }
+    }
+}
 pub fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, file_size :u64, params: &mut Params) {
     let l = params.l;
     let mut pb = ProgressBar::new(file_size);

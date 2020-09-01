@@ -118,7 +118,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
        
     }
     
-    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.15).collect();
+    let mut bucket_seqs : Vec<(Vec<u64>, f64)> = bucket_seqs.par_iter().map(|seq| (seq.to_vec(), dist(read_transformed, seq, &params))).filter(|(seq, dist)| *dist < 0.2).collect();
     bucket_seqs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     for seq in bucket_seqs.iter() {
         let query = seq.0.to_vec();
