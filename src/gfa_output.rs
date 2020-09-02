@@ -85,7 +85,6 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
 
     }*/
     let minim = kmer1.minimizers()[1];
-    println!("{}", minim);
     let minim_str = &int_to_minimizer[&minim];
     let l = minim_str.len() as usize;
     let minim_str_rev = revcomp(&minim_str);
