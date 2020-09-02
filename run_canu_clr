@@ -1,0 +1,22 @@
+#!/bin/bash
+K=$1
+L=$2
+DENSITY=$3
+N=$4
+T=$5
+abund=$6
+threshold=$7
+distance=$8
+touch bench/canu-bench-clr-$1$2.txt
+echo "Running reference..."
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/dmel_ref.fa -k $K -l $L -n $N -t 1 --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_clr_ref --reference --no-error-correct 
+start=`date +%s`
+echo "Running reads..."
+command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/canu_clr.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --prefix canu_clr 2>&1 | tee -a bench/canu-bench-clr-$1$2.txt
+end=`date +%s`
+echo "Running evaluation..."
+pypy3 ~/rust-mhdbg/utils/evaluate_ec.py  canu_clr_ref.ec_data  canu_clr.ec_data  canu_clr.postcor.ec_data canu_clr.poa.ec_data | tee ec.txt
+echo "Comparing k-mers..."
+python utils/compare_kmers.py canu_clr_ref.sequences canu_clr.sequences dmel_ref.fa
+runtime=$((end-start))
+echo "Runtime was $runtime seconds."

@@ -45,7 +45,6 @@ if debug_missing_kmers:
         if kmer in origins1:
             origin = origins1[kmer]
             f = open("missing_kmers.txt", "a")
-            f.write((kmer,origin))
             print(kmer,origin)
         else:
             print(kmer,"not found in reference '.sequences' file, but should have been")

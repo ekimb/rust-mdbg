@@ -129,7 +129,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
             pair_map.insert((query[i], query[i+1]), seq_str[read_minimizers_pos[i] as usize ..read_minimizers_pos[i+1] as usize].to_string());
         }
     }
-    let mut max_len = 60;
+    let mut max_len = 100;
     
     if bucket_seqs.len() > max_len {bucket_seqs = bucket_seqs[0..max_len].to_vec();}
     let mut scale_dist = 1.0;
@@ -144,7 +144,7 @@ pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u6
     }
     
 
-    let mut consensus = aligner.poa.consensus(&params, read_transformed.len());
+    let mut consensus = aligner.poa.consensus(&params);
     let consensus_read = consensus.par_iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
     let mut consensus_str = String::new();
     let mut pos_idx = 0;

@@ -185,7 +185,10 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
 
         //paf format 
 //Query sequence name Query sequence length Query start (0-based) Query end (0-based) Relative strand: "+" or "-" Target sequence name Target sequence length Target start on original strand (0-based) Target end on original strand (0-based) Number of residue matches Alignment block length Mapping quality (0-255; 255 for missing)
-//let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_str, seq1.len(), id1_beg, id1_end, ori_fin, id2, seq2.len(), id2_beg, id2_end, overlap_length, overlap_length);
+        //let paf_line = format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t255\n", id1_str, seq1.len(), id1_beg, id1_end, ori_fin, id2, seq2.len(), id2_beg, id2_end, overlap_length, overlap_length);
+        
+        
+        
         //gfa2 : s1+ s2- b1 e1 b2 e2
         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
         write!(file, "{}", l_line).expect("error writing l_line");
