@@ -34,7 +34,7 @@ impl Read {
             let mut lmer = &inp_seq[i..i+l];
             let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
             let hash = ntc64(lmer.as_bytes(), 0, l);
-            if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
+            if (!lmer.contains("N")) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
                 read_minimizers.push(lmer.to_string());
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
