@@ -5,6 +5,7 @@ use std::fs::File;
 use std::error::Error;
 use std::io::Write;
 use super::Kmer;
+use crate::kmer_vec::get;
 use std::collections::HashMap;
 use strsim::levenshtein;
 
@@ -71,7 +72,6 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     */
     
     // with minim_shift, it's relatively trivial now
-    
     let shift_p :(usize,usize)= minim_shift[&kmer1.normalize().0];
     let shift_p :(usize,usize)= (shift_p.0 as usize, shift_p.1 as usize);
     //println!("minim shift {:?}",shift_p);
