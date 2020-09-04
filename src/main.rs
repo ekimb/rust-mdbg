@@ -486,43 +486,25 @@ fn main() {
         for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
         let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
             for (node, abund) in dbg.into_iter() {
-                if dbg_nodes.contains_key(&node.clone().normalize().0) {
-                    let entry = dbg_nodes.entry(node.clone().normalize().0).or_insert(0);
+                if dbg_nodes.contains_key(&node.clone()) {
+                    let entry = dbg_nodes.entry(node.clone()).or_insert(0);
                     *entry += *abund;
                 }
                 else {
-                    dbg_nodes.insert(node.clone().normalize().0, *abund);
+                    dbg_nodes.insert(node.clone(), *abund);
                 }
             }
             let mut seqs = kmer_seqs_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, seq) in seqs.into_iter() {
-                if kmer_seqs.contains_key(&kmer.clone().normalize().0) {
-                    let entry = kmer_seqs.entry(kmer.clone().normalize().0).or_insert(String::new());
-                    *entry = seq.to_string();
-                }
-                else {
-                    kmer_seqs.insert(kmer.clone().normalize().0, seq.to_string());
-                }
+                kmer_seqs.insert(kmer.clone(), seq.to_string());
             }
             let mut oris = kmer_origin_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, ori) in oris.into_iter() {
-                if kmer_origin.contains_key(&kmer.clone().normalize().0) {
-                    let entry = kmer_origin.entry(kmer.clone().normalize().0).or_insert(String::new());
-                    *entry = ori.to_string();
-                }
-                else {
-                    kmer_origin.insert(kmer.clone().normalize().0, ori.to_string());
-                }
+                kmer_origin.insert(kmer.clone(), ori.to_string());
             }
             let mut shifts = minim_shift_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, shift) in shifts.into_iter() {
-                if minim_shift.contains_key(&kmer.clone().normalize().0) {
-                    let entry = minim_shift.entry(kmer.clone().normalize().0).or_insert((0, 0));
-                    *entry = *shift;
-                }
-                else {
-                    minim_shift.insert(kmer.clone().normalize().0, *shift);
-                }
+                minim_shift.insert(kmer.clone(), *shift);
             }
         let mut ec = ec_entries.entry(thread_num).or_insert(Vec::new());
         for tuple in ec.iter() {
@@ -629,43 +611,25 @@ fn main() {
         for thread_num in 0..NUM_THREADS {
             let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
             for (node, abund) in dbg.into_iter() {
-                if dbg_nodes.contains_key(&node.clone().normalize().0) {
-                    let entry = dbg_nodes.entry(node.clone().normalize().0).or_insert(0);
+                if dbg_nodes.contains_key(&node.clone()) {
+                    let entry = dbg_nodes.entry(node.clone()).or_insert(0);
                     *entry += *abund;
                 }
                 else {
-                    dbg_nodes.insert(node.clone().normalize().0, *abund);
+                    dbg_nodes.insert(node.clone(), *abund);
                 }
             }
             let mut seqs = kmer_seqs_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, seq) in seqs.into_iter() {
-                if kmer_seqs.contains_key(&kmer.clone().normalize().0) {
-                    let entry = kmer_seqs.entry(kmer.clone().normalize().0).or_insert(String::new());
-                    *entry = seq.to_string();
-                }
-                else {
-                    kmer_seqs.insert(kmer.clone().normalize().0, seq.to_string());
-                }
+                kmer_seqs.insert(kmer.clone(), seq.to_string());
             }
             let mut oris = kmer_origin_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, ori) in oris.into_iter() {
-                if kmer_origin.contains_key(&kmer.clone().normalize().0) {
-                    let entry = kmer_origin.entry(kmer.clone().normalize().0).or_insert(String::new());
-                    *entry = ori.to_string();
-                }
-                else {
-                    kmer_origin.insert(kmer.clone().normalize().0, ori.to_string());
-                }
+                kmer_origin.insert(kmer.clone(), ori.to_string());
             }
             let mut shifts = minim_shift_all.entry(thread_num).or_insert(HashMap::new());
             for (kmer, shift) in shifts.into_iter() {
-                if minim_shift.contains_key(&kmer.clone().normalize().0) {
-                    let entry = minim_shift.entry(kmer.clone().normalize().0).or_insert((0, 0));
-                    *entry = *shift;
-                }
-                else {
-                    minim_shift.insert(kmer.clone().normalize().0, *shift);
-                }
+                minim_shift.insert(kmer.clone(), *shift);
             }
             let mut ec = ec_entries.entry(thread_num).or_insert(Vec::new());
             for tuple in ec.iter() {
