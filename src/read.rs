@@ -92,7 +92,7 @@ impl Read {
 
     
     //pub fn write_to_poa
-    pub fn query(&mut self, int_to_minimizer: &mut HashMap<u64, String>, ec_file_poa: &mut BufWriter<File>, buckets: &mut Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
+    pub fn query(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
         let n = params.n;
         let k = params.k;
         let l = params.l;
@@ -133,7 +133,7 @@ impl Read {
                 pair_map.insert((transformed[i], transformed[i+1]), seq[pos[i] as usize ..pos[i+1] as usize].to_string());
             }
         }
-        let mut max_len = 60;
+        let mut max_len = 50;
         if bucket_reads.len() > max_len {bucket_reads = bucket_reads[0..max_len].to_vec();}
         if bucket_reads.len() == 0 {println!("Read has no neighbors");}
         for i in 0..bucket_reads.len() {
@@ -171,7 +171,7 @@ impl Read {
                 corrected_count += 1;
             }
         }
-        ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
+        poa_map.insert(seq_id.to_string(), poa_ids.to_vec());
         self.seq = consensus_str;
         self.minimizers = consensus_read;
         self.minimizers_pos = consensus_pos;
