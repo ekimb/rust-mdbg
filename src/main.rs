@@ -405,8 +405,6 @@ fn main() {
     thread::scope(|s| {
     let mut guards = Vec::with_capacity(NUM_THREADS);
         for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
-            println!("{}", thread_num);
-            println!("{}", chunk.len());
             let mut reads_by_id_all = reads_by_id_all.clone();
             let mut dbg_nodes_all = dbg_nodes_all.clone();
             let mut kmer_seqs_all = kmer_seqs_all.clone();
@@ -486,9 +484,7 @@ fn main() {
     for thread_num in 0..NUM_THREADS {
         let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
         for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
-        println!("{}", reads_by_id.len());
         let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
-        println!("{}", dbg.len());
         for (node, abund) in dbg {dbg_nodes.insert(node.clone(), *abund);}
         let mut seqs = kmer_seqs_all.entry(thread_num).or_insert(HashMap::new());
         for (kmer, seq) in seqs.into_iter() {kmer_seqs.insert(kmer.clone(), seq.to_string());}
@@ -537,8 +533,6 @@ fn main() {
         thread::scope(|s| {
             let mut guards = Vec::with_capacity(NUM_THREADS);
             for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
-                println!("{}", thread_num);
-                println!("{}", chunk.len());
                 let mut dbg_nodes_all = dbg_nodes_all.clone();
                 let mut kmer_seqs_all = kmer_seqs_all.clone();
                 let mut kmer_origin_all = kmer_origin_all.clone();
@@ -566,7 +560,6 @@ fn main() {
                             read_obj.transformed = corrected_map[&read_obj.id].3.to_vec();
                         }
                         ec_entry.push((read_obj.id.to_string(), read_obj.seq.to_string(), read_obj.transformed.to_vec(), read_obj.minimizers.to_vec(), read_obj.minimizers_pos.to_vec()));
-                        println!("EC entry length: {}", ec_entry.len());
                         if read_obj.transformed.len() > k { 
                             read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes_t, &mut kmer_seqs, &mut minim_shift, &params);
                         }
@@ -620,7 +613,6 @@ fn main() {
         ec_reads::flush(&mut ec_file_postcor);
         ec_reads::flush(&mut ec_file_poa);
     }
-    println!("nodes {} shifts {} seqs {}", dbg_nodes.len(), minim_shift.len(), kmer_seqs.len());
     println!("nodes before abund-filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x,&mut c| c >= (min_kmer_abundance as u32));
     println!("nodes after: {}", dbg_nodes.len());
