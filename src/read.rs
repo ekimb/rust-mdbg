@@ -64,7 +64,7 @@ impl Read {
             let entry = dbg_nodes.entry(node.clone()).or_insert(0);
             *entry += 1;
 
-            if *entry == min_kmer_abundance as u32 {
+            //if *entry == min_kmer_abundance as u32 {
                 let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
                 if seq_reversed {
                     seq = utils::revcomp(&seq);
@@ -86,13 +86,13 @@ impl Read {
                         debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
                     }
                 }
-            }
+            //}
         }
     }
 
     
     //pub fn write_to_poa
-    pub fn query(&mut self, int_to_minimizer: &mut HashMap<u64, String>, ec_file_poa: &mut BufWriter<File>, buckets: &mut Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
+    pub fn query(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
         let n = params.n;
         let k = params.k;
         let l = params.l;
@@ -133,9 +133,9 @@ impl Read {
                 pair_map.insert((transformed[i], transformed[i+1]), seq[pos[i] as usize ..pos[i+1] as usize].to_string());
             }
         }
-        let mut max_len = 60;
+        let mut max_len = 50;
         if bucket_reads.len() > max_len {bucket_reads = bucket_reads[0..max_len].to_vec();}
-        if bucket_reads.len() == 0 {println!("Read has no neighbors");}
+        //if bucket_reads.len() == 0 {println!("Read has no neighbors");}
         for i in 0..bucket_reads.len() {
             poa_ids.push(bucket_reads[i].0.id.to_string());
             aligner.global(&bucket_reads[i].0.transformed);
@@ -171,7 +171,7 @@ impl Read {
                 corrected_count += 1;
             }
         }
-        ec_reads::record_poa(ec_file_poa, &seq_id, poa_ids);
+        poa_map.insert(seq_id.to_string(), poa_ids.to_vec());
         self.seq = consensus_str;
         self.minimizers = consensus_read;
         self.minimizers_pos = consensus_pos;
