@@ -45,7 +45,7 @@ use std::env;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
-const NUM_THREADS : usize = 24;
+const NUM_THREADS : usize = 40;
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -142,78 +142,6 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
     }
     println!("");
 
-}
-
-// here, keep in mind a kmer is in minimizer-space, not base-space
-// this code presupposes that the read has already been transformed into a sequence of minimizers
-// so it just performs revcomp normalization and solidy check
-fn read_to_kmers(kmer_origin: &mut HashMap<Kmer,String>, seq_id: &str, corr : bool, kmer_pos: &mut HashMap<Kmer, Vec<u32>>, seq_str :&str, read_transformed: &Vec<u64>, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (u32, u32)>, params: &Params)
-{
-    let k = params.k;
-    let l = params.l;
-    let n = params.n;
-    let min_kmer_abundance = params.min_kmer_abundance;
-    let levenshtein_minimizers = params.levenshtein_minimizers;
-    for i in 0..(read_transformed.len()-k+1)
-    {
-        //println!("{} {} {}", read_minimizers.len(), read_minimizers_pos.len(), read_transformed.len());
-
-        let mut node : Kmer = Kmer::make_from(&read_transformed[i..i+k]);
-        let mut seq_reversed = false;
-        if revcomp_aware { 
-            let (node_norm, reversed) = node.normalize(); 
-            node = node_norm;
-            seq_reversed = reversed;
-        } 
-        let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-        *entry += 1;
-        
-       // let s = node.print_as_string();
-        //println!("{:?}", s);
-        //if node == Kmer::make_from(&vec![1948, 64, 943, 3497, 2263]).normalize().0 {
-        //    println!("{}", seq_str);
-        //    println!("{:?}, {:?}, {:?}", read_minimizers, read_minimizers_pos, read_transformed);
-        //    assert_eq!(0, 1);
-        //}
-
-        // decide if that kmer is finally solid 
-
-        //if *entry == 1 as u32 {
-            // record sequences associated to solid kmers
-            let mut seq = seq_str[read_minimizers_pos[i] as usize..(read_minimizers_pos[i+k-1] as usize + l)].to_string();
-            if seq_reversed {
-                seq = utils::revcomp(&seq);
-            }
-               
-            kmer_seqs.insert(node.clone(), seq.clone());
-            let origin = format!("{}_{}_{}", seq_id, read_minimizers_pos[i].to_string(), read_minimizers_pos[i+k-1].to_string());
-            kmer_origin.insert(node.clone(), origin);
-            if !corr {
-                let mut pos_vec = read_minimizers_pos[i..i+k].to_vec();
-                pos_vec = pos_vec.iter().map(|x| x-read_minimizers_pos[i]).collect();
-                kmer_pos.insert(node.clone(), pos_vec.clone());
-            }
-            let position_of_second_minimizer = match seq_reversed {
-                true => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2],
-                false => read_minimizers_pos[i+1]-read_minimizers_pos[i]
-            };
-            let position_of_second_to_last_minimizer = match seq_reversed {
-                true => read_minimizers_pos[i+1]-read_minimizers_pos[i],
-                false => read_minimizers_pos[i+k-1]-read_minimizers_pos[i+k-2]
-            };
-
-            minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
-
-            // some sanity checks
-            if levenshtein_minimizers == 0
-            {
-                for minim in &read_minimizers[i..i+k-1]
-                {
-                    debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
-                }
-            }
-       //}
-    }
 }
 
 #[derive(Debug, StructOpt)]
