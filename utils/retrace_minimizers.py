@@ -40,7 +40,8 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
                     print(", so tested overlap:",chain[-(k-1):])
                     print("        with either:",ms[:k-1])
                     print("                 or:",ms[::-1][:k-1])
-                    exit("unexpected element to chain (unitig %s)" % unitig_name)
+                    continue
+                    #exit("unexpected element to chain (unitig %s)" % unitig_name)
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]

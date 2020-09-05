@@ -9,7 +9,7 @@
  and outputs the needleman-wunch alignment of each read to the reference (semi-global aln)  
  and optionally outputs a comparison between the two set of reads (e.g. corrected vs uncorrected)
 """
-
+import math
 nb_processes = 2
 
 def parse_file(filename, only_those_reads = None, max_reads = 100):
@@ -164,7 +164,19 @@ def jac(poa_template,lst):
         nb_included += 1
     if nb_included > 0:
         mean_jac /= nb_included
-    return mean_jac
+    return 1-mean_jac
+def mash(poa_template,lst):
+    mean_mash = 0
+    nb_included = 0
+    for poa_seq_id in lst:
+        poa_r1 = set(orig_r1[poa_seq_id])
+        jac = len(poa_template & poa_r1) / len(poa_template | poa_r1)
+        if jac == 0.00: mean_mash += 1
+        else: mean_mash += -1.0/10.0 * math.log((2.0 * jac) / (1.0 + jac))
+        nb_included += 1
+    if nb_included > 0:
+        mean_mash /= nb_included
+    return mean_mash
 
 
 if __name__ == "__main__":
@@ -225,12 +237,12 @@ if __name__ == "__main__":
             if file_poa is not None:
                 poa_template = set(orig_r1[seq_id])
                 tp, fp, fn = evaluate_poa.eval_poa(seq_id, poa_d, poa_d_itv)
-                print("POA retrieval TP: %d (Jac %.2f)    FP: %d (Jac %.2f)   FN: %d (Jac %.2f)" \
-                        % (len(tp),jac(poa_template,tp),
-                            len(fp),jac(poa_template,fp),
-                            len(fn),jac(poa_template,fn)))
+                print("POA retrieval TP: %d (Jac %.2f) (Mash %.2f)    FP: %d (Jac %.2f) (Mash %.2f)   FN: %d (Jac %.2f) (Mash %.2f)" \
+                        % (len(tp),jac(poa_template,tp),mash(poa_template,tp),
+                            len(fp),jac(poa_template,fp),mash(poa_template,fp),
+                            len(fn),jac(poa_template,fn),mash(poa_template,fn)))
 
-            debug_aln = True 
+            debug_aln = False 
             if debug_aln:
                 print("alignment of uncorrected read",short_name(seq_id)," (len %d) to ref:" % len(orig_r1[seq_id]))
                 #print(orig_r1[seq_id]) # print original read sequence of minimizers
@@ -248,4 +260,3 @@ if __name__ == "__main__":
     print(nb_better,"reads improved")
     print(nb_nochange,"reads unchanged")
     print(nb_worse,"reads made worse")
-

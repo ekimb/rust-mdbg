@@ -13,3 +13,7 @@ ref/
 *.png
 *.pyc
 *.txt
+*.svg
+perf*
+runs
+*.paf

@@ -6,9 +6,9 @@ use std::cmp::Ordering;
 #[derive(Clone)]
 pub struct KmerVec 
 {
-    data: Vec<u32>
+    data: Vec<u64>
 }
-pub fn get(a: &KmerVec) -> Vec<u32> { a.data.to_vec() }
+pub fn get(a: &KmerVec) -> Vec<u64> { a.data.to_vec() }
 
 impl KmerVec
 {
@@ -47,7 +47,7 @@ impl KmerVec
         }
     }
 
-    pub fn make_from(ar: &[u32]) -> KmerVec
+    pub fn make_from(ar: &[u64]) -> KmerVec
     {
         KmerVec {
         data: Vec::from(ar)
@@ -59,7 +59,7 @@ impl KmerVec
         format!("{:?}",&self.data)
     }
 
-    pub fn minimizers(&self) -> &Vec<u32>
+    pub fn minimizers(&self) -> &Vec<u64>
     {
         &self.data
     }

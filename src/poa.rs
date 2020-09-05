@@ -148,7 +148,7 @@ use petgraph::visit::Dfs;
 
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 
-pub type POAGraph = Graph<u32, i32, Directed, usize>;
+pub type POAGraph = Graph<u64, i32, Directed, usize>;
 
 // Unlike with a total order we may have arbitrary successors in the
 // traceback matrix. I have not yet figured out what the best level of
@@ -158,7 +158,7 @@ pub const MIN_SCORE: i32 = -858_993_459;
 
 /// Trait required to instantiate a Scoring instance
 pub trait MatchFunc {
-    fn score(&mut self, a: u32, b: u32) -> i32;
+    fn score(&mut self, a: u64, b: u64) -> i32;
 }
 
 /// A concrete data structure which implements trait MatchFunc with constant
@@ -188,7 +188,7 @@ impl MatchParams {
 
 impl MatchFunc for MatchParams {
     #[inline]
-    fn score(&mut self, a: u32, b: u32) -> i32 {
+    fn score(&mut self, a: u64, b: u64) -> i32 {
         if a == b {
             self.match_score
         } else {
@@ -201,9 +201,9 @@ impl MatchFunc for MatchParams {
 /// can be instantiated using closures and custom user defined functions
 impl<F> MatchFunc for F
 where
-    F: FnMut(u32, u32) -> i32,
+    F: FnMut(u64, u64) -> i32,
 {
-    fn score(&mut self, a: u32, b: u32) -> i32 {
+    fn score(&mut self, a: u64, b: u64) -> i32 {
         (self)(a, b)
     }
 }
@@ -493,7 +493,7 @@ impl Traceback {
         {
             // TODO: these should be -1 * distance from head node
             row[0] = TracebackCell {
-                score: (i as i32) * 0, // gap_open penalty //semi-global
+                score: (i as i32) * gap_open, // gap_open penalty //semi-global
                 op: AlignmentOperation::Del(None),
             };
         }
@@ -522,7 +522,7 @@ impl Traceback {
         &self.matrix[i][j]
     }
 
-    pub fn print(&self, g: &Graph<u32, i32, Directed, usize>, query: Vec<u32>) {
+    pub fn print(&self, g: &Graph<u64, i32, Directed, usize>, query: Vec<u64>) {
         let (m, n) = (g.node_count(), query.len());
         print!(".\t");
         for base in query.iter().take(n) {
@@ -588,13 +588,13 @@ impl Traceback {
 /// Uses consuming builder pattern for constructing partial order alignments with method chaining
 pub struct Aligner<F: MatchFunc> {
     pub traceback: Traceback,
-    query: Vec<u32>,
+    query: Vec<u64>,
     pub poa: Poa<F>,
 }
 
 impl<F: MatchFunc> Aligner<F> {
     /// Create new instance.
-    pub fn new(scoring: Scoring<F>, reference: Vec<u32>) -> Self {
+    pub fn new(scoring: Scoring<F>, reference: &Vec<u64>) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
@@ -615,9 +615,9 @@ impl<F: MatchFunc> Aligner<F> {
     }
 
     /// Globally align a given query against the graph.
-    pub fn global(&mut self, query: Vec<u32>) -> &mut Self {
+    pub fn global(&mut self, query: &Vec<u64>) -> &mut Self {
         self.query = query.to_vec();
-        self.traceback = self.poa.global(query);
+        self.traceback = self.poa.global(&query);
         self
     }
 
@@ -635,9 +635,6 @@ impl<F: MatchFunc> Aligner<F> {
 pub struct Poa<F: MatchFunc> {
     scoring: Scoring<F>,
     pub graph: POAGraph,
-    pub node_index : HashMap<NodeIndex<usize>, u32>,
-    pub edge_index : HashMap<usize, (u32, u32)>,
-    pub seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>>,
 }
 
 impl<F: MatchFunc> Poa<F> {
@@ -649,12 +646,9 @@ impl<F: MatchFunc> Poa<F> {
     /// * `poa` - the partially ordered reference alignment
     ///
     pub fn new(scoring: Scoring<F>, graph: POAGraph) -> Self {
-        let mut node_index : HashMap<NodeIndex<usize>, u32> = HashMap::new();
-        let mut edge_index : HashMap<usize, (u32, u32)> = HashMap::new();
-        let mut seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>> = HashMap::new();
 
 
-        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
+        Poa { scoring, graph}
     }
 
     /// Create a new POA graph from an initial reference sequence and alignment penalties.
@@ -664,27 +658,19 @@ impl<F: MatchFunc> Poa<F> {
     /// * `scoring` - the score struct
     /// * `reference` - a reference TextSlice to populate the initial reference graph
     ///
-    pub fn from_string(scoring: Scoring<F>, seq: Vec<u32>) -> Self {
-        let mut node_index : HashMap<NodeIndex<usize>, u32> = HashMap::new();
-        let mut edge_index : HashMap<usize, (u32, u32)> = HashMap::new();
-        let mut seq_to_edges : HashMap<Vec<u32>, Vec<EdgeIndex<usize>>> = HashMap::new();
-        let mut entry = seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
-        let mut graph: Graph<u32, i32, Directed, usize> =
+    pub fn from_string(scoring: Scoring<F>, seq: &Vec<u64>) -> Self {
+        let mut graph: Graph<u64, i32, Directed, usize> =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
-        node_index.insert(prev, seq[0]);
         let mut node: NodeIndex<usize>;
         for base in seq.iter().skip(1) {
             node = graph.add_node(*base);
-            node_index.insert(node, *base);
             graph.add_edge(prev, node, 1);
             let edge = graph.find_edge(prev, node).unwrap();
-            entry.push(edge);
-            edge_index.insert(edge.index(),(node_index[&prev], node_index[&node]));
             prev = node;
         }
 
-        Poa { scoring, graph, node_index, edge_index, seq_to_edges }
+        Poa { scoring, graph }
     }
 
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
@@ -693,7 +679,7 @@ impl<F: MatchFunc> Poa<F> {
     /// * `query` - the query TextSlice to align against the internal graph member
     ///
 
-    pub fn global(&mut self, query: Vec<u32>) -> Traceback {
+    pub fn global(&mut self, query: &Vec<u64>) -> Traceback {
         assert!(self.graph.node_count() != 0);
 
         // dimensions of the traceback matrix
@@ -803,16 +789,16 @@ impl<F: MatchFunc> Poa<F> {
     /// * `aln` - The alignment of the new sequence to the graph
     /// * `seq` - The sequence being incorporated
     ///
-    pub fn consensus(&mut self) -> Vec<u32> {
+    pub fn consensus(&mut self, params : &Params) -> Vec<u64> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut cns = Vec::new();
-        for node in self.consensus_path().to_vec() {
-            cns.push(*self.graph.node_weight(node).unwrap() as u32);
+        for node in self.consensus_path(&params).to_vec() {
+            cns.push(*self.graph.node_weight(node).unwrap() as u64);
         }
 
         cns.to_vec()
     }
-    pub fn consensus_path(&mut self) -> Vec<NodeIndex<usize>> {
+    pub fn consensus_path(&mut self, params : &Params) -> Vec<NodeIndex<usize>> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut node_idx = toposort(&self.graph, None).unwrap();
         // For each node find the best predecessor by edge-weight, breaking ties with path-weight
@@ -822,7 +808,10 @@ impl<F: MatchFunc> Poa<F> {
             let mut best_neighbor = None::<NodeIndex<usize>>;
             let mut best_weights = (0, 0); // (Edge-weight, Path-weight)
             for e_ref in self.graph.edges(*node) {
-                let weight = *e_ref.weight();
+                let mut weight = *e_ref.weight();
+                if weight < params.t as i32 {
+                    weight = 0;
+                }
                 let target = e_ref.target();
 
                 if (weight, *scores.entry(target).or_insert(0)) > best_weights {
@@ -860,9 +849,8 @@ impl<F: MatchFunc> Poa<F> {
 
         cns_path
     }
-    pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u32>) {
+    pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u64>) {
         let mut prev: NodeIndex<usize> = NodeIndex::new(0);
-        let mut entry = self.seq_to_edges.entry(seq.to_vec()).or_insert(Vec::<EdgeIndex<usize>>::new());
         let mut i: usize = 0;
         for op in aln.operations.iter() {
             match op {
@@ -875,11 +863,8 @@ impl<F: MatchFunc> Poa<F> {
                     //println!("Node : {:?}", seq[i]);
                     if (seq[i] != self.graph.raw_nodes()[*p].weight) {
                         let node = self.graph.add_node(seq[i]);
-                        self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
-                        entry.push(edge);
-                        self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                     } else {
                         // increment node weight
@@ -892,11 +877,8 @@ impl<F: MatchFunc> Poa<F> {
                                 self.graph.add_edge(prev, node, 1);
                                 let edge = self.graph.find_edge(prev, node).unwrap();
                                 //println!("Edge added {:?}", (self.node_index[&prev], self.node_index[&node]));
-                                self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                             }
                         }
-                        let node = NodeIndex::new(*p);
-                        self.node_index.insert(node, seq[i]);
                         prev = node;
                     }
                     i += 1;
@@ -906,11 +888,8 @@ impl<F: MatchFunc> Poa<F> {
                 }
                 AlignmentOperation::Ins(Some(_)) => {
                         let node = self.graph.add_node(seq[i]);
-                        self.node_index.insert(node, seq[i]);
                         self.graph.add_edge(prev, node, 1);
                         let edge = self.graph.find_edge(prev, node).unwrap();
-                        entry.push(edge);
-                        self.edge_index.insert(edge.index(),(self.node_index[&prev], self.node_index[&node]));
                         prev = node;
                         i += 1;
                 }
@@ -930,7 +909,7 @@ mod tests {
     fn test_init_graph() {
         // sanity check for String -> Graph
 
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let poa = Poa::from_string(scoring, b"123456789");
         assert!(poa.graph.is_directed());
         assert_eq!(poa.graph.node_count(), 9);
@@ -939,7 +918,7 @@ mod tests {
 
     #[test]
     fn test_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         // examples from the POA paper
         //let _seq1 = b"PKMIVRPQKNETV";
         //let _seq2 = b"THKMLVRNETIM";
@@ -956,7 +935,7 @@ mod tests {
 
     #[test]
     fn test_branched_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let seq1 = b"TTTTT";
         let seq2 = b"TTATT";
         let mut poa = Poa::from_string(scoring, seq1);
@@ -973,7 +952,7 @@ mod tests {
 
     #[test]
     fn test_alt_branched_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
 
         let seq1 = b"TTCCTTAA";
         let seq2 = b"TTTTGGAA";
@@ -998,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_insertion_on_branch() {
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
 
         let seq1 = b"TTCCGGTTTAA";
         let seq2 = b"TTGGTATGGGAA";
@@ -1023,7 +1002,7 @@ mod tests {
 
     #[test]
     fn test_poa_method_chaining() {
-        let scoring = Scoring::new(-1, 0, |a: u32, b: u32| if a == b { 1i32 } else { -1i32 });
+        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let mut aligner = Aligner::new(scoring, b"TTCCGGTTTAA");
         aligner
             .global(b"TTGGTATGGGAA")

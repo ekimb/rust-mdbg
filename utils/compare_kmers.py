@@ -3,7 +3,7 @@ if len(sys.argv) < 3 or ".sequences" not in sys.argv[2] or ".sequences" not in s
     exit("input: <file1.sequences> <file2.sequences> [genome.fasta]\n will compare the set of kmers in those two files\nand optionnally analyze the missing kmers across the refgenome\n")
 
 # tip: make file1 be the .sequences file constructed from a reference genome
-# and file2 be one made from the reads
+# and file2 be one made from the reads
 file1= sys.argv[1]
 file2= sys.argv[2]
 
@@ -44,6 +44,10 @@ if debug_missing_kmers:
     for kmer in [x for x in kmers1 if x not in kmers2]:
         if kmer in origins1:
             origin = origins1[kmer]
+            f = open("missing_kmers.txt", "a")
             print(kmer,origin)
         else:
             print(kmer,"not found in reference '.sequences' file, but should have been")
+        if kmer[::-1] in origins1:
+            print("Reverse complement in reference")
+    f.close()
