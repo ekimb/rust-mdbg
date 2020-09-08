@@ -1,0 +1,23 @@
+#!/bin/bash
+input=$1
+if [ ! -f "$input" ]; then
+    echo "Input GFA file not found!"
+    exit 1
+fi
+
+curfile=$input
+n=50
+echo "running $n rounds of gfaview simplifications"
+
+for i in `seq 1 $n` 
+do
+ nextfile=$input.$i
+ gfaview -t -r -u -b $curfile > $nextfile
+ if [ "$curfile" != "$input" ]
+ then
+     rm -f $curfile
+ fi
+ curfile=$nextfile
+done
+
+echo "done, result in: $curfile"
