@@ -53,8 +53,8 @@ for i in range(len(final_sequences_file)):
     if line.startswith('#'): continue
     spl = line.split()
     utg = spl[0]
-    spl_end = -2 if spl[-1].isdigit() else -1
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:spl_end]))
+    spl_end = -3
+    minims = tuple(map(lambda x: int(x.strip('(').strip(')').replace(',','')),spl[1:spl_end]))
     seq = spl[spl_end]
     
     #magic happens here
@@ -96,7 +96,7 @@ for i in range(len(final_sequences_file)):
                 """
             whole_seq += seq[l:]
 
-    final_sequences_file[i] = "%s\t%s\t%s\n" % (utg, list(minims), whole_seq)
+    final_sequences_file[i] = "%s\t%s\t%s\tPLACEHOLDER\tPLACEHOLDER\n" % (utg, list(minims), whole_seq)
 
 # write [final.sequences] with sequence info 
 output = open(sys.argv[2],'w')

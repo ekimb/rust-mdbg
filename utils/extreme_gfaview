@@ -1,23 +1,38 @@
 #!/bin/bash
 input=$1
-if [ ! -f "$input" ]; then
+it=$2
+if [ ! -f "$input.gfa" ]; then
     echo "Input GFA file not found!"
     exit 1
 fi
 
-curfile=$input
-n=50
-echo "running $n rounds of gfaview simplifications"
+curgfa=$input.gfa
+curseq=$input.sequences
+curfa=$input.fa
 
-for i in `seq 1 $n` 
+
+echo "running $it rounds of gfaview simplifications"
+
+for i in `seq 1 $it` 
 do
- nextfile=$input.$i
- gfaview -t -r -u -b $curfile > $nextfile
- if [ "$curfile" != "$input" ]
+ nextgfa=$input.$i.gfa
+ nextseq=$input.$i.sequences
+ nextfa=$input.$i.fasta
+ gfaview -t -r -b -u $curgfa > $nextgfa
+ python utils/retrace_minimizers.py $curseq $nextgfa
+ python utils/output_basic_sequences.py  $input.sequences $nextseq
+ python utils/sequences_file_to_fasta.py  $nextseq $nextfa
+
+# finishing up
+#mv $base.notips.nobubbles.again.gfa $base.assembled.gfa # FIXME
+#mv $base.notips.nobubbles.again.fasta $base.assembled.fasta # FIXME
+ if [ "$curgfa" != "$input.gfa" ]
  then
-     rm -f $curfile
+     rm -f $curgfa $curseq $curfa
  fi
- curfile=$nextfile
+ curgfa=$nextgfa
+ curseq=$nextseq
+ curfa=$nextfa
 done
 
-echo "done, result in: $curfile"
+echo "done, result in: $curgfa"

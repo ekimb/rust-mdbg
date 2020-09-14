@@ -5,8 +5,8 @@ if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.arg
 # read [origin.sequences] file
 d_minims = dict()
 from parse_sequences_file import parse
-k, l, kmer_seq, osef, origins1 = parse(sys.argv[1])
-d_minims = kmer_seq
+k, l, node_minims, kmer_seq, osef, origins1 = parse(sys.argv[1])
+d_minims = node_minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     chain = []

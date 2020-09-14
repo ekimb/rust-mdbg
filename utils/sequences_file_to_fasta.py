@@ -8,7 +8,7 @@ for line in open(sys.argv[1]):
         continue 
     spl = line.split()
     unitig_id = spl[0]
-    spl_end = -2 if spl[-1].isdigit() else -1
+    spl_end = -3
     minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:spl_end]))
     seq = spl[spl_end]
     assert not seq.isdigit(),"error: this .sequences file has an odd format"
