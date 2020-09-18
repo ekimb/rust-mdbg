@@ -8,8 +8,8 @@ file1= sys.argv[1]
 file2= sys.argv[2]
 
 from parse_sequences_file import parse
-k, l,       kmer_seq1, osef, origins1 = parse(file1)
-osef, osef, kmer_seq2, osef, origins2 = parse(file2)
+k, l, node_minims,  kmer_seq1, osef, origins1 = parse(file1)
+osef, osef, node_minims2, kmer_seq2, osef, origins2 = parse(file2)
 
 kmers1 = set(kmer_seq1.keys())
 kmers2 = set(kmer_seq2.keys())
