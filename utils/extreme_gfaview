@@ -33,6 +33,7 @@ do
  curgfa=$nextgfa
  curseq=$nextseq
  curfa=$nextfa
+ echo "iteration $i done"
 done
 
 echo "done, result in: $curgfa"
