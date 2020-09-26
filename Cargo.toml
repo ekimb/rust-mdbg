@@ -31,5 +31,7 @@ rand_pcg = "0.2.1"
 rand_core = "0.5.1"
 closure = "0.3.0"
 editdistancewf = "0.1.0"
+libc = "0.2.77"
+
 [profile.dev]
 opt-level = 3
