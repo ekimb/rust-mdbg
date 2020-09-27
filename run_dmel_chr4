@@ -20,7 +20,7 @@ end=`date +%s`
 echo "Running evaluation..."
 pypy3 utils/evaluate_ec.py  dmel_chr4.ec_data  dmel_chr4_reads-0.05.ec_data  dmel_chr4_reads-0.05.postcor.ec_data dmel_chr4_reads-0.05.poa.ec_data | tee ec.txt
 echo "Comparing k-mers..."
-python utils/compare_kmers.py dmel_chr4.sequences dmel_chr4_reads-0.05.sequences dmel_chr4.fa
+python utils/compare_kmers.py dmel_chr4.sequences dmel_chr4_reads-0.05.sequences
 runtime=$((end-start))
 echo "Runtime was $runtime seconds."
 utils/simplify dmel_chr4_reads-0.05
