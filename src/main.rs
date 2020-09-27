@@ -27,6 +27,8 @@ use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use strsim::levenshtein;
 use rayon::prelude::*;
+use std::time::{Duration, Instant};
+use std::mem::{self, MaybeUninit};
 use editdistancewf as wf;
 mod utils;
 mod banded;
@@ -144,6 +146,17 @@ fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>
 
 }
 
+/// Try to get memory usage (resident set size) in bytes using the `getrusage()` function from libc.
+// from https://github.com/digama0/mm0/blob/bebd670c5a77a1400913ebddec2c6248e76f90fe/mm0-rs/src/util.rs
+fn get_memory_rusage() -> usize {
+  let usage = unsafe {
+    let mut usage = MaybeUninit::uninit();
+    assert_eq!(libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()), 0);
+    usage.assume_init()
+  };
+  usage.ru_maxrss as usize * 1024
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
 struct Opt {
@@ -194,6 +207,7 @@ struct Opt {
 
 
 fn main() {
+    let start = Instant::now();
     let opt = Opt::from_args();      
     let mut uhs : bool = false;
     let mut filename = PathBuf::new();
@@ -661,5 +675,9 @@ fn main() {
     // and also read sequences corresponding to those minimizers
     println!("writing sequences..");
     seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
+    
+    let duration = start.elapsed();
+    println!("Total execution time: {:?}", duration);
+    println!("Max RSS: {:?} GB", (get_memory_rusage() as f32)/1024.0/1024.0/1024.0);
 }
 
