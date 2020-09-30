@@ -53,6 +53,7 @@ impl Read {
         let n = params.n;
         let min_kmer_abundance = params.min_kmer_abundance;
         let levenshtein_minimizers = params.levenshtein_minimizers;
+        let output_base_space = params.output_base_space;
         for i in 0..(self.transformed.len()-k+1) {
             let mut node : Kmer = Kmer::make_from(&self.transformed[i..i+k]);
             let mut seq_reversed = false;
@@ -63,6 +64,9 @@ impl Read {
             } 
             let entry = dbg_nodes.entry(node.clone()).or_insert(0);
             *entry += 1;
+
+            if ! output_base_space { continue;}
+
 
             //if *entry == min_kmer_abundance as u32 {
                 let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();

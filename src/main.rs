@@ -70,6 +70,7 @@ pub struct Params
     distance: usize,
     reference: bool,
     uhs: bool,
+    output_base_space: bool,
 }
 pub fn dist(s1: &Vec<u64>, s2: &Vec<u64>, params: &Params) -> f64 {
     let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
@@ -302,6 +303,7 @@ fn main() {
         correction_threshold,
         reference,
         uhs,
+        output_base_space,
     };
     // init some useful objects
     let mut nb_minimizers_per_read : f64 = 0.0;
@@ -374,7 +376,10 @@ fn main() {
                 reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
                 if read_obj.transformed.len() > k {
                     read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
-                    ec_entry.push((read_obj.id.to_string(), read_obj.seq, read_obj.transformed.to_vec(), read_obj.minimizers, read_obj.minimizers_pos));
+                    if error_correct
+                    {
+                        ec_entry.push((read_obj.id.to_string(), read_obj.seq, read_obj.transformed.to_vec(), read_obj.minimizers, read_obj.minimizers_pos));
+                    }
                 }
                 if error_correct
                 {
