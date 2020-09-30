@@ -202,6 +202,8 @@ struct Opt {
     #[structopt(long)]
     no_error_correct: bool,
     #[structopt(long)]
+    no_base_space: bool,
+    #[structopt(long)]
     reference: bool,
 }
 
@@ -223,6 +225,7 @@ fn main() {
     let mut levenshtein_minimizers: usize = 0;
     let mut distance: usize = 0;
     let mut error_correct: bool = true;
+    let mut output_base_space : bool = true;
     let mut correction_threshold : i32 = 0;
     let mut reference : bool = false;
     let mut windowed : bool = false;
@@ -261,7 +264,7 @@ fn main() {
     let minimizer_type = match levenshtein_minimizers { 0 => "reg", 1 => "lev1", 2 => "lev2",_ => "levX" };
     if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
     if opt.distance.is_none() { println!("Warning: using default distance metric ({})",distance_type); }
-
+    if opt.no_base_space { output_base_space = false;}
 
 
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
@@ -436,17 +439,20 @@ fn main() {
                     dbg_nodes.insert(node.clone(), *abund);
                 }
             }
-            let mut seqs = kmer_seqs_all.entry(thread_num).or_insert(HashMap::new());
-            for (kmer, seq) in seqs.into_iter() {
-                kmer_seqs.insert(kmer.clone(), seq.to_string());
-            }
-            let mut oris = kmer_origin_all.entry(thread_num).or_insert(HashMap::new());
-            for (kmer, ori) in oris.into_iter() {
-                kmer_origin.insert(kmer.clone(), ori.to_string());
-            }
-            let mut shifts = minim_shift_all.entry(thread_num).or_insert(HashMap::new());
-            for (kmer, shift) in shifts.into_iter() {
-                minim_shift.insert(kmer.clone(), *shift);
+            if (output_base_space)
+            {
+                let mut seqs = kmer_seqs_all.entry(thread_num).or_insert(HashMap::new());
+                for (kmer, seq) in seqs.into_iter() {
+                    kmer_seqs.insert(kmer.clone(), seq.to_string());
+                }
+                let mut oris = kmer_origin_all.entry(thread_num).or_insert(HashMap::new());
+                for (kmer, ori) in oris.into_iter() {
+                    kmer_origin.insert(kmer.clone(), ori.to_string());
+                }
+                let mut shifts = minim_shift_all.entry(thread_num).or_insert(HashMap::new());
+                for (kmer, shift) in shifts.into_iter() {
+                    minim_shift.insert(kmer.clone(), *shift);
+                }
             }
         let mut ec = ec_entries.entry(thread_num).or_insert(Vec::new());
         for tuple in ec.iter() {
@@ -669,12 +675,15 @@ fn main() {
 
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers);
+    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers, output_base_space);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
-    println!("writing sequences..");
-    seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
+    if (output_base_space)
+    {
+        println!("writing sequences..");
+        seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
+    }
     
     let duration = start.elapsed();
     println!("Total execution time: {:?}", duration);

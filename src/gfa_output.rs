@@ -117,9 +117,10 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     shift as u32
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(usize,usize)>, levenshtein_minimizers: usize)  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(usize,usize)>, levenshtein_minimizers: usize, output_base_space: bool)  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
+    let empty_str = String::new();
     
     let path = format!("{}{}",output_prefix.to_str().unwrap(),".gfa");
     let mut file = match File::create(&path) {
@@ -132,7 +133,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
 
     for node in gr.node_indices() {
         let idx = node.index();
-        let seq = &kmer_seqs[nodes_vect[idx]];
+        let seq = &kmer_seqs.get(nodes_vect[idx]).unwrap_or(&empty_str);
         let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
         write!(file, "{}", s_line).expect("error writing s_line");
        // let s_line = format!("S\t{}\t{}\t{}\n",idx,seq.len(),seq);
@@ -146,17 +147,21 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         
         let mut kmer1 = nodes_vect[id1].clone();
         let mut kmer2 = nodes_vect[id2].clone();
-        let mut seq1 = kmer_seqs[&kmer1].clone();
+        let mut seq1 = kmer_seqs.get(&kmer1).unwrap_or(&empty_str).clone();
         if ori1 == "-" {
             seq1 = revcomp(&seq1);
             kmer1 = kmer1.reverse();
         }
-        let mut seq2 = kmer_seqs[&kmer2].clone();
+        let mut seq2 = kmer_seqs.get(&kmer2).unwrap_or(&empty_str).clone();
         if ori2 == "-" {
             seq2 = revcomp(&seq2);
             kmer2 = kmer2.reverse();
         }
-        let shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
+        let mut shift = 0;
+        if (output_base_space)
+        {
+            shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
+        }
         let mut overlap_length = seq1.len() as u32 -shift;
 
         //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
@@ -172,7 +177,7 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         // so for now we'll just do this dirty 'fix'
         // since anyway the importance of overlap length field in GFA is quite relative in this
         // pipeline
-        overlap_length = std::cmp::min(overlap_length, (seq2.len()-1) as u32);
+        overlap_length = std::cmp::min(overlap_length, (std::cmp::max(1,seq2.len())-1) as u32);
         let id1_beg = shift;
         let id1_end = shift+overlap_length;
         let id2_beg = 0;
