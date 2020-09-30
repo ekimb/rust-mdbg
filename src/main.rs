@@ -410,8 +410,10 @@ fn main() {
             *shift = minim_shift;
             let mut ec = ec_entries.entry(thread_num).or_insert(Vec::new());
             *ec = ec_entry;
-            let mut bucket = buckets_all.entry(thread_num).or_insert(HashMap::new());
-            *bucket = buckets;
+            if error_correct {
+                let mut bucket = buckets_all.entry(thread_num).or_insert(HashMap::new());
+                *bucket = buckets;
+            }
             }));
             guards.push(guard);
         }
@@ -463,17 +465,19 @@ fn main() {
         for tuple in ec.iter() {
             ec_reads::record(&mut ec_file, &tuple.0, &tuple.1, &tuple.2, &tuple.3, &tuple.4);
         }
-        let mut bucket = buckets_all.entry(thread_num).or_insert(HashMap::new());
-        for (key, bag) in bucket {
-            if buckets.contains_key(key) {
-                let mut fin = Vec::new();
-                let prev = buckets.entry(key.to_vec()).or_insert(Vec::<String>::new());
-                prev.into_iter().for_each(|x| fin.push(x.to_string()));
-                bag.into_iter().for_each(|x| fin.push(x.to_string()));
-                *prev = fin;
-            }
-            else {
-                buckets.insert(key.to_vec(), bag.to_vec());
+        if error_correct {
+            let mut bucket = buckets_all.entry(thread_num).or_insert(HashMap::new());
+            for (key, bag) in bucket {
+                if buckets.contains_key(key) {
+                    let mut fin = Vec::new();
+                    let prev = buckets.entry(key.to_vec()).or_insert(Vec::<String>::new());
+                    prev.into_iter().for_each(|x| fin.push(x.to_string()));
+                    bag.into_iter().for_each(|x| fin.push(x.to_string()));
+                    *prev = fin;
+                }
+                else {
+                    buckets.insert(key.to_vec(), bag.to_vec());
+                }
             }
         }
 
