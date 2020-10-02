@@ -76,6 +76,7 @@ impl Read {
                     M.push_back(Q.front().unwrap().clone());
                 }
                 Some(back) => {
+                    if Q.is_empty() {continue;}
                     if back.hash != Q.front().unwrap().hash {
                         M.push_back(Q.front().unwrap().clone());
                     }
