@@ -76,10 +76,10 @@ def process_unitig(name, info):
     minims, abunds = chain_minimizers(info, name)
     if abund_filter:
         passed = [x for x in abunds if x > MIN_ABUNDANCE]
-        if len(passed) != 0:
+        if len(passed) != 0 and len(minims) != 0:
             #print("Passed nodes %d" % len(passed))
             output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
-    else:
+    else if len(minims) != 0:
         output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
 
 
