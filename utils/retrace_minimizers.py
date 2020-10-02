@@ -58,7 +58,7 @@ output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
-    #print("new chain",name,"len",len(info),"contents:",info)
+    print("new chain",name,"len",len(info),"contents:",info)
     minims = chain_minimizers(info, name)
     output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
 
