@@ -52,12 +52,12 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
             if abund_filter:
-                print("ID %s abund %d" % (node_id, abund))
+                #print("ID %s abund %d" % (node_id, abund))
                 abunds.append(abund)
 
         else:
             if abund_filter:
-                print("ID %s abund %d" % (node_id, abund))
+                #print("ID %s abund %d" % (node_id, abund))
                 abunds.append(abund)
             chain = ms[::]
             # small note to myself:
@@ -70,12 +70,12 @@ output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
     MIN_ABUNDANCE = 3
-    print("new chain",name,"len",len(info),"contents:",info)
+    #print("new chain",name,"len",len(info),"contents:",info)
     minims, abunds = chain_minimizers(info, name)
     if abund_filter:
         passed = [x for x in abunds if x > MIN_ABUNDANCE]
         if len(passed) != 0:
-            print("Passed nodes %d" % len(passed))
+            #print("Passed nodes %d" % len(passed))
             output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
     else:
         output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
