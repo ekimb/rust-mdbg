@@ -46,7 +46,7 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
-            print("ID %s abund %d", node_id, abund)
+            print("ID %s abund %d" % (node_id, abund))
         else:
             chain = ms[::]
             # small note to myself:
