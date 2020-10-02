@@ -66,7 +66,7 @@ def process_unitig(name, info):
     MIN_ABUNDANCE = 2
     print("new chain",name,"len",len(info),"contents:",info)
     minims, abunds = chain_minimizers(info, name)
-    passed = [x for x in minims if x > MIN_ABUNDANCE]
+    passed = [x for x in abunds if x > MIN_ABUNDANCE]
     if len(passed) != 0:
         print("Passed nodes %d" % len(passed))
         output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
