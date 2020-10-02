@@ -143,8 +143,8 @@ impl Read {
                     seq = utils::revcomp(&seq);
                 }
                 kmer_seqs.insert(node.clone(), seq.clone());
-                let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
-                kmer_origin.insert(node.clone(), origin);
+                //let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+                //kmer_origin.insert(node.clone(), origin);
                 let position_of_second_minimizer = match seq_reversed {
                     true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
                     false => self.minimizers_pos[i+1]-self.minimizers_pos[i]
