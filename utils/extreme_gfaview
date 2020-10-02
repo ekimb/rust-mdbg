@@ -21,11 +21,11 @@ do
  nextgfa=$input.$i.gfa
  nextseq=$input.$i.sequences
  nextfa=$input.$i.fasta
- gfaview -t -r -R 100000 -b -B 1000000 -u $curgfa -v 3 > $nextgfa
+ gfaview -t -R 100000 -r  -B 1000000 -b -u $curgfa -v 3 > $nextgfa
  
  if [ -f "$curseq" ]
  then
-     python $DIR/retrace_minimizers.py $curseq $nextgfa
+     python $DIR/retrace_minimizers.py $curseq $nextgfa 5
      python $DIR/output_basic_sequences.py  $input.sequences $nextseq
      python $DIR/sequences_file_to_fasta.py  $nextseq $nextfa
  fi
