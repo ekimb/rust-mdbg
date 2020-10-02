@@ -15,6 +15,8 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     abunds = []
     chain = []
     for (chain_number,(pos, node_id, ori)) in enumerate(info):
+        if node_id not in d_minims:
+            continue
         # FIXME for some reason I didn't use the 'ori' field but it could actually help
         ms = d_minims[node_id]
         if abund_filter:
