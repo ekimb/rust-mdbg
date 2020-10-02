@@ -79,7 +79,7 @@ def process_unitig(name, info):
         if len(passed) != 0 and len(minims) != 0:
             #print("Passed nodes %d" % len(passed))
             output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
-    else if len(minims) != 0:
+    elif len(minims) != 0:
         output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
 
 
