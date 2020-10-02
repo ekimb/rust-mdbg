@@ -10,10 +10,10 @@ distance=$8
 w=$9
 touch bench/canu-bench-hifi-$1$2.txt
 echo "Running reference..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref_hpc.fa -k $K -l $L -n $N -w $w -t 1 --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_hifi_ref --reference --no-error-correct 
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref_hpc.fa -k $K -l $L -n $N -t 1 --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_hifi_ref --reference --no-error-correct 
 start=`date +%s`
 echo "Running reads..."
-command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/canu_hifi_hpc.fa -k $K -l $L -n $N -w $w -t $T --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix canu_hifi 2>&1 | tee -a bench/canu-bench-hifi-$1$2.txt
+command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/canu_hifi_hpc.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix canu_hifi 2>&1 | tee -a bench/canu-bench-hifi-$1$2.txt
 end=`date +%s`
 echo "Comparing k-mers..."
 python utils/compare_kmers.py canu_hifi_ref.sequences canu_hifi.sequences
