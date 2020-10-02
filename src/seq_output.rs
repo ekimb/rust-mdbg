@@ -28,7 +28,7 @@ pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :
         let seq       = &kmer_seqs[node];
         let abundance = &dbg_nodes[node];
         //let origin  = &kmer_origin[node];
-        let origin = "PLACEHOLDER"
+        let origin = "PLACEHOLDER";
         let s_line = format!("{}\t{}\t{}\t{}\t{}\n",index.index(),node.print_as_string(), seq, abundance, origin);
         write!(file, "{}", s_line).expect("error writing minimizers/sequences");
     }
