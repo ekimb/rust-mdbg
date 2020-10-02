@@ -5,7 +5,7 @@ if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.arg
 # read [origin.sequences] file
 d_minims = dict()
 from parse_sequences_file import parse
-k, l, node_minims, kmer_seq, osef, origins1 = parse(sys.argv[1])
+k, l, node_minims, kmer_seq, kmer_abundance, origins1 = parse(sys.argv[1])
 d_minims = node_minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
@@ -13,6 +13,7 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     for (chain_number,(pos, node_id, ori)) in enumerate(info):
         # FIXME for some reason I didn't use the 'ori' field but it could actually help
         ms = d_minims[node_id]
+        abund = kmer_abundance[ms]
         if len(chain) > 0:
             if chain[-(k-1):] == ms[:k-1]:
                 pass
@@ -45,6 +46,7 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
+            print("ID %s abund %d", node_id, abund)
         else:
             chain = ms[::]
             # small note to myself:
