@@ -2,7 +2,7 @@ use super::Params;
 use super::minimizers;
 use nthash::ntc64;
 use std::collections::HashMap;
-
+use std::collections::VecDeque;
 use std::fs::File;
 use super::Kmer;
 use super::revcomp_aware;
@@ -20,10 +20,87 @@ pub struct Read {
     pub seq: String,
     pub corrected: bool,
 }
+#[derive(Clone)]
+pub struct Lmer {
+    pub pos: usize,
+    pub hash: u64,
+}
 
 impl Read {
 
-    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>) -> Self {
+    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>) -> Self {
+        if params.w != 0 {
+            return Read::extract_windowed(inp_id, inp_seq, params, int_to_minimizer)
+        }
+        else {
+            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer)
+        }
+    }
+
+    pub fn extract_windowed(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>) -> Self {
+        let l = params.l;
+        let w = params.w;
+        let mut read_minimizers = Vec::<String>::new();
+        let mut read_minimizers_pos = Vec::<usize>::new();
+        let mut read_transformed = Vec::<u64>::new();
+        let mut Q: VecDeque<Lmer> = VecDeque::new();
+        let mut M: VecDeque<Lmer> = VecDeque::new();
+        for i in 0..inp_seq.len()-l+1 {
+            let mut lmer = &inp_seq[i..i+l];
+            let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
+            if lmer.contains("N") {continue;}
+            let lmer_hash = ntc64(lmer.as_bytes(), 0, l);
+            let lmer_obj = Lmer {pos: i, hash: lmer_hash};
+            while !Q.is_empty() && Q.back().unwrap().hash > lmer_hash {
+                Q.pop_back();
+            }
+            Q.push_back(lmer_obj);
+            if Q.front().unwrap().pos as i32 <= (i as i32) - (w as i32) {
+                while Q.front().unwrap().pos as i32 <= (i as i32) - (w as i32) {
+                    Q.pop_front();
+                }
+            }
+            match M.back() {
+                None => {
+                    M.push_back(Q.front().unwrap().clone());
+                }
+                Some(back) => {
+                    if back.hash != Q.front().unwrap().hash {
+                        M.push_back(Q.front().unwrap().clone());
+                    }
+                }
+            }
+            match Q.get(1).cloned() {
+                None => {
+                    continue
+                }
+                Some(next) => {
+                    while Q.front().unwrap().hash == next.hash {
+                        Q.pop_front();
+                        if Q.is_empty() {break;}
+                        match M.back() {
+                            None => {
+                                M.push_back(Q.front().unwrap().clone());
+                            }
+                            Some(back) => {
+                                if back.hash != Q.front().unwrap().hash {
+                                    M.push_back(Q.front().unwrap().clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+        }
+        let mut read_minimizers : Vec::<String> = M.iter().map(|lmer| int_to_minimizer[&lmer.hash].to_string()).collect();
+        let mut read_minimizers_pos : Vec::<usize> = M.iter().map(|lmer| lmer.pos).collect();
+        let mut read_transformed : Vec::<u64> = M.iter().map(|lmer| lmer.hash).collect();
+
+        Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+
+    }
+    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;

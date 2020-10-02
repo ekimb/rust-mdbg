@@ -226,11 +226,9 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         for lmer in list_minimizers
         {
             let hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
-            if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
-                minimizer_to_int.insert(lmer.to_string(),  hash);
-                int_to_minimizer.insert(hash,         lmer.to_string());
-                minim_idx += 1;
-            }
+            minimizer_to_int.insert(lmer.to_string(),  hash);
+            int_to_minimizer.insert(hash,         lmer.to_string());
+            minim_idx += 1;
         }
     
     println!("selected {} minimizer ID's, {} sequences",int_to_minimizer.len(), minimizer_to_int.len());

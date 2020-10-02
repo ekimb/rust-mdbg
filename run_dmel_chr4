@@ -8,12 +8,11 @@ abund=$6
 threshold=$7
 distance=$8
 w=$9
-uhsbool=$10
 echo "Running reference..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- dmel_chr4.fa -k $K -l $L -n $N -t 1 --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix dmel_chr4 --reference --no-error-correct 
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- dmel_chr4.fa -k $K -l $L -n $N -t 1 -w $w --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix dmel_chr4 --reference --no-error-correct 
 start=`date +%s`
 echo "Running reads..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund $abund --correction-threshold $threshold --distance $distance --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T -w $w --density $DENSITY --minabund $abund --correction-threshold $threshold --distance $distance --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05
 #cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.00.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund $abund --no-error-correct --prefix dmel_chr4_reads-0.05
 
 end=`date +%s`
