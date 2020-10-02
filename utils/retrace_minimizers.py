@@ -63,7 +63,7 @@ output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
-    MIN_ABUNDANCE = 2
+    MIN_ABUNDANCE = 3
     print("new chain",name,"len",len(info),"contents:",info)
     minims, abunds = chain_minimizers(info, name)
     passed = [x for x in abunds if x > MIN_ABUNDANCE]
