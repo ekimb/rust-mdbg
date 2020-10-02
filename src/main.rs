@@ -47,7 +47,7 @@ use std::env;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
-const NUM_THREADS : usize = 8;
+const NUM_THREADS : usize = 24;
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
