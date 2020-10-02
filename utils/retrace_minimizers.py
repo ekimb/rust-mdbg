@@ -9,6 +9,7 @@ k, l, node_minims, kmer_seq, kmer_abundance, origins1 = parse(sys.argv[1])
 d_minims = node_minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
+    abunds = []
     chain = []
     for (chain_number,(pos, node_id, ori)) in enumerate(info):
         # FIXME for some reason I didn't use the 'ori' field but it could actually help
@@ -47,20 +48,28 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
             print("ID %s abund %d" % (node_id, abund))
+            abunds.append(abund)
+
         else:
+            print("ID %s abund %d" % (node_id, abund))
+            abunds.append(abund)
             chain = ms[::]
             # small note to myself:
             # gfaview re-uses unitig's across simplifications. i.e. the same origin unitig may be found in two different 'a' lines
-    return chain
+    return chain, abunds
 
 output_filename = '.'.join(sys.argv[2].split('.')[:-1])+".sequences"
 output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
+    MIN_ABUNDANCE = 2
     print("new chain",name,"len",len(info),"contents:",info)
-    minims = chain_minimizers(info, name)
-    output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
+    minims, abunds = chain_minimizers(info, name)
+    passed = [x for x in minims if x > MIN_ABUNDANCE]
+    if len(passed) != 0:
+        print("Passed nodes %d" % len(passed))
+        output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
 
 # read [target.gfa] file
 current_unitig_name = ""
