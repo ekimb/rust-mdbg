@@ -137,7 +137,7 @@ impl Read {
             if ! output_base_space { continue;}
 
 
-            //if *entry == min_kmer_abundance as u32 {
+            if *entry == min_kmer_abundance as u32 {
                 let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
                 if seq_reversed {
                     seq = utils::revcomp(&seq);
@@ -159,7 +159,7 @@ impl Read {
                         debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
                     }
                 }
-            //}
+            }
         }
     }
 
