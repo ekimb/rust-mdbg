@@ -59,6 +59,17 @@ impl Read {
                 while Q.front().unwrap().pos as i32 <= (i as i32) - (w as i32) {
                     Q.pop_front();
                 }
+                match Q.get(1).cloned() {
+                    None => {
+                        continue
+                    }
+                    Some(next) => {
+                        while Q.front().unwrap().hash == next.hash {
+                            Q.pop_front();
+                            if Q.is_empty() {break;}
+                        }
+                    }
+                }
             }
             match M.back() {
                 None => {
@@ -70,27 +81,7 @@ impl Read {
                     }
                 }
             }
-            match Q.get(1).cloned() {
-                None => {
-                    continue
-                }
-                Some(next) => {
-                    while Q.front().unwrap().hash == next.hash {
-                        Q.pop_front();
-                        if Q.is_empty() {break;}
-                        match M.back() {
-                            None => {
-                                M.push_back(Q.front().unwrap().clone());
-                            }
-                            Some(back) => {
-                                if back.hash != Q.front().unwrap().hash {
-                                    M.push_back(Q.front().unwrap().clone());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+           
             
         }
         let mut read_minimizers : Vec::<String> = M.iter().map(|lmer| int_to_minimizer[&lmer.hash].to_string()).collect();
