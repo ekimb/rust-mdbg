@@ -11,6 +11,9 @@ curseq=$input.sequences
 curfa=$input.fa
 
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+
 echo "running $it rounds of gfaview simplifications"
 
 for i in `seq 1 $it` 
@@ -18,10 +21,14 @@ do
  nextgfa=$input.$i.gfa
  nextseq=$input.$i.sequences
  nextfa=$input.$i.fasta
- gfaview -t -r -b -u $curgfa > $nextgfa
- python utils/retrace_minimizers.py $curseq $nextgfa
- python utils/output_basic_sequences.py  $input.sequences $nextseq
- python utils/sequences_file_to_fasta.py  $nextseq $nextfa
+ gfaview -t -r -R 100000 -b -B 1000000 -u $curgfa -v 3 > $nextgfa
+ 
+ if [ -f "$curseq" ]
+ then
+     python $DIR/retrace_minimizers.py $curseq $nextgfa
+     python $DIR/output_basic_sequences.py  $input.sequences $nextseq
+     python $DIR/sequences_file_to_fasta.py  $nextseq $nextfa
+ fi
 
 # finishing up
 #mv $base.notips.nobubbles.again.gfa $base.assembled.gfa # FIXME
