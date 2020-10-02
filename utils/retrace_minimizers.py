@@ -6,6 +6,9 @@ if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.arg
 d_minims = dict()
 from parse_sequences_file import parse
 k, l, node_minims, kmer_seq, kmer_abundance, origins1 = parse(sys.argv[1])
+abund_filter = True
+if len(kmer_abundance) == 0:
+    abund_filter = False
 d_minims = node_minims
 
 def chain_minimizers(info, unitig_name): # unitig_name is just for debug
@@ -14,7 +17,8 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
     for (chain_number,(pos, node_id, ori)) in enumerate(info):
         # FIXME for some reason I didn't use the 'ori' field but it could actually help
         ms = d_minims[node_id]
-        abund = kmer_abundance[ms]
+        if abund_filter:
+            abund = kmer_abundance[ms]
         if len(chain) > 0:
             if chain[-(k-1):] == ms[:k-1]:
                 pass
@@ -47,12 +51,14 @@ def chain_minimizers(info, unitig_name): # unitig_name is just for debug
         if len(chain) > 0:
             assert(chain[-(k-1):] == ms[:k-1])
             chain += ms[k-1:][::]
-            print("ID %s abund %d" % (node_id, abund))
-            abunds.append(abund)
+            if abund_filter:
+                print("ID %s abund %d" % (node_id, abund))
+                abunds.append(abund)
 
         else:
-            print("ID %s abund %d" % (node_id, abund))
-            abunds.append(abund)
+            if abund_filter:
+                print("ID %s abund %d" % (node_id, abund))
+                abunds.append(abund)
             chain = ms[::]
             # small note to myself:
             # gfaview re-uses unitig's across simplifications. i.e. the same origin unitig may be found in two different 'a' lines
@@ -66,10 +72,14 @@ def process_unitig(name, info):
     MIN_ABUNDANCE = 3
     print("new chain",name,"len",len(info),"contents:",info)
     minims, abunds = chain_minimizers(info, name)
-    passed = [x for x in abunds if x > MIN_ABUNDANCE]
-    if len(passed) != 0:
-        print("Passed nodes %d" % len(passed))
+    if abund_filter:
+        passed = [x for x in abunds if x > MIN_ABUNDANCE]
+        if len(passed) != 0:
+            print("Passed nodes %d" % len(passed))
+            output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
+    else:
         output.write("%s\t%s\tPLACEHOLDER\tPLACEHOLDER\tPLACEHOLDER\n"% (name,minims))
+
 
 # read [target.gfa] file
 current_unitig_name = ""
