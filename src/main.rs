@@ -321,25 +321,26 @@ fn main() {
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
     let mut pb = ProgressBar::on(stderr(),file_size);
-
-    let counts_file = match File::open(counts_filename) {
-        Err(why) => panic!("couldn't load counts file: {}", why.description()),
-        Ok(counts_file) => counts_file,
-    }; 
-    let mut br = BufReader::new(counts_file);
-    let mut lmer_counts : HashMap<String, u32> = HashMap::new();
-    loop
-    {
-        let mut line = String::new();
-        let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
-        if let Err(e) = br.read_line(&mut line) { break; }
-        if line.len() == 0                      { break; }
-        let trimmed  = line.trim().to_string();   
-        let vec : Vec<String> = trimmed.split(" ").map(String::from).collect();
-        let kmer = vec[0].to_string();
-        let count = vec[1].parse::<u32>().unwrap();
-        lmer_counts.insert(kmer, count);               
-        new_line(&mut line, &mut br);
+    if !opt.counts.is_none() {
+        let counts_file = match File::open(counts_filename) {
+            Err(why) => panic!("couldn't load counts file: {}", why.description()),
+            Ok(counts_file) => counts_file,
+        }; 
+        let mut br = BufReader::new(counts_file);
+        let mut lmer_counts : HashMap<String, u32> = HashMap::new();
+        loop
+        {
+            let mut line = String::new();
+            let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
+            if let Err(e) = br.read_line(&mut line) { break; }
+            if line.len() == 0                      { break; }
+            let trimmed  = line.trim().to_string();   
+            let vec : Vec<String> = trimmed.split(" ").map(String::from).collect();
+            let kmer = vec[0].to_string();
+            let count = vec[1].parse::<u32>().unwrap();
+            lmer_counts.insert(kmer, count);               
+            new_line(&mut line, &mut br);
+        }
     }
 
     let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
