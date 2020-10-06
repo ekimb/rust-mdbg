@@ -1,6 +1,11 @@
 import sys
 if len(sys.argv) < 3 or ".gfa" not in sys.argv[2] or ".sequences" not in sys.argv[1]:
     exit("input: [origin.sequences] [target.gfa]\n will propagate info from [origin.sequences] to [target].sequences")
+    
+if len(sys.argv) >= 4:
+    MIN_ABUNDANCE = int(sys.argv[3])
+else:
+    MIN_ABUNDANCE = 1
 
 # read [origin.sequences] file
 d_minims = dict()
@@ -71,7 +76,6 @@ output = open(output_filename,'w')
 output.write("# k = %d\n" % k)
 output.write("# l = %d\n" % l)
 def process_unitig(name, info):
-    MIN_ABUNDANCE = int(sys.argv[3])
     #print("new chain",name,"len",len(info),"contents:",info)
     minims, abunds = chain_minimizers(info, name)
     if abund_filter:

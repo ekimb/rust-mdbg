@@ -363,10 +363,10 @@ fn main() {
     let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
     let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); // records position of second minimizer in sequence
     let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
-    let mut ec_file         = ec_reads::new_file(&output_prefix);
-    let mut ec_file_postcor = ec_reads::new_file(&postcor_path);
-    let poa_path = PathBuf::from(format!("{}.poa",output_prefix.to_str().unwrap()));
-    let mut ec_file_poa = ec_reads::new_file(&poa_path);
+    let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
+    let mut ec_file         = ec_reads::new_file(&output_prefix); // reads before correction
+    let mut ec_file_postcor = ec_reads::new_file(&postcor_path);  // reads after correction
+    let mut ec_file_poa     = ec_reads::new_file(&poa_path);      // POA debug info (which reads were recruited per template, I think. Baris can correct/confirm)
     let mut lmer_counts : HashMap<String, u32> = HashMap::new();
     let mut buckets : HashMap<Vec<u64>, Vec<String>> = HashMap::new();
     let mut reads_by_id = HashMap::<String, Read>::new();

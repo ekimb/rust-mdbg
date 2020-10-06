@@ -21,7 +21,8 @@ do
  nextgfa=$input.$i.gfa
  nextseq=$input.$i.sequences
  nextfa=$input.$i.fasta
- gfaview -t -R 100000 -r  -B 1000000 -b -u $curgfa -v 3 > $nextgfa
+ #gfatools gfa -m -t -r -b -u $curgfa -v 3 > $nextgfa
+ gfatools asm -t 10000 -b 10000 -B 10000 -u $curgfa > $nextgfa
  
  if [ -f "$curseq" ]
  then
