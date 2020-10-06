@@ -348,7 +348,7 @@ fn main() {
         }
     }
 
-    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
+    let (mut minimizer_to_int, mut int_to_minimizer, skip) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
@@ -398,7 +398,7 @@ fn main() {
             let mut minim_shift_all = minim_shift_all.clone();
             let mut buckets_all = buckets_all.clone();
             let mut ec_entries = ec_entries.clone();
-            let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, |_| {
+            let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, ref skip, |_| {
             let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
             let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
             let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
@@ -411,7 +411,7 @@ fn main() {
                 let seq_inp = record.seq();
                 let seq_id = record.id();
                 let seq_str = String::from_utf8_lossy(seq_inp);
-                let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer);
+                let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
                 reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
                 if read_obj.transformed.len() > k {
                     read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
