@@ -51,7 +51,6 @@ use std::env;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
-const NUM_THREADS : usize = 48;
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -215,6 +214,9 @@ struct Opt {
     counts: Option<PathBuf>,
     #[structopt(short, long)]
     c: Option<u32>,
+    #[structopt(long)]
+    threads: Option<usize>,
+
 }
 
 
@@ -242,6 +244,7 @@ fn main() {
     let mut reference : bool = false;
     let mut windowed : bool = false;
     let mut counts : bool = false;
+    let mut threads : usize = 8;
     if opt.no_error_correct {
         error_correct = false;
     }
@@ -269,6 +272,7 @@ fn main() {
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.c.is_none() { c = opt.c.unwrap(); } else { println!("Warning: Using default density-based"); }
+    if !opt.threads.is_none() { threads = opt.threads.unwrap(); } else { println!("Warning: Using default num threads (8)"); }
     if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
@@ -393,9 +397,9 @@ fn main() {
     let mut buckets_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<Vec<u64>, Vec<String>>>::new()));
     let mut ec_entries = Arc::new(Mutex::new(HashMap::<usize, Vec<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>>::new()));
 
-    if chunks.len() > NUM_THREADS {chunk_length = chunks.len()/NUM_THREADS+1;}
+    if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
     thread::scope(|s| {
-    let mut guards = Vec::with_capacity(NUM_THREADS);
+    let mut guards = Vec::with_capacity(threads);
         for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
             let mut reads_by_id_all = reads_by_id_all.clone();
             let mut dbg_nodes_all = dbg_nodes_all.clone();
@@ -478,7 +482,7 @@ fn main() {
     let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); 
     let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); 
     let mut buckets : HashMap<Vec<u64>, Vec<String>> = HashMap::new();
-    for thread_num in 0..NUM_THREADS {
+    for thread_num in 0..threads {
         let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
         for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
         let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
@@ -545,9 +549,9 @@ fn main() {
         let mut ec_entries = Arc::new(Mutex::new(HashMap::<usize, Vec<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>>::new()));
         let mut poa_entries = Arc::new(Mutex::new(HashMap::<usize, HashMap<String, Vec<String>>>::new()));
 
-        if chunks.len() > NUM_THREADS {chunk_length = chunks.len()/NUM_THREADS+1;}
+        if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
         thread::scope(|s| {
-            let mut guards = Vec::with_capacity(NUM_THREADS);
+            let mut guards = Vec::with_capacity(threads);
             for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
                 let mut dbg_nodes_all = dbg_nodes_all.clone();
                 let mut kmer_seqs_all = kmer_seqs_all.clone();
@@ -610,7 +614,7 @@ fn main() {
         let mut minim_shift_all = minim_shift_all.lock().unwrap();
         let mut ec_entries = ec_entries.lock().unwrap();
         let mut poa_entries = poa_entries.lock().unwrap(); 
-        for thread_num in 0..NUM_THREADS {
+        for thread_num in 0..threads {
             let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
             for (node, abund) in dbg.into_iter() {
                 if dbg_nodes.contains_key(&node.clone()) {
