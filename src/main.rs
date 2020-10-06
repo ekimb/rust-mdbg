@@ -4,6 +4,9 @@
 use pbr::ProgressBar;
 use bio::io::fasta;
 use std::io::stderr;
+use std::error::Error;
+use std::io::Write;
+use std::io::{BufWriter, BufRead, BufReader};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use petgraph_graphml::GraphMl;
@@ -16,6 +19,7 @@ use closure::closure;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
 use crate::read::Read;
+use std::fs::{File,remove_file};
 use std::collections::HashSet;
 use bio::io::fasta::Record;
 extern crate array_tool;
@@ -47,7 +51,7 @@ use std::env;
 // mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
-const NUM_THREADS : usize = 48;
+const NUM_THREADS : usize = 4;
 const pairs: bool = false;
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
@@ -206,6 +210,8 @@ struct Opt {
     no_base_space: bool,
     #[structopt(long)]
     reference: bool,
+    #[structopt(parse(from_os_str), short, long)]
+    counts: Option<PathBuf>,
 }
 
 
@@ -214,6 +220,7 @@ fn main() {
     let opt = Opt::from_args();      
     let mut uhs : bool = false;
     let mut filename = PathBuf::new();
+    let mut counts_filename = PathBuf::new();
     let mut uhs_filename = String::new();
     let mut output_prefix;
     let mut k: usize = 10;
@@ -271,6 +278,8 @@ fn main() {
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
+    if !opt.counts.is_none() { counts_filename = opt.counts.unwrap().clone(); } 
+
     if !opt.uhs.is_none() { 
         uhs = true;
         uhs_filename = opt.uhs.unwrap(); 
@@ -313,10 +322,34 @@ fn main() {
     let file_size = metadata.len();
     let mut pb = ProgressBar::on(stderr(),file_size);
 
-    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers);
+    let counts_file = match File::open(counts_filename) {
+        Err(why) => panic!("couldn't load counts file: {}", why.description()),
+        Ok(counts_file) => counts_file,
+    }; 
+    let mut br = BufReader::new(counts_file);
+    let mut lmer_counts : HashMap<String, u32> = HashMap::new();
+    loop
+    {
+        let mut line = String::new();
+        let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
+        if let Err(e) = br.read_line(&mut line) { break; }
+        if line.len() == 0                      { break; }
+        let trimmed  = line.trim().to_string();   
+        let vec : Vec<String> = trimmed.split(" ").map(String::from).collect();
+        let kmer = vec[0].to_string();
+        let count = vec[1].parse::<u32>().unwrap();
+        lmer_counts.insert(kmer, count);               
+        new_line(&mut line, &mut br);
+    }
+
+    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
+
+   
+
+
     // create a hash table containing (kmers, count)
     // then will keep only those with count > 1
     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter

@@ -196,12 +196,15 @@ pub fn minhash_window(seq: String, params: &Params, int_to_minimizer : &HashMap<
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
 
-pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize) -> (HashMap<String,u64>, HashMap<u64,String>) {
+pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize, lmer_counts: &HashMap<String, u32>) -> (HashMap<String,u64>, HashMap<u64,String>) {
 
     let l = params.l;
     let density = params.density;
     let mut list_minimizers : Vec<String> = Vec::new();
-    
+    let mut count_vec: Vec<(&String, &u32)> = lmer_counts.into_iter().collect();
+    let mut threshold = 100;
+    let mut frequent_vec: Vec<String> = count_vec.iter().filter(|tup| tup.1 >= &threshold).map(|tup| tup.0.to_string()).collect();
+    println!("{} frequent l-mers skipped", frequent_vec.len());
     // the following code replaces what i had before:
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
@@ -225,7 +228,8 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
-            let hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
+            let mut hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
+            if frequent_vec.contains(&lmer) {hash = u64::max_value();}
             minimizer_to_int.insert(lmer.to_string(),  hash);
             int_to_minimizer.insert(hash,         lmer.to_string());
             minim_idx += 1;
