@@ -211,7 +211,7 @@ struct Opt {
     no_base_space: bool,
     #[structopt(long)]
     reference: bool,
-    #[structopt(parse(from_os_str), short, long)]
+    #[structopt(parse(from_os_str), long)]
     counts: Option<PathBuf>,
     #[structopt(short, long)]
     c: Option<u32>,
