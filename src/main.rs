@@ -321,13 +321,14 @@ fn main() {
     let metadata = fs::metadata(&filename).expect("error opening input file");
     let file_size = metadata.len();
     let mut pb = ProgressBar::on(stderr(),file_size);
+    let mut lmer_counts : HashMap<String, u32> = HashMap::new();
+
     if !opt.counts.is_none() {
         let counts_file = match File::open(counts_filename) {
             Err(why) => panic!("couldn't load counts file: {}", why.description()),
             Ok(counts_file) => counts_file,
         }; 
         let mut br = BufReader::new(counts_file);
-        let mut lmer_counts : HashMap<String, u32> = HashMap::new();
         loop
         {
             let mut line = String::new();
