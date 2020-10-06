@@ -203,8 +203,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     let mut list_minimizers : Vec<String> = Vec::new();
     let mut count_vec: Vec<(&String, &u32)> = lmer_counts.into_iter().collect();
     let mut threshold = 100;
-    let mut frequent_vec: Vec<String> = count_vec.iter().filter(|tup| tup.1 >= &threshold).map(|tup| tup.0.to_string()).collect();
-    println!("{} frequent l-mers skipped", frequent_vec.len());
+    let mut skip : HashMap<String, bool> = HashMap::new();
     // the following code replaces what i had before:
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
@@ -219,23 +218,30 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             let lmer_rev = utils::revcomp(&lmer);
             if lmer > lmer_rev {continue;} // skip if not canonical
        }
-        list_minimizers.push(lmer);
+        list_minimizers.push(lmer.to_string());
+        skip.insert(lmer, false);
     }
-   
+    count_vec.iter().filter(|tup| tup.1 >= &threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
+    
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();
     let mut minim_idx : u32 = 0;
+    let mut skips = 0;
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
             let mut hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
-            if frequent_vec.contains(&lmer) {hash = u64::max_value();}
+            if skip[&lmer] {
+                hash = u64::max_value();
+                skips += 1;
+            }
             minimizer_to_int.insert(lmer.to_string(),  hash);
             int_to_minimizer.insert(hash,         lmer.to_string());
             minim_idx += 1;
         }
     
     println!("selected {} minimizer ID's, {} sequences",int_to_minimizer.len(), minimizer_to_int.len());
+    println!("{} frequent l-mers skipped", skips);
     (minimizer_to_int, int_to_minimizer)
 }
 
