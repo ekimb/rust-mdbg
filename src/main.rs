@@ -237,6 +237,7 @@ fn main() {
     let mut correction_threshold : i32 = 0;
     let mut reference : bool = false;
     let mut windowed : bool = false;
+    let mut counts : bool = false;
     if opt.no_error_correct {
         error_correct = false;
     }
@@ -278,7 +279,10 @@ fn main() {
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
 
     if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
-    if !opt.counts.is_none() { counts_filename = opt.counts.unwrap().clone(); } 
+    if !opt.counts.is_none() { 
+        counts = true;
+        counts_filename = opt.counts.unwrap().clone(); 
+    } 
 
     if !opt.uhs.is_none() { 
         uhs = true;
@@ -323,7 +327,7 @@ fn main() {
     let mut pb = ProgressBar::on(stderr(),file_size);
     let mut lmer_counts : HashMap<String, u32> = HashMap::new();
 
-    if !opt.counts.is_none() {
+    if counts {
         let counts_file = match File::open(counts_filename) {
             Err(why) => panic!("couldn't load counts file: {}", why.description()),
             Ok(counts_file) => counts_file,
