@@ -7,7 +7,7 @@ T=$5
 abund=$6
 threshold=$7
 distance=$8
-w=$9
+C=$9
 touch bench/canu-bench-hifi-$1$2.txt
 cp ../dsk/build/bin/* .
 ./dsk -file /scratch2/ekim/canu_hifi_hpc.fa -kmer-size $L
