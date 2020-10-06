@@ -64,6 +64,7 @@ pub struct Params
     n: usize,
     t: usize,
     w: usize,
+    c: u32,
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
@@ -212,6 +213,8 @@ struct Opt {
     reference: bool,
     #[structopt(parse(from_os_str), short, long)]
     counts: Option<PathBuf>,
+    #[structopt(short, long)]
+    c: Option<u32>,
 }
 
 
@@ -228,6 +231,7 @@ fn main() {
     let mut n: usize = 2;
     let mut t: usize = 0;
     let mut w: usize = 0;
+    let mut c: u32 = 0;
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
@@ -264,6 +268,7 @@ fn main() {
     if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
+    if !opt.c.is_none() { c = opt.c.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
@@ -306,6 +311,7 @@ fn main() {
         n,
         t,
         w,
+        c,
         density,
         size_miniverse,
         average_lmer_count: 0.0,
