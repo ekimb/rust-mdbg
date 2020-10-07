@@ -408,25 +408,10 @@ fn main() {
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
 
-   
-
-
-    // create a hash table containing (kmers, count)
-    // then will keep only those with count > 1
-    let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
-    let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
-    let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
-    let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); // records position of second minimizer in sequence
-    let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
-    let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
-    let mut ec_file         = ec_reads::new_file(&output_prefix); // reads before correction
-    let mut ec_file_postcor = ec_reads::new_file(&postcor_path);  // reads after correction
-    let mut ec_file_poa     = ec_reads::new_file(&poa_path);      // POA debug info (which reads were recruited per template, I think. Baris can correct/confirm)
-    let mut lmer_counts : HashMap<String, u32> = HashMap::new();
-    let mut buckets : HashMap<Vec<u64>, Vec<String>> = HashMap::new();
-    let mut reads_by_id = HashMap::<String, Read>::new();
-    let mut corrected_map = HashMap::<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>::new();
+    // did some l-mer counting before, but not using this anymore
+    //let mut lmer_counts : HashMap<String, u32> = HashMap::new();
     //minimizers::lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
+    
     let mut uhs_kmers = HashMap::<String, u32>::new();
     if params.uhs {
         uhs_kmers = minimizers::uhs_preparation(&mut params, &uhs_filename)
@@ -474,11 +459,6 @@ fn main() {
                         if error_correct
                         {
                             ec_entry.push((read_obj.id.to_string(), read_obj.seq, read_obj.transformed.to_vec(), read_obj.minimizers, read_obj.minimizers_pos));
-                        }
-                    }
-                    if error_correct
-                    {
-                        if read_obj.transformed.len() > k {
                             for i in 0..read_obj.transformed.len()-n+1 {
                                 let mut entry = buckets.entry(read_obj.transformed[i..i+n].to_vec()).or_insert(Vec::<String>::new());
                                 entry.push(read_obj.id.to_string());
@@ -507,11 +487,23 @@ fn main() {
     let mut buckets_all = buckets_all.lock().unwrap();
     let mut ec_entries = ec_entries.lock().unwrap();
     let mut reads_by_id = HashMap::<String, Read>::new();
-    let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new();
-    let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new();
-    let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); 
-    let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); 
+
+    // dbg_nodes is a hash table containing (kmers, count)
+    // it will keep only those with count > 1
+    let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
+    let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
+    let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
+    let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); // records position of second minimizer in sequence
+
+    // correction stuff
     let mut buckets : HashMap<Vec<u64>, Vec<String>> = HashMap::new();
+    let mut corrected_map = HashMap::<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>::new();
+    let postcor_path = PathBuf::from(format!("{}.postcor",output_prefix.to_str().unwrap()));
+    let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
+    let mut ec_file         = ec_reads::new_file(&output_prefix); // reads before correction
+    let mut ec_file_postcor = ec_reads::new_file(&postcor_path);  // reads after correction
+    let mut ec_file_poa     = ec_reads::new_file(&poa_path);      // POA debug info (which reads were recruited per template, I think. Baris can correct/confirm)
+
     for thread_num in 0..threads {
         let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
         for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
