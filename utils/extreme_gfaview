@@ -22,7 +22,7 @@ do
  nextseq=$input.$i.sequences
  nextfa=$input.$i.fasta
  #gfatools gfa -m -t -r -b -u $curgfa -v 3 > $nextgfa
- gfatools asm -t 10000 -b 10000 -B 10000 -u $curgfa > $nextgfa
+ gfatools asm -t -b -u $curgfa > $nextgfa
  
  if [ -f "$curseq" ]
  then
