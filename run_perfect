@@ -10,11 +10,14 @@ distance=2
 C=$8
 TH=$9
 touch bench/perfect-bench-$1$2.txt
+cp ../dsk/build/bin/* .
+./dsk -file /scratch2/ekim/dmel-100kb-100x.fa -kmer-size $L
+./dsk2ascii -file dmel-100kb-100x.h5 -out perfect.ascii.txt
 echo "Running reference..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref.fa -k $K -l $L -n $N -t 1 --density $DENSITY --threads $TH --minabund 1 --levenshtein-minimizers 0 --prefix perfect_ref --reference --no-error-correct 
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref.fa -k $K -l $L -n $N -t 1 --density $DENSITY --threads $TH --minabund 1 --counts perfect.ascii.txt --levenshtein-minimizers 0 --prefix perfect_ref --reference --no-error-correct 
 start=`date +%s`
 echo "Running reads..."
-command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel-100kb-100x.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix perfect 2>&1 | tee -a bench/perfect-bench-$1$2.txt
+command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel-100kb-100x.fa -k $K -l $L -n $N -t $T -c $C--threads $TH --counts perfect.ascii.txt --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix perfect 2>&1 | tee -a bench/perfect-bench-$1$2.txt
 end=`date +%s`
 echo "Running evaluation..."
 echo "Comparing k-mers..."
