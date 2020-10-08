@@ -196,7 +196,7 @@ impl Read {
                 }
             }   
         }
-        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < 0.1).collect();
+        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < 0.05).collect();
         bucket_reads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         for (read, dist) in bucket_reads.iter() {
             let transformed = &read.transformed;
