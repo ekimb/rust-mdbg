@@ -26,8 +26,16 @@ use petgraph::algo::astar;
 use petgraph::visit::Dfs;
 use petgraph::visit::EdgeRef;
 
+// unused code, is now ported to read.poa_correct()
+pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u64, String>, 
+                     read_to_seq_pos: &mut HashMap<Vec<u64>, (String, Vec<u32>)>, 
+                     pairwise_jaccard : &mut HashMap<(&Vec<u64>, &Vec<u64>), f64>, 
+                     ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, 
+                     mut corrected : &mut HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)>, 
+                     read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, 
+                     params : &Params) 
+    -> (String, Vec<String>, Vec<u32>, Vec<u64>) {
 
-pub fn query_buckets(seq_mins: &Vec<Vec<u64>>, int_to_minimizer: &mut HashMap<u64, String>, read_to_seq_pos: &mut HashMap<Vec<u64>, (String, Vec<u32>)>, pairwise_jaccard : &mut HashMap<(&Vec<u64>, &Vec<u64>), f64>, ec_file_poa: &mut BufWriter<File>, read_ids : &mut HashMap<Vec<u64>, String>, mut corrected : &mut HashMap<Vec<u64>, (String, Vec<String>, Vec<u32>, Vec<u64>)>, read_transformed : &Vec<u64>, buckets : &mut HashMap<Vec<u64>, Vec<Vec<u64>>>, params : &Params) -> (String, Vec<String>, Vec<u32>, Vec<u64>) {
     let n = params.n;
     let k = params.k;
     let l = params.l;
