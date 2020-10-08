@@ -134,7 +134,8 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
     for node in gr.node_indices() {
         let idx = node.index();
         let seq = &kmer_seqs.get(nodes_vect[idx]).unwrap_or(&empty_str);
-        let s_line = format!("S\t{}\t{}\tLN:i:{}\n",idx,seq,seq.len());
+        let abundance = dbg_nodes[nodes_vect[idx]];
+        let s_line = format!("S\t{}\t{}\tLN:i:{}\tKC:i:{}\n",idx,seq,seq.len(),abundance);
         write!(file, "{}", s_line).expect("error writing s_line");
        // let s_line = format!("S\t{}\t{}\t{}\n",idx,seq.len(),seq);
        // write!(file, "{}", s_line).expect("error writing s_line");
