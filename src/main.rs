@@ -595,6 +595,7 @@ fn main() {
                                 read_obj.query(&int_to_minimizer, &mut poa_map, &buckets, &params, &mut corrected_map, &reads_by_id);
                             }
                             else {
+                                continue;
                                 read_obj.seq = corrected_map[&read_obj.id].0.to_string();
                                 read_obj.minimizers = corrected_map[&read_obj.id].1.to_vec();
                                 read_obj.minimizers_pos = corrected_map[&read_obj.id].2.to_vec();
