@@ -206,7 +206,7 @@ impl Read {
                 pair_map.insert((transformed[i], transformed[i+1]), seq[pos[i] as usize ..pos[i+1] as usize].to_string());
             }
         }
-        let mut max_len = 30;
+        let mut max_len = read_transformed.len()-n+1;
         if bucket_reads.len() > max_len {bucket_reads = bucket_reads[0..max_len].to_vec();}
         //if bucket_reads.len() == 0 {println!("Read has no neighbors");}
         for i in 0..bucket_reads.len() {
