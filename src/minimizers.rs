@@ -203,6 +203,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     let mut list_minimizers : Vec<String> = Vec::new();
     let mut count_vec: Vec<(&String, &u32)> = lmer_counts.into_iter().collect();
     let mut threshold = params.c;
+    let mut min_threshold = 706;
     let mut skip : HashMap<String, bool> = HashMap::new();
     // the following code replaces what i had before:
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
