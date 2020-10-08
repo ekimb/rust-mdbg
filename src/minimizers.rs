@@ -222,7 +222,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         list_minimizers.push(lmer.to_string());
         skip.insert(lmer, false);
     }
-    count_vec.iter().filter(|tup| tup.1 >= &threshold || tup.1 <= min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
+    count_vec.iter().filter(|tup| tup.1 >= &threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
     
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();
