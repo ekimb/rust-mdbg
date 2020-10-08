@@ -14,7 +14,7 @@ cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- dmel_chr4.fa -k 
 start=`date +%s`
 echo "Running reads..."
 
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund $abund --correction-threshold $threshold --distance $distance --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05  #--counts reads-0.05.ascii.txt
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund $abund --correction-threshold $threshold --distance $distance --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05 --restart-from-postcor  #--counts reads-0.05.ascii.txt
 #cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- reads-0.00.fa -k $K -l $L -n $N -t $T --density $DENSITY --minabund $abund --no-error-correct --prefix dmel_chr4_reads-0.05
 
 end=`date +%s`
