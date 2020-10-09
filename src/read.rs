@@ -174,7 +174,7 @@ impl Read {
         let mut read_transformed = &self.transformed;
         let mut seq_id = &self.id;
         let mut seq_str = &self.seq;
-        let mut scoring = poa::Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
+        let mut scoring = poa::Scoring::new(-1, -1, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let mut aligner = poa::Aligner::new(scoring, &read_transformed);
         let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
         let mut bucket_reads = Vec::<&Read>::new();

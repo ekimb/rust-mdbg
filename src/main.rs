@@ -35,17 +35,12 @@ use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use editdistancewf as wf;
 mod utils;
-mod banded;
 mod gfa_output;
 mod seq_output;
 mod minimizers;
 mod ec_reads;
 mod kmer_vec;
-mod sparse;
-mod poa_new;
-mod pairwise;
 mod poa;
-mod poa_mod;
 mod read;
 use std::env;
 // mod kmer_array; // not working yet
