@@ -102,8 +102,12 @@ impl Read {
         for i in 0..inp_seq.len()-l+1 {
             let mut lmer = &inp_seq[i..i+l];
             let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
-            let hash = ntc64(lmer.as_bytes(), 0, l);
-            if (!lmer.contains("N")) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) && !skip[&lmer.to_string()] {
+            let mut hash = ntc64(lmer.as_bytes(), 0, l);
+            hash = (hash as f64) / (u64::max_value() as f64);
+            if skip[&lmer.to_string()] {
+                hash = hash.sqrt().sqrt().sqrt();
+            }
+            if (!lmer.contains("N")) && (hash as f64) <= (density/(l as f64)) {
                 read_minimizers.push(lmer.to_string());
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
