@@ -170,6 +170,9 @@ impl Read {
     
     //pub fn write_to_poa
     pub fn poa_correct(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
+        // poa scoring parameters
+        let mut scoring = poa::Scoring::new(-1, -1, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
+
         let n = params.n;
         let k = params.k;
         let l = params.l;
@@ -178,7 +181,6 @@ impl Read {
         let mut read_transformed = &self.transformed;
         let mut seq_id = &self.id;
         let mut seq_str = &self.seq;
-        let mut scoring = poa::Scoring::new(-1, -1, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let mut aligner = poa::Aligner::new(scoring, &read_transformed);
         let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
         let mut bucket_reads = Vec::<&Read>::new();
