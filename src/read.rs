@@ -173,6 +173,7 @@ impl Read {
     pub fn poa_correct(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
         // poa scoring parameters
         let mut scoring = poa::Scoring::new(-1, -1, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
+        let dist_threshold = 0.15;
 
         let n = params.n;
         let k = params.k;
@@ -203,7 +204,7 @@ impl Read {
                 }
             }   
         }
-        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < 0.15).collect();
+        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < dist_threshold).collect();
         bucket_reads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         for (read, dist) in bucket_reads.iter() {
             let transformed = &read.transformed;

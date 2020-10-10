@@ -32,12 +32,14 @@ number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-k10-p
 
 in reads with erro rate 0.02:
 
-# python ../rust-mhdbg/utils/compare_kmers.py genomegraph-0.02-k10-p0.01.sequences graph-0.02-k10-p0.01.sequences:w
+# python ../rust-mhdbg/utils/compare_kmers.py genomegraph-0.02-k10-p0.01.sequences graph-0.02-k10-p0.01.sequences
 15244 kmers in graph-0.02-k10-p0.01.sequences
 number of kmers from genomegraph-k10-p0.01-l12.sequences that are in graph-0.02-k10-p0.01.sequences 8951 (68.08)% , 4196 are not
 
 bottom line: with k=10, couldn't retrieve enough solid (minabund>=2) kmers (at read error rate is 2%)
 */
+
+// computes distance between two reads which are already in minimizer-space
 pub fn dist(temp: &Read, other: &Read, params: &Params) -> f64 {
     let s1_set: HashSet<_> = HashSet::from_iter(temp.transformed.iter());
     let s2_set: HashSet<_> = HashSet::from_iter(other.transformed.iter());

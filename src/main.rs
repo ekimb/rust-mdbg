@@ -71,31 +71,6 @@ pub struct Params
     uhs: bool,
     output_base_space: bool,
 }
-pub fn dist(s1: &Vec<u64>, s2: &Vec<u64>, params: &Params) -> f64 {
-    let s1_set: HashSet<_> = HashSet::from_iter(s1.iter());
-    let s2_set: HashSet<_> = HashSet::from_iter(s2.iter());
-    let inter: HashSet<_> = s1_set.intersection(&s2_set).collect();
-    let union: HashSet<_> = s1_set.union(&s2_set).collect();
-    let distance = params.distance;
-    match distance {
-        0 => {
-            return 1.0 - ((inter.len() as f64) / (union.len() as f64))
-        }
-        1 => {
-            return 1.0 - ((inter.len() as f64) / (s1.len() as f64))
-        }
-        2 => {
-            let jaccard = (inter.len() as f64) / (union.len() as f64);
-            let mash: f64 = -1.0 * ((2.0 * jaccard) / (1.0 + jaccard)).ln() / params.l as f64;
-            return mash
-        }
-        _ => {
-            let jaccard = (inter.len() as f64) / (union.len() as f64);
-            let mash: f64 = (-1.0 / params.k as f64) * ((2.0 * jaccard) / (1.0 + jaccard)).ln();
-            return mash
-        }
-    }
-}
 
 fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, minimizer_to_int: &HashMap<String, u64>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
