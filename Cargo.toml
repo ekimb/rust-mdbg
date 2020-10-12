@@ -29,6 +29,7 @@ rand_core = "0.5.1"
 closure = "0.3.0"
 editdistancewf = "0.1.0"
 libc = "0.2.77"
+bio-types = "0.7.0" # for my reimplementation of needleman-wunsch, bio_types is called by bio too
 
 [profile.dev]
 opt-level = 3

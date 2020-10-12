@@ -10,6 +10,7 @@ use super::ec_reads;
 use super::utils;
 use super::poa;
 use std::io::BufWriter;
+use super::utils::pretty_minvec;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
 #[derive(Clone)]
 pub struct Read {
@@ -171,9 +172,16 @@ impl Read {
     
     //pub fn write_to_poa
     pub fn poa_correct(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
-        // poa scoring parameters
-        let mut scoring = poa::Scoring::new(-1, -1, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let dist_threshold = 0.15;
+
+	// poa alignment scoring parameters
+	let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
+        let scoring = poa::Scoring::new(-1, -1, score);
+
+        // other alignment parameters
+        let dist_threshold = 0.15; // mash distance cut-off for read recruitment
+        let top_X_aligned_reads = 0; // get the 10 best read alignments per template
+        let mut poa_global_min_score = std::i32::MIN; // discard all alignments below that score (discarded when top_X_aligned_read > 0)
+        let debug = params.debug;
 
         let n = params.n;
         let k = params.k;
@@ -183,11 +191,19 @@ impl Read {
         let mut read_transformed = &self.transformed;
         let mut seq_id = &self.id;
         let mut seq_str = &self.seq;
-        let mut aligner = poa::Aligner::new(scoring, &read_transformed);
         let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
         let mut bucket_reads = Vec::<&Read>::new();
         let mut poa_ids = Vec::<String>::new();
         let mut pair_map : HashMap<(u64, u64), String> = HashMap::new();
+        let mut aligner = poa::Aligner::new(scoring, &read_transformed);
+
+
+	// yet unsupported semiglobal alignment by poa
+	//	let scoring = Scoring::new( -1, -1, &score) // Gap open, gap extend and match score function
+	//    .xclip(MIN_SCORE) // Clipping penalty for x set to 'negative infinity', hence global in x
+	//    .yclip(0); // Clipping penalty for y set to 0, hence local in y
+        //let mut aligner = poa::Aligner::new(scoring, &read_transformed);
+
         for i in 0..read_transformed.len()-1 {
             pair_map.insert((read_transformed[i], read_transformed[i+1]), seq_str[read_minimizers_pos[i] as usize..read_minimizers_pos[i+1] as usize].to_string());
         }
@@ -214,16 +230,66 @@ impl Read {
                 pair_map.insert((transformed[i], transformed[i+1]), seq[pos[i] as usize ..pos[i+1] as usize].to_string());
             }
         }
-        let mut max_len = read_transformed.len()-n+1;
+        let len_before_poa = read_transformed.len();
+        let max_len = read_transformed.len()-n+1;
         if bucket_reads.len() > max_len {bucket_reads = bucket_reads[0..max_len].to_vec();}
         //if bucket_reads.len() == 0 {println!("Read has no neighbors");}
+
+        // do a first pass aligning reads to the template to get only the top X best scoring reads
+        // TODO this code isn't up to date as it only aligns in forward direction
+        /*
+        let mut alignment_scores = Vec::new();
+        if top_X_aligned_reads > 0 
+        {
+            for i in 0..bucket_reads.len() {
+                aligner.global(&bucket_reads[i].0.transformed);
+                let score = aligner.alignment().score;
+                alignment_scores.push((score,i));
+            }
+            // sort alignment scores decreasing
+            alignment_scores.sort_by(|a, b| b.cmp(a));
+            //if debug { println!("read alignment scores: {:?}",alignment_scores); }
+
+            // threshold becomes the X-th highest alignment
+            if alignment_scores.len() > top_X_aligned_reads
+            {
+                poa_global_min_score = alignment_scores[top_X_aligned_reads].0;
+            }
+            else{
+                poa_global_min_score = std::i32::MIN;
+            }
+        }
+        */
         for i in 0..bucket_reads.len() {
             poa_ids.push(bucket_reads[i].0.id.to_string());
+            // don't know how to save alignments so i'll just waste time and recompute the best
+            // scoring alignment.
+            // it's a TODO optimization
             aligner.global(&bucket_reads[i].0.transformed);
-            aligner.add_to_graph();
+            let fwd_score = aligner.alignment().score;
+            let mut rev_read = bucket_reads[i].0.transformed.clone();
+            rev_read.reverse();
+            aligner.global(&rev_read);
+            let bwd_score = aligner.alignment().score;
+            let mut aln_ori = "";
+            if std::cmp::max(fwd_score,bwd_score) >= poa_global_min_score { 
+               if fwd_score > bwd_score { 
+                    aligner.global(&bucket_reads[i].0.transformed);
+                    aln_ori = "fwd";
+                } else { 
+                    aligner.global(&rev_read);
+                    aln_ori = "bwd";
+                }
+                aligner.add_to_graph(); 
+            }
+            if debug { println!("--- read {} alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aln_ori,aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
+            //if debug { aligner.traceback.print(aligner.graph(), bucket_reads[i].0.transformed.clone()); } // prints a confusing traceback (and crashes)
         }
         let mut consensus = aligner.poa.consensus(&params);
         let consensus_read = consensus.iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
+        let len_after_poa  = consensus_read.len();
+        if debug { println!("len of template before/after poa: {} / {} (ID: {})", len_before_poa, len_after_poa, seq_id);}
+        aligner.consensus_boundary(&consensus, &read_transformed, debug);
         let mut consensus_str = String::new();
         let mut pos_idx = 0;
         let mut consensus_pos = Vec::<usize>::new();

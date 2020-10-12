@@ -26,12 +26,13 @@ if [[ "$*" == *--only-compact* ]]
 then
         GFAVIEW_PARAMS="-u"
 else
-        GFAVIEW_PARAMS="-b -t -r -u"
+        GFAVIEW_PARAMS="-t -b -b -b -b -r -u"
 fi
 
 #gfaview $base.gfa -u > $base.unitigs.gfa
 #gfaview $base.gfa -t -u > $base.notips.gfa
-gfaview $base.gfa                 $GFAVIEW_PARAMS > $base.notips.nobubbles.gfa
+#gfaview $base.gfa                 $GFAVIEW_PARAMS > $base.notips.nobubbles.gfa
+gfatools asm $base.gfa                 -t 10000 -b 100000 -b 100000 -r 100000 -b 100000 -B 100000 -b 100000 -b 100000  -u > $base.notips.nobubbles.gfa
 #gfaview $base.notips.nobubbles.gfa $GFAVIEW_PARAMS > $base.notips.nobubbles.again.gfa  #FIXME there is a loss of info, it seems, when doing compaction twice. It's not an idempotent operation in gfaview?! removing it until i understand what's going on. To restore: just uncomment all commented #FIXME's and remove all uncommented FIXME's
 #echo ~/Desktop/Bandage load $base.notips.nobubbles.again.gfa 
 

@@ -916,6 +916,7 @@ dependencies = [
  "array_tool",
  "arrayvec",
  "bio",
+ "bio-types",
  "closure",
  "crossbeam-utils",
  "editdistancewf",

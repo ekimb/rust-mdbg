@@ -148,6 +148,11 @@ use petgraph::visit::Dfs;
 
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 
+// for Smith-Waterman
+use super::pairwise;
+
+use super::utils::pretty_minvec;
+
 pub type POAGraph = Graph<u64, i32, Directed, usize>;
 
 // Unlike with a total order we may have arbitrary successors in the
@@ -625,6 +630,32 @@ impl<F: MatchFunc> Aligner<F> {
     pub fn graph(&self) -> &POAGraph {
         &self.poa.graph
     }
+
+    /// print a pretty alignment of last query to the graph
+    pub fn print_aln(&mut self) ->String {
+        let alignment = self.traceback.alignment();
+        self.poa.pretty(&alignment, &self.query.to_vec())
+    }
+
+    /// gets template boundary in consensus
+    /// Perform Smith-Waterman on the consensus with the original template
+    /// to determine the boundary of the template on the consensus
+    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, orig: &Vec<u64>, debug: bool)
+    {
+        let x = &orig[..];
+        let y = & cns[..];
+        let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
+        let mut regular_aligner = pairwise::Aligner::with_capacity(x.len(), y.len(), -1, -1, &score);
+        let alignment = regular_aligner.semiglobal(x, y);
+        if debug
+        {
+            println!("alignment: {:?}",alignment.operations);
+            println!("consensus    : {:?}",pretty_minvec(cns));
+            println!("orig template: {:?}",pretty_minvec(orig));
+        }
+    }
+ 
+
 }
 
 /// A partially ordered alignment graph
@@ -728,7 +759,7 @@ impl<F: MatchFunc> Poa<F> {
                                 TracebackCell {
                                     score: traceback.get(i_p, j - 1).score
                                         + self.scoring.match_fn.score(r, *q),
-                                    op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
+                                        op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
                                 },
                                 TracebackCell {
                                     score: traceback.get(i_p, j).score + self.scoring.gap_open,
@@ -887,15 +918,75 @@ impl<F: MatchFunc> Poa<F> {
                     i += 1;
                 }
                 AlignmentOperation::Ins(Some(_)) => {
-                        let node = self.graph.add_node(seq[i]);
-                        self.graph.add_edge(prev, node, 1);
-                        let edge = self.graph.find_edge(prev, node).unwrap();
-                        prev = node;
-                        i += 1;
+                    let node = self.graph.add_node(seq[i]);
+                    self.graph.add_edge(prev, node, 1);
+                    let edge = self.graph.find_edge(prev, node).unwrap();
+                    prev = node;
+                    i += 1;
                 }
                 AlignmentOperation::Del(_) => {} // we should only have to skip over deleted nodes
             }
         }
+    }
+
+    /// Return a pretty formatted alignment, but it is a very rough approximation (we return a linear
+    /// representation but keep in mind the template is a graph)
+    /// interpretation:
+    /// M = match, X mismatch, '=' = hmm I don't quite know but it's some sort of match
+    /// D = deletion, I = insertion
+    pub fn pretty(&self, aln: &Alignment, seq: &Vec<u64>) -> String{
+        let mut x_pretty = String::new();
+        let mut y_pretty = String::new();
+        let mut inb_pretty = String::new();
+
+        if !aln.operations.is_empty() {
+            let mut x_add = String::new();
+            let mut y_add = String::new();
+            let mut inb_add = String::new();
+
+            let mut i: usize = 0;
+            for op in aln.operations.iter() {
+                match op {
+                    AlignmentOperation::Match(None) => {
+                        x_add   = String::from("=");//&x[i];
+                        inb_add = String::from("|");
+                        y_add   = String::from("=");//seq[i].to_string().clone();
+                        i += 1;
+                    },
+                    AlignmentOperation::Match(Some((_, p))) => {
+                        if (seq[i] != self.graph.raw_nodes()[*p].weight) {
+                            x_add   = String::from("X");//x[i];
+                            inb_add = String::from("_");
+                            y_add   = String::from("X");//seq[i].to_string().clone();
+                        }
+                        else
+                        {
+                            x_add   = String::from("M");//x[i];
+                            inb_add = String::from("_");
+                            y_add   = String::from("M");//seq[i].to_string().clone();
+                        }
+                        i += 1;
+                    },
+                    AlignmentOperation::Del(_)=> {
+                        x_add   = String::from("-");
+                        inb_add = String::from("_");
+                        y_add   = String::from("D");//seq[i].to_string().clone();
+                    },
+                    AlignmentOperation::Ins(_) => {
+                        x_add   = String::from("I");//x[i];
+                        inb_add = String::from("_");
+                        y_add   = String::from("-");
+                        i += 1;
+                    },
+                }
+
+                x_pretty.push_str(&x_add);
+                inb_pretty.push_str(&inb_add);
+                y_pretty.push_str(&y_add);
+            }
+        }
+        format!("{}\n{}\n{}", x_pretty, inb_pretty, y_pretty)
+
     }
 }
 

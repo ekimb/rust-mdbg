@@ -42,6 +42,7 @@ mod ec_reads;
 mod kmer_vec;
 mod poa;
 mod read;
+mod pairwise;
 use std::env;
 // mod kmer_array; // not working yet
 
@@ -70,6 +71,7 @@ pub struct Params
     reference: bool,
     uhs: bool,
     output_base_space: bool,
+    debug: bool,
 }
 
 fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, minimizer_to_int: &HashMap<String, u64>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
@@ -346,6 +348,7 @@ fn main() {
         reference,
         uhs,
         output_base_space,
+        debug,
     };
     // init some useful objects
     let mut nb_minimizers_per_read : f64 = 0.0;
