@@ -296,7 +296,9 @@ impl Read {
             if !pair_map.contains_key(&(consensus[i], consensus[i+1])) {
                 let alts : Vec<String> = pair_map.clone().into_iter().filter(|(a, b)| a.0 == consensus[i]).map(|tuple| tuple.1).collect();
                 insert = int_to_minimizer[&consensus[i]].to_string();
-                for _ in 0..alts[0].len() {insert.push_str("N")};
+                if alts.len() > 0 {
+                    for _ in 0..alts[0].len() {insert.push_str("N")};
+                }
             }
             else { insert = pair_map[&(consensus[i], consensus[i+1])].to_string();}
             consensus_str.push_str(&insert);

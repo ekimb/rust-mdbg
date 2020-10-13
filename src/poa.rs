@@ -1170,7 +1170,6 @@ impl<F: MatchFunc> Poa<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::alignment::pairwise::Scoring;
     use petgraph::graph::NodeIndex;
 
     #[test]
@@ -1178,7 +1177,8 @@ mod tests {
         // sanity check for String -> Graph
 
         let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let poa = Poa::from_string(scoring, b"123456789");
+        let seq = vec![1,2,3,4,5,6,7,8,9]; 
+        let mut poa = Poa::from_string(scoring, &seq);
         assert!(poa.graph.is_directed());
         assert_eq!(poa.graph.node_count(), 9);
         assert_eq!(poa.graph.edge_count(), 8);
@@ -1190,15 +1190,31 @@ mod tests {
         // examples from the POA paper
         //let _seq1 = b"PKMIVRPQKNETV";
         //let _seq2 = b"THKMLVRNETIM";
-        let poa = Poa::from_string(scoring, b"GATTACA");
-        let alignment = poa.global(b"GCATGCU").alignment();
+        let gattaca = vec![3,1,4,4,1,2,1];
+        
+        let mut poa = Poa::from_string(scoring, &gattaca);
+        let GCATGCU = vec![3,2,1,4,3,2,5];
+        let alignment = poa.global(&GCATGCU).alignment();
         assert_eq!(alignment.score, 0);
 
-        let alignment = poa.global(b"GCATGCUx").alignment();
+        let GCATGCUx = vec![3,2,1,4,3,2,5,6];
+        let alignment = poa.global(&GCATGCUx).alignment();
         assert_eq!(alignment.score, -1);
 
-        let alignment = poa.global(b"xCATGCU").alignment();
+
+        let xCATGCU= vec![6,2,1,4,3,2,5];
+        let alignment = poa.global(&xCATGCU).alignment();
         assert_eq!(alignment.score, -2);
+    }
+
+    fn seq_to_vec(seq: &[u8]) -> Vec<u64>
+    {
+        let mut res = Vec::new();
+        for c in seq.iter()
+        {
+            res.push(match *c as char { 'A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 5, 'x' => 6,_ => 0});
+        }
+        res
     }
 
     #[test]
@@ -1206,15 +1222,15 @@ mod tests {
         let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
         let seq1 = b"TTTTT";
         let seq2 = b"TTATT";
-        let mut poa = Poa::from_string(scoring, seq1);
+        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
         let head: NodeIndex<usize> = NodeIndex::new(1);
         let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(b'A');
-        let node2 = poa.graph.add_node(b'A');
+        let node1 = poa.graph.add_node(1);
+        let node2 = poa.graph.add_node(1);
         poa.graph.add_edge(head, node1, 1);
         poa.graph.add_edge(node1, node2, 1);
         poa.graph.add_edge(node2, tail, 1);
-        let alignment = poa.global(seq2).alignment();
+        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
         assert_eq!(alignment.score, 3);
     }
 
@@ -1224,16 +1240,16 @@ mod tests {
 
         let seq1 = b"TTCCTTAA";
         let seq2 = b"TTTTGGAA";
-        let mut poa = Poa::from_string(scoring, seq1);
+        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
         let head: NodeIndex<usize> = NodeIndex::new(1);
         let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(b'A');
-        let node2 = poa.graph.add_node(b'A');
+        let node1 = poa.graph.add_node(1);
+        let node2 = poa.graph.add_node(1);
         poa.graph.add_edge(head, node1, 1);
         poa.graph.add_edge(node1, node2, 1);
         poa.graph.add_edge(node2, tail, 1);
-        let alignment = poa.global(seq2).alignment();
-        poa.add_alignment(&alignment, seq2);
+        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
+        poa.add_alignment(&alignment, seq_to_vec(seq2));
         assert_eq!(poa.graph.edge_count(), 14);
         assert!(poa
             .graph
@@ -1250,20 +1266,20 @@ mod tests {
         let seq1 = b"TTCCGGTTTAA";
         let seq2 = b"TTGGTATGGGAA";
         let seq3 = b"TTGGTTTGCGAA";
-        let mut poa = Poa::from_string(scoring, seq1);
+        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
         let head: NodeIndex<usize> = NodeIndex::new(1);
         let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(b'C');
-        let node2 = poa.graph.add_node(b'C');
-        let node3 = poa.graph.add_node(b'C');
+        let node1 = poa.graph.add_node(2);
+        let node2 = poa.graph.add_node(2);
+        let node3 = poa.graph.add_node(2);
         poa.graph.add_edge(head, node1, 1);
         poa.graph.add_edge(node1, node2, 1);
         poa.graph.add_edge(node2, node3, 1);
         poa.graph.add_edge(node3, tail, 1);
-        let alignment = poa.global(seq2).alignment();
+        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
         assert_eq!(alignment.score, 2);
-        poa.add_alignment(&alignment, seq2);
-        let alignment2 = poa.global(seq3).alignment();
+        poa.add_alignment(&alignment, seq_to_vec(seq2));
+        let alignment2 = poa.global(&seq_to_vec(seq3)).alignment();
 
         assert_eq!(alignment2.score, 10);
     }
@@ -1271,11 +1287,11 @@ mod tests {
     #[test]
     fn test_poa_method_chaining() {
         let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let mut aligner = Aligner::new(scoring, b"TTCCGGTTTAA");
+        let mut aligner = Aligner::new(scoring, &seq_to_vec(b"TTCCGGTTTAA"));
         aligner
-            .global(b"TTGGTATGGGAA")
+            .global(&seq_to_vec(b"TTGGTATGGGAA"))
             .add_to_graph()
-            .global(b"TTGGTTTGCGAA")
+            .global(&seq_to_vec(b"TTGGTTTGCGAA"))
             .add_to_graph();
         assert_eq!(aligner.alignment().score, 10);
     }
