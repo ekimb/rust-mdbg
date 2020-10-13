@@ -549,7 +549,10 @@ impl Traceback {
 
         // Now backtrack through the matrix to construct an optimal path
         let mut i = self.last.index() + 1;
-        let mut j = self.cols;
+        let mut j_0 = self.cols;
+
+        //semi-global
+        let mut j = (0..j_0).map(|x| (x, self.matrix[i][x].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().0;
 
         while i > 0 && j > 0 {
             // push operation and edge corresponding to (one of the) optimal
@@ -629,7 +632,7 @@ impl<F: MatchFunc> Aligner<F> {
     /// Semiglobally align a given query against the graph.
     pub fn semiglobal(&mut self, query: &Vec<u64>) -> &mut Self {
         self.query = query.to_vec();
-        //self.traceback = self.poa.semiglobal(&query); // not ready
+        self.traceback = self.poa.semiglobal(&query); // not ready
         self
     }
 
@@ -848,7 +851,7 @@ impl<F: MatchFunc> Poa<F> {
         traceback
     }
 
-    /* code not ready yet. initialization is okay, but the score update + the traceback stopping condition (not in this function) aren't changed
+    // code not ready yet. initialization is okay, but the score update + the traceback stopping condition (not in this function) aren't changed
      
     ///  semi-global alignment 
     ///
@@ -867,17 +870,17 @@ impl<F: MatchFunc> Poa<F> {
             .matrix
             .iter_mut()
             .enumerate()
-            .take(self.rows + 1)
+            .take(traceback.rows + 1)
             .skip(1)
         {
             row[0] = TracebackCell {
-                score: 0 //semi-global, we may start anywhere in the graph
+                score: 0, //semi-global, we may start anywhere in the graph
                 op: AlignmentOperation::Del(None),
             };
         }
-        for j in 1..=self.cols {
-            self.matrix[0][j] = TracebackCell {
-                score: (j as i32) * gap_open, // but if we consume j chars of the query, we pay j gap penalties
+        for j in 1..=traceback.cols {
+            traceback.matrix[0][j] = TracebackCell {
+                score: (j as i32) * self.scoring.gap_open, // but if we consume j chars of the query, we pay j gap penalties
                 op: AlignmentOperation::Ins(None),
             };
         }
@@ -948,7 +951,7 @@ impl<F: MatchFunc> Poa<F> {
 
         traceback
     }
-       */
+       
 
 
     /// Experimental: return sequence of traversed edges

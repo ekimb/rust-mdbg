@@ -260,7 +260,7 @@ impl Read {
             // don't know how to save alignments so i'll just waste time and recompute the best
             // scoring alignment.
             // it's a TODO optimization
-            aligner.global(&bucket_reads[i].0.transformed);
+            aligner.semiglobal(&bucket_reads[i].0.transformed);
             let fwd_score = aligner.alignment().score;
             if debug { println!("--- read fwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
             let mut rev_read = bucket_reads[i].0.transformed.clone();
