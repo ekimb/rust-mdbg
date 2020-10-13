@@ -920,6 +920,7 @@ impl<F: MatchFunc> Poa<F> {
                     };
                     for prev_node in &prevs {
                         let i_p: usize = prev_node.index() + 1; // index of previous node
+                        let gap_penalty = self.determine_gap_penalty(traceback.get(i_p, j), AlignmentOperation::Del(Some((i_p - 1, i))));
                         max_cell = max(
                             max_cell,
                             max(
@@ -929,7 +930,7 @@ impl<F: MatchFunc> Poa<F> {
                                         op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
                                 },
                                 TracebackCell {
-                                    score: traceback.get(i_p, j).score + self.scoring.gap_open,
+                                    score: traceback.get(i_p, j).score + gap_penalty,
                                     op: AlignmentOperation::Del(Some((i_p - 1, i))),
                                 },
                             ),
@@ -938,10 +939,11 @@ impl<F: MatchFunc> Poa<F> {
                     max_cell
                 };
 
+                let gap_penalty = self.determine_gap_penalty(traceback.get(i, j-1),AlignmentOperation::Ins(Some(i - 1)));
                 let score = max(
                     max_cell,
                     TracebackCell {
-                        score: traceback.get(i, j - 1).score + self.scoring.gap_open,
+                        score: traceback.get(i, j - 1).score + gap_penalty,
                         op: AlignmentOperation::Ins(Some(i - 1)),
                     },
                 );
