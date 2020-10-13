@@ -176,11 +176,13 @@ impl Read {
 	// poa alignment scoring parameters
 	let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
         let scoring = poa::Scoring::new(-1, -1, score);
+        //let scoring = poa::Scoring::new(-1, 0, score); // the hope is that a 0 gap extend penalty somehow approximates semiglobal, but that's not quite true
 
         // other alignment parameters
         let dist_threshold = 0.15; // mash distance cut-off for read recruitment
         let top_X_aligned_reads = 0; // get the 10 best read alignments per template
         let mut poa_global_min_score = std::i32::MIN; // discard all alignments below that score (discarded when top_X_aligned_read > 0)
+        //let mut poa_global_min_score = -10; // harsh
         let debug = params.debug;
 
         let n = params.n;
@@ -196,13 +198,6 @@ impl Read {
         let mut poa_ids = Vec::<String>::new();
         let mut pair_map : HashMap<(u64, u64), String> = HashMap::new();
         let mut aligner = poa::Aligner::new(scoring, &read_transformed);
-
-
-	// yet unsupported semiglobal alignment by poa
-	//	let scoring = Scoring::new( -1, -1, &score) // Gap open, gap extend and match score function
-	//    .xclip(MIN_SCORE) // Clipping penalty for x set to 'negative infinity', hence global in x
-	//    .yclip(0); // Clipping penalty for y set to 0, hence local in y
-        //let mut aligner = poa::Aligner::new(scoring, &read_transformed);
 
         for i in 0..read_transformed.len()-1 {
             pair_map.insert((read_transformed[i], read_transformed[i+1]), seq_str[read_minimizers_pos[i] as usize..read_minimizers_pos[i+1] as usize].to_string());
@@ -267,9 +262,11 @@ impl Read {
             // it's a TODO optimization
             aligner.global(&bucket_reads[i].0.transformed);
             let fwd_score = aligner.alignment().score;
+            if debug { println!("--- read fwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
             let mut rev_read = bucket_reads[i].0.transformed.clone();
             rev_read.reverse();
             aligner.global(&rev_read);
+            if debug { println!("         bwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&rev_read), aligner.print_aln()); }
             let bwd_score = aligner.alignment().score;
             let mut aln_ori = "";
             if std::cmp::max(fwd_score,bwd_score) >= poa_global_min_score { 
@@ -282,7 +279,6 @@ impl Read {
                 }
                 aligner.add_to_graph(); 
             }
-            if debug { println!("--- read {} alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aln_ori,aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
             //if debug { aligner.traceback.print(aligner.graph(), bucket_reads[i].0.transformed.clone()); } // prints a confusing traceback (and crashes)
         }
         let mut consensus = aligner.poa.consensus(&params);

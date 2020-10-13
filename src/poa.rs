@@ -488,7 +488,7 @@ impl Traceback {
     }
 
     /// Populate the edges of the traceback matrix
-    fn initialize_scores(&mut self, gap_open: i32) {
+    fn initialize_scores(&mut self, gap_open: i32, gap_extend: i32) {
         for (i, row) in self
             .matrix
             .iter_mut()
@@ -498,13 +498,13 @@ impl Traceback {
         {
             // TODO: these should be -1 * distance from head node
             row[0] = TracebackCell {
-                score: (i as i32) * gap_open, // gap_open penalty //semi-global
+                score: gap_open + ((i-1) as i32) * gap_extend, 
                 op: AlignmentOperation::Del(None),
             };
         }
         for j in 1..=self.cols {
             self.matrix[0][j] = TracebackCell {
-                score: (j as i32) * gap_open,
+                score: gap_open + ((j-1) as i32) * gap_extend,
                 op: AlignmentOperation::Ins(None),
             };
         }
@@ -626,6 +626,15 @@ impl<F: MatchFunc> Aligner<F> {
         self
     }
 
+    /// Semiglobally align a given query against the graph.
+    pub fn semiglobal(&mut self, query: &Vec<u64>) -> &mut Self {
+        self.query = query.to_vec();
+        //self.traceback = self.poa.semiglobal(&query); // not ready
+        self
+    }
+
+
+
     /// Return alignment graph.
     pub fn graph(&self) -> &POAGraph {
         &self.poa.graph
@@ -703,6 +712,58 @@ impl<F: MatchFunc> Poa<F> {
 
         Poa { scoring, graph }
     }
+   
+    /// determine whether the gap penalty is an open or an extend based on previous cell
+    fn determine_gap_penalty(&self, traceback_cell : &TracebackCell, current_op: AlignmentOperation) -> i32
+    {
+        match traceback_cell.op {
+            AlignmentOperation::Match(None) => {
+                self.scoring.gap_open
+            }
+            AlignmentOperation::Match(Some((_, p))) => {
+                self.scoring.gap_open
+            }
+            AlignmentOperation::Ins(None) => {
+                match current_op
+                {
+                    AlignmentOperation::Ins(None) =>  {
+                        self.scoring.gap_extend
+                    },
+                     AlignmentOperation::Ins(Some(_)) => {
+                        self.scoring.gap_extend
+                    },
+                    _ => {
+                        self.scoring.gap_open
+                    }
+                }
+            }
+            AlignmentOperation::Ins(Some(_)) => {
+                match current_op
+                {
+                    AlignmentOperation::Ins(None) =>  {
+                        self.scoring.gap_extend
+                    },
+                     AlignmentOperation::Ins(Some(_)) => {
+                        self.scoring.gap_extend
+                    },
+                    _ => {
+                        self.scoring.gap_open
+                    }
+                }
+            }
+            AlignmentOperation::Del(_) => {
+                match current_op
+                {
+                    AlignmentOperation::Del(None) =>  {
+                        self.scoring.gap_extend
+                    },
+                    _ => {
+                        self.scoring.gap_open
+                    }
+                }
+            }
+        }
+    }
 
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
     ///
@@ -716,7 +777,110 @@ impl<F: MatchFunc> Poa<F> {
         // dimensions of the traceback matrix
         let (m, n) = (self.graph.node_count(), query.len());
         let mut traceback = Traceback::with_capacity(m, n);
-        traceback.initialize_scores(self.scoring.gap_open);
+        traceback.initialize_scores(self.scoring.gap_open, self.scoring.gap_extend);
+
+        traceback.set(
+            0,
+            0,
+            TracebackCell {
+                score: 0,
+                op: AlignmentOperation::Match(None),
+            },
+        );
+
+        // construct the score matrix (O(n^2) space)
+        let mut topo = Topo::new(&self.graph);
+        while let Some(node) = topo.next(&self.graph) {
+            // reference base and index
+            let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
+            let i = node.index() + 1;
+            traceback.last = node;
+            // iterate over the predecessors of this node
+            let prevs: Vec<NodeIndex<usize>> =
+                self.graph.neighbors_directed(node, Incoming).collect();
+            // query base and its index in the DAG (traceback matrix rows)
+            for (j_p, q) in query.iter().enumerate() {
+                let j = j_p + 1;
+                // match and deletion scores for the first reference base
+                let max_cell = if prevs.is_empty() {
+                    TracebackCell {
+                        score: traceback.get(0, j - 1).score + self.scoring.match_fn.score(r, *q),
+                        op: AlignmentOperation::Match(None),
+                    }
+                } else {
+                    let mut max_cell = TracebackCell {
+                        score: MIN_SCORE,
+                        op: AlignmentOperation::Match(None),
+                    };
+                    for prev_node in &prevs {
+                        let i_p: usize = prev_node.index() + 1; // index of previous node
+                        let gap_penalty = self.determine_gap_penalty(traceback.get(i_p, j), AlignmentOperation::Del(Some((i_p - 1, i))));
+                        max_cell = max(
+                            max_cell,
+                            max(
+                                TracebackCell {
+                                    score: traceback.get(i_p, j - 1).score
+                                        + self.scoring.match_fn.score(r, *q),
+                                        op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
+                                },
+                                TracebackCell {
+                                    score: traceback.get(i_p, j).score + gap_penalty,
+                                    op: AlignmentOperation::Del(Some((i_p - 1, i))),
+                                },
+                            ),
+                        );
+                    }
+                    max_cell
+                };
+
+                let gap_penalty = self.determine_gap_penalty(traceback.get(i, j-1),AlignmentOperation::Ins(Some(i - 1)));
+                let score = max(
+                    max_cell,
+                    TracebackCell {
+                        score: traceback.get(i, j - 1).score + gap_penalty,
+                        op: AlignmentOperation::Ins(Some(i - 1)),
+                    },
+                );
+                traceback.set(i, j, score);
+            }
+        }
+
+        traceback
+    }
+
+    /* code not ready yet. initialization is okay, but the score update + the traceback stopping condition (not in this function) aren't changed
+     
+    ///  semi-global alignment 
+    ///
+    /// # Arguments
+    /// * `query` - the query TextSlice to align against the internal graph member
+    ///
+
+    pub fn semiglobal(&mut self, query: &Vec<u64>) -> Traceback {
+        assert!(self.graph.node_count() != 0);
+
+        // dimensions of the traceback matrix
+        let (m, n) = (self.graph.node_count(), query.len());
+        let mut traceback = Traceback::with_capacity(m, n);
+        //traceback.initialize_scores(self.scoring.gap_open);
+        for (i, row) in traceback 
+            .matrix
+            .iter_mut()
+            .enumerate()
+            .take(self.rows + 1)
+            .skip(1)
+        {
+            row[0] = TracebackCell {
+                score: 0 //semi-global, we may start anywhere in the graph
+                op: AlignmentOperation::Del(None),
+            };
+        }
+        for j in 1..=self.cols {
+            self.matrix[0][j] = TracebackCell {
+                score: (j as i32) * gap_open, // but if we consume j chars of the query, we pay j gap penalties
+                op: AlignmentOperation::Ins(None),
+            };
+        }
 
         traceback.set(
             0,
@@ -784,6 +948,8 @@ impl<F: MatchFunc> Poa<F> {
 
         traceback
     }
+       */
+
 
     /// Experimental: return sequence of traversed edges
     ///
@@ -917,7 +1083,7 @@ impl<F: MatchFunc> Poa<F> {
                 AlignmentOperation::Ins(None) => {
                     i += 1;
                 }
-                AlignmentOperation::Ins(Some(_)) => {
+               AlignmentOperation::Ins(Some(_)) => {
                     let node = self.graph.add_node(seq[i]);
                     self.graph.add_edge(prev, node, 1);
                     let edge = self.graph.find_edge(prev, node).unwrap();
@@ -932,8 +1098,8 @@ impl<F: MatchFunc> Poa<F> {
     /// Return a pretty formatted alignment, but it is a very rough approximation (we return a linear
     /// representation but keep in mind the template is a graph)
     /// interpretation:
-    /// M = match, X mismatch, '=' = hmm I don't quite know but it's some sort of match
-    /// D = deletion, I = insertion
+    /// M = match, X mismatch
+    /// D = deletion, I = insertion, i = some other strange kind of insertion
     pub fn pretty(&self, aln: &Alignment, seq: &Vec<u64>) -> String{
         let mut x_pretty = String::new();
         let mut y_pretty = String::new();
@@ -948,9 +1114,8 @@ impl<F: MatchFunc> Poa<F> {
             for op in aln.operations.iter() {
                 match op {
                     AlignmentOperation::Match(None) => {
-                        x_add   = String::from("=");//&x[i];
-                        inb_add = String::from("|");
-                        y_add   = String::from("=");//seq[i].to_string().clone();
+                        // I think it's the start of the alignment, as per the alignment() function
+                        // that breaks here
                         i += 1;
                     },
                     AlignmentOperation::Match(Some((_, p))) => {
@@ -978,6 +1143,13 @@ impl<F: MatchFunc> Poa<F> {
                         y_add   = String::from("-");
                         i += 1;
                     },
+                    AlignmentOperation::Ins(Some(_)) => {
+                        x_add   = String::from("i");//x[i];
+                        inb_add = String::from("_");
+                        y_add   = String::from("-");
+                        i += 1;
+                    }
+
                 }
 
                 x_pretty.push_str(&x_add);
