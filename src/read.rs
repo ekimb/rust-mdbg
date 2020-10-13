@@ -265,16 +265,16 @@ impl Read {
             if debug { println!("--- read fwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
             let mut rev_read = bucket_reads[i].0.transformed.clone();
             rev_read.reverse();
-            aligner.global(&rev_read);
+            aligner.semiglobal(&rev_read);
             if debug { println!("         bwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&rev_read), aligner.print_aln()); }
             let bwd_score = aligner.alignment().score;
             let mut aln_ori = "";
             if std::cmp::max(fwd_score,bwd_score) >= poa_global_min_score { 
                if fwd_score > bwd_score { 
-                    aligner.global(&bucket_reads[i].0.transformed);
+                    aligner.semiglobal(&bucket_reads[i].0.transformed);
                     aln_ori = "fwd";
                 } else { 
-                    aligner.global(&rev_read);
+                    aligner.semiglobal(&rev_read);
                     aln_ori = "bwd";
                 }
                 aligner.add_to_graph(); 
