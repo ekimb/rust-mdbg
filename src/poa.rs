@@ -607,6 +607,7 @@ impl<F: MatchFunc> Aligner<F> {
                     break;
                 }
                 AlignmentOperation::Del(None) => {
+                    break; //semiglobal can end anywhere in the first column
                     j -= 1;
                 }
                 AlignmentOperation::Ins(None) => {
