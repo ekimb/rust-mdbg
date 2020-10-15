@@ -541,54 +541,6 @@ impl Traceback {
         }
         println!();
     }
-    
-
-    pub fn alignment(&self) -> Alignment {
-        // optimal AlignmentOperation path
-        let mut ops: Vec<AlignmentOperation> = vec![];
-
-        // Now backtrack through the matrix to construct an optimal path
-        let mut i = self.last.index() + 1;
-        let mut j_0 = self.cols;
-
-        //semi-global
-        let mut j = (0..j_0).map(|x| (x, self.matrix[i][x].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().0;
-
-        while i > 0 && j > 0 {
-            // push operation and edge corresponding to (one of the) optimal
-            // routes
-            ops.push(self.matrix[i][j].op.clone());
-            match self.matrix[i][j].op {
-                AlignmentOperation::Match(Some((p, _))) => {
-                    i = p + 1;
-                    j -= 1;
-                }
-                AlignmentOperation::Del(Some((p, _))) => {
-                    i = p + 1;
-                }
-                AlignmentOperation::Ins(Some(p)) => {
-                    i = p + 1;
-                    j -= 1;
-                }
-                AlignmentOperation::Match(None) => {
-                    break;
-                }
-                AlignmentOperation::Del(None) => {
-                    j -= 1;
-                }
-                AlignmentOperation::Ins(None) => {
-                    i -= 1;
-                }
-            }
-        }
-
-        ops.reverse();
-
-        Alignment {
-            score: self.matrix[self.last.index() + 1][self.cols].score,
-            operations: ops,
-        }
-    }
 }
 
 /// A partially ordered aligner builder
@@ -612,7 +564,7 @@ impl<F: MatchFunc> Aligner<F> {
 
     /// Add the alignment of the last query to the graph.
     pub fn add_to_graph(&mut self) -> &mut Self {
-        let alignment = self.traceback.alignment();
+        let alignment = self.alignment();
         self.poa.add_alignment(&alignment, self.query.to_vec());
         self
     }
@@ -625,12 +577,14 @@ impl<F: MatchFunc> Aligner<F> {
         // Now backtrack through the matrix to construct an optimal path
         let mut i = self.traceback.last.index() + 1;
         let mut j = self.traceback.cols;
+
+        // semiglobal
         let mut cands: Vec<NodeIndex<usize>> = self.poa.graph.node_indices().filter(|x| self.poa.graph.neighbors_directed(*x, Outgoing).collect::<Vec<NodeIndex<usize>>>().len() == 0).collect();
-        //semi-global
-        println!("Cands {:?}, len {}", cands, cands.len());
+        //println!("Cands {:?}, len {}", cands, cands.len());
         let mut max_cand = cands.iter().map(|cand| ((cand.index() + 1, self.traceback.cols), self.traceback.matrix[cand.index()+1][self.traceback.cols].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap();
         let mut i_0 = (max_cand.0).0;
         let mut j_0 = (max_cand.0).1;
+
         i = i_0;
         j = j_0;
         while i > 0 && j > 0 {
@@ -692,7 +646,7 @@ impl<F: MatchFunc> Aligner<F> {
 
     /// print a pretty alignment of last query to the graph
     pub fn print_aln(&mut self) ->String {
-        let alignment = self.traceback.alignment();
+        let alignment = self.alignment();
         self.poa.pretty(&alignment, &self.query.to_vec())
     }
 

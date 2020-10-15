@@ -23,7 +23,7 @@ print(len(kmers2),"kmers in",file2)
 
 kmers1_in_kmers2 = len([x for x in kmers1 if x in kmers2])
 kmers1_not_in_kmers2  = len(kmers1) - kmers1_in_kmers2
-print("number of kmers from %s that are in %s" % (file1,file2), kmers1_in_kmers2, "(%.2f)%%" % ((1.0*kmers1_in_kmers2)/len(kmers1)*100.0),",", kmers1_not_in_kmers2,"are not")
+print("number of kmers from %s that are in %s:" % (file1,file2), kmers1_in_kmers2, "(%.2f)%%" % ((1.0*kmers1_in_kmers2)/len(kmers1)*100.0),",", kmers1_not_in_kmers2,"are not")
 
 
 # plot abundances of k-min-mers..
