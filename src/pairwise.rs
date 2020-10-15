@@ -529,97 +529,7 @@ impl Alignment {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::AlignmentOperation::*;
-    use super::*;
 
-    #[test]
-    fn test_cigar() {
-        let alignment = Alignment {
-            score: 5,
-            xstart: 3,
-            ystart: 0,
-            xend: 9,
-            yend: 10,
-            ylen: 10,
-            xlen: 10,
-            operations: vec![Match, Match, Match, Subst, Ins, Ins, Del, Del],
-            mode: AlignmentMode::Semiglobal,
-        };
-        assert_eq!(alignment.cigar(false), "3S3=1X2I2D1S");
-
-        let alignment = Alignment {
-            score: 5,
-            xstart: 0,
-            ystart: 5,
-            xend: 4,
-            yend: 10,
-            ylen: 10,
-            xlen: 5,
-            operations: vec![Yclip(5), Match, Subst, Subst, Ins, Del, Del, Xclip(1)],
-            mode: AlignmentMode::Custom,
-        };
-        assert_eq!(alignment.cigar(false), "1=2X1I2D1S");
-        assert_eq!(alignment.cigar(true), "1=2X1I2D1H");
-
-        let alignment = Alignment {
-            score: 5,
-            xstart: 0,
-            ystart: 5,
-            xend: 3,
-            yend: 8,
-            ylen: 10,
-            xlen: 3,
-            operations: vec![Yclip(5), Subst, Match, Subst, Yclip(2)],
-            mode: AlignmentMode::Custom,
-        };
-        assert_eq!(alignment.cigar(false), "1X1=1X");
-
-        let alignment = Alignment {
-            score: 5,
-            xstart: 0,
-            ystart: 5,
-            xend: 3,
-            yend: 8,
-            ylen: 10,
-            xlen: 3,
-            operations: vec![Subst, Match, Subst],
-            mode: AlignmentMode::Semiglobal,
-        };
-        assert_eq!(alignment.cigar(false), "1X1=1X");
-    }
-
-    #[test]
-    fn test_pretty() {
-        let alignment = Alignment {
-            score: 1,
-            xstart: 0,
-            ystart: 2,
-            xend: 3,
-            yend: 5,
-            ylen: 7,
-            xlen: 2,
-            operations: vec![Subst, Match, Match],
-            mode: AlignmentMode::Semiglobal,
-        };
-        let pretty = concat!("  GAT  \n", "  \\||  \n", "CTAATCC\n", "\n\n");
-        assert_eq!(alignment.pretty(b"GAT", b"CTAATCC"), pretty);
-        let alignment = Alignment {
-            score: 5,
-            xstart: 0,
-            ystart: 5,
-            xend: 4,
-            yend: 10,
-            ylen: 10,
-            xlen: 5,
-            operations: vec![Yclip(5), Match, Subst, Subst, Ins, Del, Del, Xclip(1)],
-            mode: AlignmentMode::Custom,
-        };
-        let pretty = concat!("     AAAA--A\n     |\\\\+xx \nTTTTTTTT-TT \n\n\n");
-        assert_eq!(alignment.pretty(b"AAAAA", b"TTTTTTTTTT"), pretty);
-    }
-}
 //// --- snip for bio-types
 
 
@@ -929,6 +839,17 @@ pub struct Aligner<F: MatchFunc> {
     traceback: Traceback,
     scoring: Scoring<F>,
 }
+
+fn seq_to_vec(seq: &[u8]) -> Vec<u64>
+{
+    let mut res = Vec::new();
+    for c in seq.iter()
+    {
+        res.push(match *c as char { 'A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 5, 'x' => 6,_ => 0});
+    }
+    res
+}
+
 
 const DEFAULT_ALIGNER_CAPACITY: usize = 200;
 
@@ -1373,6 +1294,12 @@ impl<F: MatchFunc> Aligner<F> {
         }
     }
 
+    pub fn global_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
+        self.global(&seq_to_vec(x),&seq_to_vec(y))
+    }
+
+
+
     /// Calculate global alignment of x against y.
     pub fn global(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
         // Store the current clip penalties
@@ -1400,6 +1327,10 @@ impl<F: MatchFunc> Aligner<F> {
         self.scoring.yclip_suffix = clip_penalties[3];
 
         alignment
+    }
+
+    pub fn semiglobal_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
+        self.semiglobal(&seq_to_vec(x),&seq_to_vec(y))
     }
 
     /// Calculate semiglobal alignment of x against y (x is global, y is local).
@@ -1625,8 +1556,7 @@ impl Traceback {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::alignment::AlignmentOperation::*;
-    use crate::scores::blosum62;
+    use AlignmentOperation::*;
 
     #[test]
     fn traceback_cell() {
@@ -1660,7 +1590,7 @@ mod tests {
         let y = b"AAAAACCGTTGAT";
         let score = |a: u64, b: u64| if a == b { 1i32 } else { -1i32 };
         let mut aligner = Aligner::with_capacity(x.len(), y.len(), -5, -1, score);
-        let alignment = aligner.semiglobal(x, y);
+        let alignment = aligner.semiglobal_str(x, y);
         assert_eq!(alignment.ystart, 4);
         assert_eq!(alignment.xstart, 0);
         assert_eq!(
@@ -1676,7 +1606,7 @@ mod tests {
         let y = b"AAAAACCGTTGAT";
         let score = |a: u64, b: u64| if a == b { 1i32 } else { -5i32 };
         let mut aligner = Aligner::with_capacity(x.len(), y.len(), -1, -1, score);
-        let alignment = aligner.semiglobal(x, y);
+        let alignment = aligner.semiglobal_str(x, y);
         assert_eq!(alignment.ystart, 4);
         assert_eq!(alignment.xstart, 0);
         assert_eq!(
@@ -1691,9 +1621,9 @@ mod tests {
         let y = b"ACGACA";
         let score = |a: u64, b: u64| if a == b { 1i32 } else { -3i32 };
         let mut aligner = Aligner::with_capacity(x.len(), y.len(), -5, -1, score);
-        let alignment = aligner.global(x, y);
+        let alignment = aligner.global_str(x, y);
 
-        println!("aln:\n{}", alignment.pretty(x, y));
+        //println!("aln:\n{}", alignment.pretty(x, y));
         assert_eq!(
             alignment.operations,
             [Match, Match, Match, Ins, Ins, Ins, Match, Match, Match]
@@ -1706,9 +1636,9 @@ mod tests {
         let y = b"AGATAGATAGATGTAGATGATCCACAGT";
         let score = |a: u64, b: u64| if a == b { 1i32 } else { -1i32 };
         let mut aligner = Aligner::with_capacity(x.len(), y.len(), -5, -1, score);
-        let alignment = aligner.global(x, y);
+        let alignment = aligner.global_str(x, y);
 
-        println!("aln:\n{}", alignment.pretty(x, y));
+        //println!("aln:\n{}", alignment.pretty(x, y));
 
         let mut correct = Vec::new();
         correct.extend(repeat(Match).take(11));
@@ -1718,6 +1648,8 @@ mod tests {
         assert_eq!(alignment.operations, correct);
     }
 
+    // Rayan: didn't port the other tests 
+    /*
     #[test]
     fn test_local_affine_ins2() {
         let x = b"ACGTATCATAGATAGATAGGGTTGTGTAGATGATCCACAG";
@@ -1761,6 +1693,8 @@ mod tests {
         );
     }
 
+    /*
+    use crate::scores::blosum62;
     #[test]
     fn test_blosum62() {
         let x = b"AAAA";
@@ -1773,6 +1707,7 @@ mod tests {
         assert_eq!(alignment.score, 16);
         assert_eq!(alignment.operations, [Match, Match, Match, Match]);
     }
+    */
 
     #[test]
     fn test_issue11() {
@@ -2136,4 +2071,94 @@ mod tests {
             assert_eq!(alignment.score, 0);
         }
     }
+
+    
+    // tests for bio-type:
+    //
+    #[test]
+    fn test_cigar() {
+        let alignment = Alignment {
+            score: 5,
+            xstart: 3,
+            ystart: 0,
+            xend: 9,
+            yend: 10,
+            ylen: 10,
+            xlen: 10,
+            operations: vec![Match, Match, Match, Subst, Ins, Ins, Del, Del],
+            mode: AlignmentMode::Semiglobal,
+        };
+        assert_eq!(alignment.cigar(false), "3S3=1X2I2D1S");
+
+        let alignment = Alignment {
+            score: 5,
+            xstart: 0,
+            ystart: 5,
+            xend: 4,
+            yend: 10,
+            ylen: 10,
+            xlen: 5,
+            operations: vec![Yclip(5), Match, Subst, Subst, Ins, Del, Del, Xclip(1)],
+            mode: AlignmentMode::Custom,
+        };
+        assert_eq!(alignment.cigar(false), "1=2X1I2D1S");
+        assert_eq!(alignment.cigar(true), "1=2X1I2D1H");
+
+        let alignment = Alignment {
+            score: 5,
+            xstart: 0,
+            ystart: 5,
+            xend: 3,
+            yend: 8,
+            ylen: 10,
+            xlen: 3,
+            operations: vec![Yclip(5), Subst, Match, Subst, Yclip(2)],
+            mode: AlignmentMode::Custom,
+        };
+        assert_eq!(alignment.cigar(false), "1X1=1X");
+
+        let alignment = Alignment {
+            score: 5,
+            xstart: 0,
+            ystart: 5,
+            xend: 3,
+            yend: 8,
+            ylen: 10,
+            xlen: 3,
+            operations: vec![Subst, Match, Subst],
+            mode: AlignmentMode::Semiglobal,
+        };
+        assert_eq!(alignment.cigar(false), "1X1=1X");
+    }
+
+    #[test]
+    fn test_pretty() {
+        let alignment = Alignment {
+            score: 1,
+            xstart: 0,
+            ystart: 2,
+            xend: 3,
+            yend: 5,
+            ylen: 7,
+            xlen: 2,
+            operations: vec![Subst, Match, Match],
+            mode: AlignmentMode::Semiglobal,
+        };
+        let pretty = concat!("  GAT  \n", "  \\||  \n", "CTAATCC\n", "\n\n");
+        assert_eq!(alignment.pretty(b"GAT", b"CTAATCC"), pretty);
+        let alignment = Alignment {
+            score: 5,
+            xstart: 0,
+            ystart: 5,
+            xend: 4,
+            yend: 10,
+            ylen: 10,
+            xlen: 5,
+            operations: vec![Yclip(5), Match, Subst, Subst, Ins, Del, Del, Xclip(1)],
+            mode: AlignmentMode::Custom,
+        };
+        let pretty = concat!("     AAAA--A\n     |\\\\+xx \nTTTTTTTT-TT \n\n\n");
+        assert_eq!(alignment.pretty(b"AAAAA", b"TTTTTTTTTT"), pretty);
+    }
+    */
 }
