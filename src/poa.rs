@@ -619,7 +619,54 @@ impl<F: MatchFunc> Aligner<F> {
 
     /// Return alignment of last added query against the graph.
     pub fn alignment(&self) -> Alignment {
-        self.traceback.alignment()
+
+        let mut ops: Vec<AlignmentOperation> = vec![];
+
+        // Now backtrack through the matrix to construct an optimal path
+        let mut i = self.traceback.last.index() + 1;
+        let mut j = self.traceback.cols;
+        let mut cands: Vec<NodeIndex<usize>> = self.poa.graph.node_indices().filter(|x| self.poa.graph.neighbors_directed(*x, Outgoing).collect::<Vec<NodeIndex<usize>>>().len() == 0).collect();
+        //semi-global
+        println!("Cands {:?}, len {}", cands, cands.len());
+        let mut max_cand = cands.iter().map(|cand| ((cand.index() + 1, self.traceback.cols), self.traceback.matrix[cand.index()+1][self.traceback.cols].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap();
+        let mut i_0 = (max_cand.0).0;
+        let mut j_0 = (max_cand.0).1;
+        i = i_0;
+        j = j_0;
+        while i > 0 && j > 0 {
+            // push operation and edge corresponding to (one of the) optimal
+            // routes
+            ops.push(self.traceback.matrix[i][j].op.clone());
+            match self.traceback.matrix[i][j].op {
+                AlignmentOperation::Match(Some((p, _))) => {
+                    i = p + 1;
+                    j -= 1;
+                }
+                AlignmentOperation::Del(Some((p, _))) => {
+                    i = p + 1;
+                }
+                AlignmentOperation::Ins(Some(p)) => {
+                    i = p + 1;
+                    j -= 1;
+                }
+                AlignmentOperation::Match(None) => {
+                    break;
+                }
+                AlignmentOperation::Del(None) => {
+                    j -= 1;
+                }
+                AlignmentOperation::Ins(None) => {
+                    i -= 1;
+                }
+            }
+        }
+
+        ops.reverse();
+
+        Alignment {
+            score: self.traceback.matrix[i_0][j_0].score,
+            operations: ops,
+        }
     }
 
     /// Globally align a given query against the graph.
