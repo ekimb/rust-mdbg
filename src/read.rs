@@ -32,7 +32,6 @@ impl Read {
     pub fn trim(mut self, params: &Params, overlap_counter: &HashMap<Vec<u64>, (u32, u32)>) -> Self {
         if params.o != 0 {
             let o = params.o;
-            println!("{:?}", self.transformed);
             let left_entry = overlap_counter[&self.transformed[0..o].to_vec()];
             if left_entry.1 == 0 {
                 self.transformed = self.transformed[o..].to_vec();
