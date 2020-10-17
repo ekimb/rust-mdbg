@@ -500,7 +500,6 @@ fn main() {
                         let seq_inp = record.seq();
                         let seq_id = record.id();
                         let seq_str = String::from_utf8_lossy(seq_inp);
-                        println!("{}", seq_id);
                         let mut read_obj = reads_by_id[&seq_id.to_string()].clone();
                         read_obj = read_obj.trim(&params, &immut_ovlp);
                         reads_by_id_new.insert(read_obj.id.to_string(), read_obj.clone());
