@@ -138,7 +138,7 @@ impl Read {
                 read_transformed.push(hash);
             }
         }
-        if o != 0 {
+        if o != 0 && read_transformed.len() > 2*o {
             let left_entry = overlap_counter.entry(read_transformed[0..o].to_vec()).or_insert((0, 0));
             *left_entry = (left_entry.0 + 1, left_entry.1);
             let right_entry = overlap_counter.entry(read_transformed[read_transformed.len()-o..].to_vec()).or_insert((0, 0));
