@@ -30,7 +30,7 @@ pub struct Lmer {
 impl Read {
 
     pub fn trim(mut self, params: &Params, overlap_counter: &HashMap<Vec<u64>, (u32, u32)>) -> Self {
-        if params.o != 0 && self.transformed.len() > 2*params.o {
+        if params.o != 0 && self.transformed.len() > 2*o {
             let o = params.o;
             let left_entry = overlap_counter[&self.transformed[0..o].to_vec()];
             if left_entry.1 == 0 {
