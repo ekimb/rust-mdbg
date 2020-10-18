@@ -11,7 +11,7 @@ C=$8
 TH=$9
 touch bench/canu-bench-hifi-$1$2.txt
 echo "Running reference..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref_hpc.fa -k $K -l $L -o $O -t 1 --threads $TH --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_hifi_ref --reference --no-error-correct 
+cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref_hpc.fa -k $K -l $L -o 0 -t 1 --threads $TH --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_hifi_ref --reference --no-error-correct 
 start=`date +%s`
 echo "Running reads..."
 #./dsk -file /scratch2/ekim/canu_hifi_hpc.fa -kmer-size $L
