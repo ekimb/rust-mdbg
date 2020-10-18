@@ -36,16 +36,10 @@ impl Read {
             let left_entry = overlap_counter[&self.transformed[0..o].to_vec()];
             if left_entry.1 == 0 {
                 self.transformed = self.transformed[o..].to_vec();
-                self.minimizers = self.minimizers[o..].to_vec();
-                self.minimizers_pos = self.minimizers_pos[o..].to_vec();
-
             }
             let right_entry = overlap_counter[&self.transformed[self.transformed.len()-o..].to_vec()];
             if right_entry.0 == 0 {
                 self.transformed = self.transformed[0..self.transformed.len()-o].to_vec();
-                self.minimizers = self.minimizers[0..self.minimizers.len()-o].to_vec();
-                self.minimizers_pos = self.minimizers_pos[0..self.minimizers_pos.len()-o].to_vec();
-
             }
         }
         return self
