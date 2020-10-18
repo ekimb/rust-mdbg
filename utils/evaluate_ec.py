@@ -81,6 +81,7 @@ def semiglobal_align(a, b):
     i, j = best_i, best_j
     align_a = []
     align_b = []
+    aln_str = ""
 
     nb_matches = 0
     nb_columns = 0
@@ -90,12 +91,17 @@ def semiglobal_align(a, b):
         if matrix[i][j][1] == DIAGONAL:
             align_a += [a[i - 1]]
             align_b += [b[j - 1]]
-            if a[i - 1] == b[j - 1]: nb_matches += 1 
+            if a[i - 1] == b[j - 1]: 
+                nb_matches += 1 
+                aln_str += "M"
+            else:
+                aln_str += "X"
             i -= 1
             j -= 1
         elif matrix[i][j][1] == LEFT:
             align_a += ["-"]
             align_b += [b[j - 1]]
+            aln_str += "-"
             j -= 1
         else: # UP
             align_a += [a[i - 1]]
@@ -103,7 +109,7 @@ def semiglobal_align(a, b):
             i -= 1
     
     blast_identity = 100.0 * nb_matches / nb_columns if nb_columns > 0 else 0
-    return best_score, align_a[::-1], align_b[::-1], blast_identity
+    return best_score, align_a[::-1], align_b[::-1], blast_identity, aln_str
 
 
 from multiprocessing import Pool
@@ -142,7 +148,7 @@ def process_reads(reads,filename, only_those_reads = None):
 
     for (identity, aln, read_id, read) in aln_results:
         id_dict[read_id] = identity
-        aln_dict[read_id] = (aln[1],aln[2])
+        aln_dict[read_id] = (aln[1],aln[2], aln[4])
 
     for read_id, minims in reads:
         orig_dict[read_id] = minims 
@@ -242,18 +248,22 @@ if __name__ == "__main__":
                             len(fp),jac(poa_template,fp),mash(poa_template,fp),
                             len(fn),jac(poa_template,fn),mash(poa_template,fn)))
 
-            debug_aln = False 
+            debug_aln = True
             if debug_aln:
                 print("alignment of uncorrected read",short_name(seq_id)," (len %d) to ref:" % len(orig_r1[seq_id]))
                 #print(orig_r1[seq_id]) # print original read sequence of minimizers
                 aln = aln_r1[seq_id]
-                print("\t".join(map(str,aln[0])))
-                print("\t".join(map(str,aln[1])))
+                def pretty_print(x):
+                    print("\t".join(map(lambda y:str(y)[:2],x)))
+                #pretty_print(aln[0])
+                #pretty_print(aln[1])
+                print(aln[2])
                 print("and now the corrected read (len %d) alignment:" % len(orig_r2[seq_id]))
                 #print(orig_r2[seq_id])
                 aln = aln_r2[seq_id]
-                print("\t".join(map(str,aln[0])))
-                print("\t".join(map(str,aln[1])))
+                #pretty_print(aln[0])
+                #pretty_print(aln[1])
+                print(aln[2])
 
                 print("---")
 

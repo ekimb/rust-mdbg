@@ -196,12 +196,9 @@ impl Read {
         let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
         let mut bucket_reads = Vec::<&Read>::new();
         let mut poa_ids = Vec::<String>::new();
-        let mut pair_map : HashMap<(u64, u64), String> = HashMap::new();
-        let mut aligner = poa::Aligner::new(scoring, &read_transformed);
+        let mut aligner = poa::Aligner::new(scoring, &read_transformed, Some(seq_str), Some(read_minimizers_pos));
 
-        for i in 0..read_transformed.len()-1 {
-            pair_map.insert((read_transformed[i], read_transformed[i+1]), seq_str[read_minimizers_pos[i] as usize..read_minimizers_pos[i+1] as usize].to_string());
-        }
+        // populate bucket_reads with reads that share n consecutive minimizers with template
         for i in 0..read_transformed.len()-n+1 {
             let bucket_idx = &read_transformed[i..i+n];
             let entry = &buckets[bucket_idx];
@@ -215,15 +212,13 @@ impl Read {
                 }
             }   
         }
+        // filter bucket_reads so that it only contains reads below a mash distance of template
         let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < dist_threshold).collect();
         bucket_reads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         for (read, dist) in bucket_reads.iter() {
             let transformed = &read.transformed;
             let seq = &read.seq;
             let pos = &read.minimizers_pos;
-            for i in 0..transformed.len()-1 {
-                pair_map.insert((transformed[i], transformed[i+1]), seq[pos[i] as usize ..pos[i+1] as usize].to_string());
-            }
         }
         let len_before_poa = read_transformed.len();
         let max_len = read_transformed.len()-n+1;
@@ -260,28 +255,38 @@ impl Read {
             // don't know how to save alignments so i'll just waste time and recompute the best
             // scoring alignment.
             // it's a TODO optimization
-            aligner.semiglobal(&bucket_reads[i].0.transformed);
+            let read = &bucket_reads[i].0;
+            let seq = &read.seq;
+            let pos = &read.minimizers_pos;
+            aligner.semiglobal(&read.transformed, Some(seq), Some(pos));
             let fwd_score = aligner.alignment().score;
-            if debug { println!("--- read fwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&bucket_reads[i].0.transformed), aligner.print_aln()); }
-            let mut rev_read = bucket_reads[i].0.transformed.clone();
+            if debug { println!("--- read fwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, read.id.to_string(),pretty_minvec(&read.transformed), aligner.print_aln()); }
+            let mut rev_read = read.transformed.clone();
             rev_read.reverse();
-            aligner.semiglobal(&rev_read);
-            if debug { println!("         bwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, bucket_reads[i].0.id.to_string(),pretty_minvec(&rev_read), aligner.print_aln()); }
+            let mut rev_seq = utils::revcomp(&seq);
+            let mut rev_minim_pos = pos.clone();
+            rev_minim_pos.reverse();
+            for i in 0..rev_minim_pos.len() {
+                rev_minim_pos[i] = seq.len() - l - rev_minim_pos[i];
+            }
+            aligner.semiglobal(&rev_read, Some(&rev_seq), Some(&rev_minim_pos));
+            if debug { println!("         bwd alignment score: {} (ID: {})\nin minim-space: {}\n{}\n---",aligner.alignment().score, read.id.to_string(),pretty_minvec(&rev_read), aligner.print_aln()); }
             let bwd_score = aligner.alignment().score;
             let mut aln_ori = "";
             if std::cmp::max(fwd_score,bwd_score) >= poa_global_min_score { 
                if fwd_score > bwd_score { 
-                    aligner.semiglobal(&bucket_reads[i].0.transformed);
+                    aligner.semiglobal(&read.transformed, Some(seq), Some(pos));
                     aln_ori = "fwd";
                 } else { 
-                    aligner.semiglobal(&rev_read);
+                    aligner.semiglobal(&rev_read, Some(&rev_seq), Some(&rev_minim_pos));
                     aln_ori = "bwd";
                 }
                 aligner.add_to_graph(); 
             }
             //if debug { aligner.traceback.print(aligner.graph(), bucket_reads[i].0.transformed.clone()); } // prints a confusing traceback (and crashes)
         }
-        let mut consensus = aligner.poa.consensus(&params);
+        let (consensus, consensus_edge_seqs) = aligner.poa.consensus(&params);
+        //println!("consensus()/consensus_edge_seqs() lens: {} / {}", consensus.len(), consensus_edge_seqs.len());
         let consensus_read = consensus.iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
         let len_after_poa  = consensus_read.len();
         if debug { println!("len of template before/after poa: {} / {} (ID: {})", len_before_poa, len_after_poa, seq_id);}
@@ -290,18 +295,10 @@ impl Read {
         let mut pos_idx = 0;
         let mut consensus_pos = Vec::<usize>::new();
         if consensus.len() == 0 {return}
-        for i in 0..consensus.len()-1 {
+        for i in 0..consensus_edge_seqs.len() {
             consensus_pos.push(pos_idx);
-            let mut insert = String::new();
-            if !pair_map.contains_key(&(consensus[i], consensus[i+1])) {
-                let alts : Vec<String> = pair_map.clone().into_iter().filter(|(a, b)| a.0 == consensus[i]).map(|tuple| tuple.1).collect();
-                insert = int_to_minimizer[&consensus[i]].to_string();
-                if alts.len() > 0 {
-                    for _ in 0..alts[0].len() {insert.push_str("N")};
-                }
-            }
-            else { insert = pair_map[&(consensus[i], consensus[i+1])].to_string();}
-            consensus_str.push_str(&insert);
+            let insert = &consensus_edge_seqs[i];
+            consensus_str.push_str(insert);
             pos_idx += insert.len();
         }
         consensus_pos.push(pos_idx);
