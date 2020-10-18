@@ -29,29 +29,12 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn trim(mut self, params: &Params, overlap_counter: &HashMap<Vec<u64>, (u32, u32)>) -> Self {
-        if params.o != 0 {
-            let o = params.o;
-            println!("{:?}", self.transformed);
-            let left_entry = overlap_counter[&self.transformed[0..o].to_vec()];
-            if left_entry.1 == 0 {
-                self.transformed = self.transformed[o..].to_vec();
-            }
-            let right_entry = overlap_counter[&self.transformed[self.transformed.len()-o..].to_vec()];
-            if right_entry.0 == 0 {
-                self.transformed = self.transformed[0..self.transformed.len()-o].to_vec();
-            }
-        }
-        return self
-
-    }
-
-    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>, overlap_counter: &mut HashMap<Vec<u64>, (u32, u32)>) -> Self {
+    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
         if params.w != 0 {
             return Read::extract_windowed(inp_id, inp_seq, params, int_to_minimizer)
         }
         else {
-            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip, overlap_counter)
+            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip)
         }
     }
 
@@ -110,11 +93,10 @@ impl Read {
         Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
 
     }
-    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>, overlap_counter: &mut HashMap<Vec<u64>, (u32, u32)>) -> Self {
+    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
-        let o = params.o;
         let mut read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
@@ -132,12 +114,6 @@ impl Read {
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
             }
-        }
-        if o != 0 {
-            let left_entry = overlap_counter.entry(read_transformed[0..o].to_vec()).or_insert((0, 0));
-            *left_entry = (left_entry.0 + 1, left_entry.1);
-            let right_entry = overlap_counter.entry(read_transformed[read_transformed.len()-o..].to_vec()).or_insert((0, 0));
-            *right_entry = (right_entry.0, right_entry.1 + 1);
         }
         Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }

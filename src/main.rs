@@ -60,7 +60,6 @@ pub struct Params
     t: usize,
     w: usize,
     c: u32,
-    o: usize,
     density :f64,
     size_miniverse: u32,
     average_lmer_count : f64,
@@ -234,8 +233,6 @@ struct Opt {
     counts: Option<PathBuf>,
     #[structopt(short, long)]
     c: Option<u32>,
-    #[structopt(short, long)]
-    o: Option<usize>,
     #[structopt(long)]
     threads: Option<usize>,
 
@@ -256,7 +253,6 @@ fn main() {
     let mut t: usize = 0;
     let mut w: usize = 0;
     let mut c: u32 = 0;
-    let mut o: usize = 0;
     let mut density :f64 = 0.10;
     let mut min_kmer_abundance: usize = 2;
     let mut levenshtein_minimizers: usize = 0;
@@ -296,8 +292,6 @@ fn main() {
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.c.is_none() { c = opt.c.unwrap(); } else { println!("Warning: Using default density-based"); }
-    if !opt.o.is_none() { o = opt.o.unwrap(); } else { println!("Warning: No overlap-based trimming"); }
-
     if !opt.threads.is_none() { threads = opt.threads.unwrap(); } else { println!("Warning: Using default num threads (8)"); }
     if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
 
@@ -343,7 +337,6 @@ fn main() {
         t,
         w,
         c,
-        o,
         density,
         size_miniverse,
         average_lmer_count: 0.0,
@@ -419,91 +412,41 @@ fn main() {
         let chunk_reader = fasta::Reader::from_file(&filename).unwrap();
         let mut chunks = chunk_reader.records().collect::<Vec<_>>();
         let mut chunk_length = 1;
-        if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
         let mut reads_by_id_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<String,  Read>>::new()));
-        let mut overlap_counter_all = Arc::new(Mutex::new(HashMap::<usize,HashMap<Vec<u64>, (u32, u32)>>::new()));
         let mut dbg_nodes_all   = Arc::new(Mutex::new(HashMap::<usize, HashMap<Kmer,    u32>>::new()));
         let mut kmer_seqs_all   = Arc::new(Mutex::new(HashMap::<usize, HashMap<Kmer,    String>>::new()));
         let mut kmer_origin_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<Kmer,    String>>::new()));
         let mut minim_shift_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<Kmer,    (usize, usize)>>::new()));
         let mut buckets_all     = Arc::new(Mutex::new(HashMap::<usize, HashMap<Vec<u64>,Vec<String>>>::new()));
         let mut ec_entries      = Arc::new(Mutex::new(HashMap::<usize, Vec<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>>::new()));
+
+        if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
         thread::scope(|s| {
             let mut guards = Vec::with_capacity(threads);
             for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
                 let mut reads_by_id_all = reads_by_id_all.clone();
-                let mut overlap_counter_all = overlap_counter_all.clone();
-                let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, ref skip, |_| {
-                    let mut reads_by_id = HashMap::<String, Read>::new();
-                    let mut overlap_counter : HashMap<Vec<u64>, (u32, u32)> = HashMap::new(); //counter for overlap-based trimming
-                    let mut ec_entry = Vec::<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>::new();
-                    for result in chunk {
-                        let record = result.as_ref().unwrap();
-                        let seq_inp = record.seq();
-                        let seq_id = record.id();
-                        let seq_str = String::from_utf8_lossy(seq_inp);
-                        let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip, &mut overlap_counter);
-                        reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
-                    }
-                    thread_update_hashmap(&reads_by_id_all, reads_by_id, thread_num);
-                    thread_update_hashmap(&overlap_counter_all, overlap_counter, thread_num);
-
-                }));
-                guards.push(guard);
-            }
-        }).unwrap();
-
-        let mut reads_by_id_all = reads_by_id_all.lock().unwrap();
-        let mut overlap_counter_all = overlap_counter_all.lock().unwrap();
-        let mut reads_by_id = HashMap::<String, Read>::new();
-        let mut overlap_counter : HashMap<Vec<u64>, (u32, u32)> = HashMap::new(); 
-        for thread_num in 0..threads {
-            let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
-            for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
-            let mut counter = overlap_counter_all.entry(thread_num).or_insert(HashMap::new());
-            for (overlap, tuple) in counter.into_iter() {
-                if overlap_counter.contains_key(&overlap.clone()) {
-                    let entry = overlap_counter.entry(overlap.clone()).or_insert((0, 0));
-                    entry.0 += tuple.0;
-                    entry.1 += tuple.1;
-                }
-                else {
-                    overlap_counter.insert(overlap.clone(), *tuple);
-                }
-            }
-        }
-        pb.finish_print("Done converting reads to minimizers.");
-        let immut_ovlp = overlap_counter;
-        let mut reads_by_id_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<String,  Read>>::new()));
-
-        thread::scope(|s| {
-            let mut guards = Vec::with_capacity(threads);
-            for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
                 let mut dbg_nodes_all = dbg_nodes_all.clone();
                 let mut kmer_seqs_all = kmer_seqs_all.clone();
                 let mut kmer_origin_all = kmer_origin_all.clone();
                 let mut minim_shift_all = minim_shift_all.clone();
                 let mut buckets_all = buckets_all.clone();
                 let mut ec_entries = ec_entries.clone();
-                let mut reads_by_id_all = reads_by_id_all.clone();
-                let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref reads_by_id, ref output_prefix, ref mut pb, ref skip, ref immut_ovlp, |_| {
+
+                let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, ref skip, |_| {
                     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
                     let mut kmer_seqs   : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node to its sequence
                     let mut kmer_origin : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
                     let mut minim_shift : HashMap<Kmer,(usize,usize)> = HashMap::new(); // records position of second minimizer in sequence
+                    let mut reads_by_id = HashMap::<String, Read>::new();
                     let mut ec_entry = Vec::<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>::new();
                     let mut buckets : HashMap<Vec<u64>, Vec<String>> = HashMap::new();
-                    let mut reads_by_id_new = HashMap::<String, Read>::new();
-                    
                     for result in chunk {
                         let record = result.as_ref().unwrap();
                         let seq_inp = record.seq();
                         let seq_id = record.id();
                         let seq_str = String::from_utf8_lossy(seq_inp);
-                        println!("{}", seq_id);
-                        let mut read_obj = reads_by_id[&seq_id.to_string()].clone();
-                        read_obj = read_obj.trim(&params, &immut_ovlp);
-                        reads_by_id_new.insert(read_obj.id.to_string(), read_obj.clone());
+                        let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
+                        reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
                         if read_obj.transformed.len() > k {
                             read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
                             if error_correct
@@ -516,8 +459,9 @@ fn main() {
                             }
                         }
                     }
-                    thread_update_hashmap(&reads_by_id_all, reads_by_id_new, thread_num);
+
                     thread_update_common_hashmaps(&dbg_nodes_all, dbg_nodes, &kmer_seqs_all, kmer_seqs, &kmer_origin_all, kmer_origin, &minim_shift_all, minim_shift, thread_num);
+                    thread_update_hashmap(&reads_by_id_all, reads_by_id, thread_num);
                     thread_update_vec(    &ec_entries,      ec_entry, thread_num);
                     if error_correct {
                         thread_update_hashmap(&buckets_all, buckets, thread_num);
@@ -527,17 +471,17 @@ fn main() {
             }
         }).unwrap();
 
-
-
+        pb.finish_print("Done converting reads to minimizers.");
+        let mut reads_by_id_all = reads_by_id_all.lock().unwrap();
         let mut dbg_nodes_all = dbg_nodes_all.lock().unwrap();
         let mut kmer_seqs_all = kmer_seqs_all.lock().unwrap();
         let mut kmer_origin_all = kmer_origin_all.lock().unwrap();
         let mut minim_shift_all = minim_shift_all.lock().unwrap();
         let mut buckets_all = buckets_all.lock().unwrap();
         let mut ec_entries = ec_entries.lock().unwrap();
-        let mut ec_file         = ec_reads::new_file(&output_prefix); // reads before correction
-        let mut reads_by_id_all = reads_by_id_all.lock().unwrap();
         let mut reads_by_id = HashMap::<String, Read>::new();
+        let mut ec_file         = ec_reads::new_file(&output_prefix); // reads before correction
+
         for thread_num in 0..threads {
             let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
             for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
@@ -619,7 +563,7 @@ fn main() {
                         let mut corrected_map = HashMap::new();
                         let mut poa_map = HashMap::new();
                         for ec_record in chunk.iter() {
-                            let mut read_obj = reads_by_id[&ec_record.seq_id.to_string()].clone();
+                            let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false};
                             if !corrected_map.contains_key(&read_obj.id) { 
                                 read_obj.poa_correct(&int_to_minimizer, &mut poa_map, &buckets, &params, &mut corrected_map, &reads_by_id);
                             }
