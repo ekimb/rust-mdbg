@@ -6,13 +6,18 @@
    the .ec_data file for the same set of reads, processed differently (e.g. corrected)
  - and also optionnally,
    the .poa.ec_data file that contains which reads are retrieved for the template
+ - and also optionnally,
+   a maximum number of reads to display alignments for
  and outputs the needleman-wunch alignment of each read to the reference (semi-global aln)  
  and optionally outputs a comparison between the two set of reads (e.g. corrected vs uncorrected)
 """
 import math
 nb_processes = 2
+max_nb_reads = 50
 
-def parse_file(filename, only_those_reads = None, max_reads = 100):
+def parse_file(filename, only_those_reads = None, max_reads = None):
+    if max_reads is None:
+        max_reads = max_nb_reads
     res = []
     counter = 0
     seq_id = ""
@@ -106,6 +111,7 @@ def semiglobal_align(a, b):
         else: # UP
             align_a += [a[i - 1]]
             align_b += ["-"]
+            aln_str += "i"
             i -= 1
     
     blast_identity = 100.0 * nb_matches / nb_columns if nb_columns > 0 else 0
@@ -159,7 +165,8 @@ def process_reads(reads,filename, only_those_reads = None):
     return id_dict, aln_dict, orig_dict
 
 def short_name(read_id):
-    return read_id[:12]+".." if len(read_id) > 12 else read_id
+    max_len=25
+    return read_id[:max_len]+".." if len(read_id) > max_len else read_id
 
 def jac(poa_template,lst):
     mean_jac = 0
@@ -196,7 +203,8 @@ if __name__ == "__main__":
     file2 = sys.argv[2]
     if len(sys.argv) > 3:
         file3 = sys.argv[3]
-
+    if len(sys.argv) > 5:
+        max_nb_reads = int(sys.argv[5])
 
     reference, osef          = parse_file(file1)
     assert(len(reference)==1)

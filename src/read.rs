@@ -182,7 +182,7 @@ impl Read {
         let dist_threshold = 0.15; // mash distance cut-off for read recruitment
         let top_X_aligned_reads = 0; // get the 10 best read alignments per template
         let mut poa_global_min_score = std::i32::MIN; // discard all alignments below that score (discarded when top_X_aligned_read > 0)
-        //let mut poa_global_min_score = -10; // harsh
+        //let mut poa_global_min_score = -10; 
         let debug = params.debug;
 
         let n = params.n;
@@ -287,10 +287,10 @@ impl Read {
         }
         let (consensus, consensus_edge_seqs) = aligner.poa.consensus(&params);
         //println!("consensus()/consensus_edge_seqs() lens: {} / {}", consensus.len(), consensus_edge_seqs.len());
+        let (consensus, consensus_edge_seqs) = aligner.consensus_boundary(&consensus, &consensus_edge_seqs, &read_transformed, debug);
         let consensus_read = consensus.iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
         let len_after_poa  = consensus_read.len();
         if debug { println!("len of template before/after poa: {} / {} (ID: {})", len_before_poa, len_after_poa, seq_id);}
-        aligner.consensus_boundary(&consensus, &read_transformed, debug);
         let mut consensus_str = String::new();
         let mut pos_idx = 0;
         let mut consensus_pos = Vec::<usize>::new();

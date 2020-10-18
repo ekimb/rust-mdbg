@@ -145,6 +145,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::algo::toposort;
 use petgraph::visit::Topo;
 use petgraph::visit::Dfs;
+use petgraph::dot::{Dot, Config};
 
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 
@@ -658,18 +659,22 @@ impl<F: MatchFunc> Aligner<F> {
     /// gets template boundary in consensus
     /// Perform Smith-Waterman on the consensus with the original template
     /// to determine the boundary of the template on the consensus
-    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, orig: &Vec<u64>, debug: bool)
+    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, cns_es: &Vec<String>, orig: &Vec<u64>, debug: bool)
+        -> (Vec<u64>, Vec<String>)
     {
         let x = &orig[..];
         let y = & cns[..];
         let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
         let mut regular_aligner = pairwise::Aligner::with_capacity(x.len(), y.len(), -1, -1, &score);
         let alignment = regular_aligner.semiglobal(x, y);
+        let adjusted_cns = cns   [alignment.ystart..alignment.yend].to_vec().clone();
+        let adjusted_es  = cns_es[alignment.ystart..(alignment.yend-1)].to_vec().clone();
         if debug
         {
             println!("alignment: {:?} (score: {})",alignment.operations, alignment.score);
             println!("consensus    : {:?}",pretty_minvec(cns));
             println!("orig template: {:?}",pretty_minvec(orig));
+            println!("adjusted cns : {:?}",pretty_minvec(&adjusted_cns));
         }
 
         // TODO comment that part if the warning below is never printed
@@ -685,6 +690,8 @@ impl<F: MatchFunc> Aligner<F> {
         {
             println!("WARNING! (rev alignment POA consensus score {} higher than fwd alignment {})", rev_alignment.score, alignment.score);
         }
+
+        (adjusted_cns, adjusted_es)
     }
  
 
@@ -1026,6 +1033,15 @@ impl<F: MatchFunc> Poa<F> {
             }
         }
         //println!("[in poa] consensus()/consensus_edge_seqs() lens: {} / {}", cns.len(), cns_edges_seqs.len());
+
+        let print_graph = false;
+        if print_graph
+        {
+            // debug: print graph in dot format
+            let printable_graph = self.graph.map(|_, w| format!("{:?}", w), |_, w| format!("{:?}", w.0));
+            println!("{}", Dot::with_config(&printable_graph, &[]));
+        }
+
         (cns.to_vec(), cns_edges_seqs.to_vec())
     }
 
@@ -1098,13 +1114,14 @@ impl<F: MatchFunc> Poa<F> {
                 }
                 AlignmentOperation::Match(Some((_, p))) => {
                     let node = NodeIndex::new(*p);
-                    let between_minims = &seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize];
+                    let between_minims = String::from(&seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize]);
                     //println!("Weight : {}", self.graph.raw_nodes()[*p].weight);
                     //println!("Node : {:?}", seq[i]);
                     if (seq[i] != self.graph.raw_nodes()[*p].weight) {
                         let node = self.graph.add_node(seq[i]);
-                        self.graph.add_edge(prev, node, (1, String::from(between_minims)));
-                        let edge = self.graph.find_edge(prev, node).unwrap();
+                        self.graph.add_edge(prev, node, (1, between_minims));
+                        //let edge = self.graph.find_edge(prev, node).unwrap(); 
+                        // Rayan: I don't see the point of that above line
                         prev = node;
                         prev_i = i;
                     } else {
@@ -1115,8 +1132,8 @@ impl<F: MatchFunc> Poa<F> {
                             }
                             None => {
                                 // where the previous node was newly added
-                                self.graph.add_edge(prev, node, (1, String::from(between_minims)));
-                                let edge = self.graph.find_edge(prev, node).unwrap();
+                                self.graph.add_edge(prev, node, (1, between_minims));
+                                //let edge = self.graph.find_edge(prev, node).unwrap();
                                 //println!("Edge added {:?}", (self.node_index[&prev], self.node_index[&node]));
                             }
                         }
@@ -1130,9 +1147,9 @@ impl<F: MatchFunc> Poa<F> {
                 }
                AlignmentOperation::Ins(Some(_)) => {
                     let node = self.graph.add_node(seq[i]);
-                    let between_minims = &seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize];
-                    self.graph.add_edge(prev, node, (1, String::from(between_minims)));
-                    let edge = self.graph.find_edge(prev, node).unwrap();
+                    let between_minims = String::from(&seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize]);
+                    self.graph.add_edge(prev, node, (1, between_minims));
+                    //let edge = self.graph.find_edge(prev, node).unwrap();
                     prev = node;
                     prev_i = i;
                     i += 1;
