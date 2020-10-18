@@ -475,10 +475,7 @@ fn main() {
         pb.finish_print("Done converting reads to minimizers.");
         let immut_ovlp = overlap_counter;
         let mut reads_by_id_all = Arc::new(Mutex::new(HashMap::<usize, HashMap<String,  Read>>::new()));
-        let chunk_reader = fasta::Reader::from_file(&filename).unwrap();
-        let mut chunks = chunk_reader.records().collect::<Vec<_>>();
-        let mut chunk_length = 1;
-        if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
+
         thread::scope(|s| {
             let mut guards = Vec::with_capacity(threads);
             for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
