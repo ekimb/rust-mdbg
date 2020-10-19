@@ -31,7 +31,7 @@ pub fn pretty_minvec(seq :&Vec<u64>)  -> String
     let mut s = String::new();
     for x in seq.iter()
     {
-        s = format!("{}{} ",s,x.to_string()[..].to_string());
+        s = format!("{}{} ",s,x.to_string()[..2].to_string());
     }
     s
 }
