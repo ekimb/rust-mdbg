@@ -29,12 +29,12 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>, threshold_hash: u64) -> Self {
+    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
         if params.w != 0 {
             return Read::extract_windowed(inp_id, inp_seq, params, int_to_minimizer)
         }
         else {
-            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip, threshold_hash)
+            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip)
         }
     }
 
@@ -93,7 +93,7 @@ impl Read {
         Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
 
     }
-    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>, threshold_hash: u64) -> Self {
+    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -109,7 +109,7 @@ impl Read {
             if !lmer.contains("N") && skip[&lmer.to_string()] {
                 hash_new = hash_new.sqrt().sqrt().sqrt();
             }
-            if (!lmer.contains("N")) && (hash_new as f64) <= (threshold_hash as f64) / (u64::max_value() as f64) {
+            if (!lmer.contains("N")) && (hash_new as f64) <= (density/(l as f64)) {
                 read_minimizers.push(lmer.to_string());
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
