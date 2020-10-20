@@ -380,7 +380,7 @@ fn main() {
         }
     }
 
-    let (mut minimizer_to_int, mut int_to_minimizer, skip) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
+    let (mut minimizer_to_int, mut int_to_minimizer, skip, threshold_hash) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
     // fasta parsing
     // possibly swap it later for https://github.com/aseyboldt/fastq-rs
     let reader = fasta::Reader::from_file(&filename).unwrap();
@@ -445,7 +445,7 @@ fn main() {
                         let seq_inp = record.seq();
                         let seq_id = record.id();
                         let seq_str = String::from_utf8_lossy(seq_inp);
-                        let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
+                        let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip, threshold_hash);
                         reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
                         if read_obj.transformed.len() > k {
                             read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params);
