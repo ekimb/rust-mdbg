@@ -109,7 +109,7 @@ impl Read {
             if !lmer.contains("N") && skip[&lmer.to_string()] {
                 hash_new = hash_new.sqrt().sqrt().sqrt();
             }
-            if (!lmer.contains("N")) && (hash_new as f64) <= (density/(l as f64)) {
+            if (!lmer.contains("N")) && ((hash_new as f64) <= (density/(2.0*l as f64)) || (hash_new as f64) >= (1.0 - (density/(2.0*l as f64)))) {
                 read_minimizers.push(lmer.to_string());
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
