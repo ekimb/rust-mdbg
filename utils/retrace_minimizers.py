@@ -10,7 +10,7 @@ else:
 # read [origin.sequences] file
 d_minims = dict()
 from parse_sequences_file import parse
-k, l, node_minims, kmer_seq, kmer_abundance, origins1 = parse(sys.argv[1])
+k, l, node_minims, kmer_seq, kmer_abundance, origins1, minim_shift = parse(sys.argv[1])
 abund_filter = True
 if len(kmer_abundance) == 0:
     abund_filter = False
