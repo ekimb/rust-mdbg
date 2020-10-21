@@ -10,6 +10,9 @@ use super::ec_reads;
 use super::utils;
 use super::poa;
 use std::io::BufWriter;
+use std::path::PathBuf;
+use std::error::Error;
+use std::io::Write;
 use super::utils::pretty_minvec;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
 #[derive(Clone)]
@@ -122,7 +125,8 @@ impl Read {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params) {
+    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params, thread_seq_path :&mut BufWriter<File>) {
+        ;
         let k = params.k;
         let l = params.l;
         let n = params.n;
@@ -148,8 +152,8 @@ impl Read {
                 if seq_reversed {
                     seq = utils::revcomp(&seq);
                 }
-                kmer_seqs.insert(node.clone(), seq.clone());
-                //let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+                //kmer_seqs.insert(node.clone(), seq.clone());
+                let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
                 //kmer_origin.insert(node.clone(), origin);
                 let position_of_second_minimizer = match seq_reversed {
                     true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
@@ -159,12 +163,15 @@ impl Read {
                     true => self.minimizers_pos[i+1]-self.minimizers_pos[i],
                     false => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2]
                 };
-                minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+                let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
+                //minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
                 if levenshtein_minimizers == 0 {
                     for minim in &self.minimizers[i..i+k-1] {
                         debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
                     }
                 }
+                let s_line = format!("{}\t{}\t{}\t{:?}",node.print_as_string(), seq, origin, shift);
+                write!(thread_seq_path, "{}\n", s_line).expect("error writing minimizers/sequences");
            // }
         }
     }

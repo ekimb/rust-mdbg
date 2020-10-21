@@ -22,7 +22,7 @@ def parse(filename):
             kmer_abundance[minims] = abundance
         origin = spl[-2]
         seq = spl[-5]
-        shifts = tuple(map(lambda x: int(x.strip('(').strip(')').replace(',','')),spl[-2:]))
+        shifts = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[-2:]))
         node_minims[seq_id] = minims
         kmer_to_seq[minims] = seq
         kmer_origins[minims] = origin
