@@ -145,6 +145,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::algo::toposort;
 use petgraph::visit::Topo;
 use petgraph::visit::Dfs;
+use petgraph::dot::{Dot, Config};
 
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 
@@ -153,7 +154,7 @@ use super::pairwise;
 
 use super::utils::pretty_minvec;
 
-pub type POAGraph = Graph<u64, i32, Directed, usize>;
+pub type POAGraph = Graph<u64, (i32, String), Directed, usize>;
 
 // Unlike with a total order we may have arbitrary successors in the
 // traceback matrix. I have not yet figured out what the best level of
@@ -418,6 +419,7 @@ pub enum AlignmentOperation {
 
 pub struct Alignment {
     pub score: i32,
+    ystart: usize,
     //    xstart: Edge,
     operations: Vec<AlignmentOperation>,
 }
@@ -527,7 +529,7 @@ impl Traceback {
         &self.matrix[i][j]
     }
 
-    pub fn print(&self, g: &Graph<u64, i32, Directed, usize>, query: Vec<u64>) {
+    pub fn print(&self, g: &POAGraph, query: Vec<u64>) {
         let (m, n) = (g.node_count(), query.len());
         print!(".\t");
         for base in query.iter().take(n) {
@@ -549,31 +551,36 @@ impl Traceback {
 pub struct Aligner<F: MatchFunc> {
     pub traceback: Traceback,
     query: Vec<u64>,
+    query_str: String, 
+    query_minim_pos: Vec<usize>,
     pub poa: Poa<F>,
 }
 
 impl<F: MatchFunc> Aligner<F> {
     /// Create new instance.
-    pub fn new(scoring: Scoring<F>, reference: &Vec<u64>) -> Self {
+    pub fn new(scoring: Scoring<F>, reference: &Vec<u64>, ref_str: Option<&String>, ref_minim_pos: Option<&Vec<usize>>) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
-            poa: Poa::from_string(scoring, reference),
+            query_str: ref_str.unwrap().clone(),
+            query_minim_pos: ref_minim_pos.unwrap().clone(),
+            poa: Poa::from_string(scoring, reference, ref_str, ref_minim_pos),
         }
     }
 
     /// Add the alignment of the last query to the graph.
     pub fn add_to_graph(&mut self) -> &mut Self {
         let alignment = self.alignment();
-        self.poa.add_alignment(&alignment, self.query.to_vec());
+        self.poa.add_alignment(&alignment, self.query.to_vec(), Some(&self.query_str), Some(&self.query_minim_pos));
         self
     }
 
     /// Return alignment of last added query against the graph.
     pub fn alignment(&self) -> Alignment {
+        let debug = false;
 
         let mut ops: Vec<AlignmentOperation> = vec![];
-
+    
         // Now backtrack through the matrix to construct an optimal path
         let mut i = self.traceback.last.index() + 1;
         let mut j = self.traceback.cols;
@@ -587,6 +594,7 @@ impl<F: MatchFunc> Aligner<F> {
 
         i = i_0;
         j = j_0;
+        if debug{print!("traceback: ");}
         while i > 0 && j > 0 {
             // push operation and edge corresponding to (one of the) optimal
             // routes
@@ -595,31 +603,42 @@ impl<F: MatchFunc> Aligner<F> {
                 AlignmentOperation::Match(Some((p, _))) => {
                     i = p + 1;
                     j -= 1;
+                    if debug{print!("M");}
                 }
                 AlignmentOperation::Del(Some((p, _))) => {
                     i = p + 1;
+                    if debug{print!("-");}
                 }
                 AlignmentOperation::Ins(Some(p)) => {
                     i = p + 1;
-                    j -= 1;
+                    j -= 1; 
+                    if debug{print!("I");}
                 }
                 AlignmentOperation::Match(None) => {
+                    if debug{print!("m");}
+                    j -= 1; //?
                     break;
                 }
                 AlignmentOperation::Del(None) => {
+                    if debug{print!("d");}
                     break; //semiglobal can end anywhere in the first column
                     j -= 1;
                 }
                 AlignmentOperation::Ins(None) => {
+                    if debug{print!("i");}
                     i -= 1;
+                    j -= 1; //?
                 }
             }
         }
+        if debug{println!("");}
 
         ops.reverse();
 
+        if debug{println!("ystart: {}",j);}
         Alignment {
             score: self.traceback.matrix[i_0][j_0].score,
+            ystart: j,
             operations: ops,
         }
     }
@@ -632,13 +651,13 @@ impl<F: MatchFunc> Aligner<F> {
     }
 
     /// Semiglobally align a given query against the graph.
-    pub fn semiglobal(&mut self, query: &Vec<u64>) -> &mut Self {
+    pub fn semiglobal(&mut self, query: &Vec<u64>, query_str: Option<&String>, query_minim_pos: Option<&Vec<usize>>) -> &mut Self {
         self.query = query.to_vec();
-        self.traceback = self.poa.semiglobal(&query); // not ready
+        self.query_str = query_str.unwrap().clone();
+        self.query_minim_pos = query_minim_pos.unwrap().clone();
+        self.traceback = self.poa.semiglobal(&query);
         self
     }
-
-
 
     /// Return alignment graph.
     pub fn graph(&self) -> &POAGraph {
@@ -654,19 +673,39 @@ impl<F: MatchFunc> Aligner<F> {
     /// gets template boundary in consensus
     /// Perform Smith-Waterman on the consensus with the original template
     /// to determine the boundary of the template on the consensus
-    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, orig: &Vec<u64>, debug: bool)
+    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, cns_es: &Vec<String>, orig: &Vec<u64>, debug: bool)
+        -> (Vec<u64>, Vec<String>)
     {
         let x = &orig[..];
         let y = & cns[..];
         let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
         let mut regular_aligner = pairwise::Aligner::with_capacity(x.len(), y.len(), -1, -1, &score);
         let alignment = regular_aligner.semiglobal(x, y);
+        let adjusted_cns = cns   [alignment.ystart..alignment.yend].to_vec().clone();
+        let adjusted_es  = cns_es[alignment.ystart..(alignment.yend-1)].to_vec().clone();
         if debug
         {
-            println!("alignment: {:?}",alignment.operations);
+            println!("alignment: {:?} (score: {})",alignment.operations, alignment.score);
             println!("consensus    : {:?}",pretty_minvec(cns));
             println!("orig template: {:?}",pretty_minvec(orig));
+            println!("adjusted cns : {:?}",pretty_minvec(&adjusted_cns));
         }
+
+        // TODO comment that part if the warning below is never printed
+
+        let mut y_rev = cns.clone();
+        y_rev.reverse();
+        let rev_alignment = regular_aligner.semiglobal(x, &y_rev);
+        if false // debug
+        {
+            println!("bwd alignment: {:?} (score: {})",rev_alignment.operations, alignment.score);
+        }
+        if rev_alignment.score > alignment.score
+        {
+            println!("WARNING! (rev alignment POA consensus score {} higher than fwd alignment {})", rev_alignment.score, alignment.score);
+        }
+
+        (adjusted_cns, adjusted_es)
     }
  
 
@@ -691,8 +730,6 @@ impl<F: MatchFunc> Poa<F> {
     /// * `poa` - the partially ordered reference alignment
     ///
     pub fn new(scoring: Scoring<F>, graph: POAGraph) -> Self {
-
-
         Poa { scoring, graph}
     }
 
@@ -703,16 +740,23 @@ impl<F: MatchFunc> Poa<F> {
     /// * `scoring` - the score struct
     /// * `reference` - a reference TextSlice to populate the initial reference graph
     ///
-    pub fn from_string(scoring: Scoring<F>, seq: &Vec<u64>) -> Self {
-        let mut graph: Graph<u64, i32, Directed, usize> =
+    pub fn from_string(scoring: Scoring<F>, seq: &Vec<u64>, seq_str: Option<&String>, seq_minim_pos: Option<&Vec<usize>>) -> Self {
+        let mut graph: POAGraph =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
         let mut node: NodeIndex<usize>;
+        let mut i = 1;
         for base in seq.iter().skip(1) {
             node = graph.add_node(*base);
-            graph.add_edge(prev, node, 1);
+
+            // adding sequence between minimizers to graph edges
+            let seq_minim_pos = seq_minim_pos.unwrap();
+            let between_minims = &seq_str.unwrap()[seq_minim_pos[i-1] as usize..seq_minim_pos[i] as usize];
+
+            graph.add_edge(prev, node, (1,String::from(between_minims)));
             let edge = graph.find_edge(prev, node).unwrap();
             prev = node;
+            i = i + 1;
         }
 
         Poa { scoring, graph }
@@ -986,22 +1030,36 @@ impl<F: MatchFunc> Poa<F> {
         path
     }
 
-    /// Incorporate a new sequence into a graph from an alignment
-    ///
-    /// # Arguments
-    ///
-    /// * `aln` - The alignment of the new sequence to the graph
-    /// * `seq` - The sequence being incorporated
-    ///
-    pub fn consensus(&mut self, params : &Params) -> Vec<u64> {
-        // If we've added no new nodes or edges since the last call, sort first
+    /// return the consensus of the POA
+    /// and also
+    /// return the sequences associated to edges in the consensus
+    pub fn consensus(&mut self, params : &Params) -> (Vec<u64>, Vec<String>) {
+        let debug = false; // prints POA graph in dot format
+
         let mut cns = Vec::new();
-        for node in self.consensus_path(&params).to_vec() {
-            cns.push(*self.graph.node_weight(node).unwrap() as u64);
+        let mut cns_edges_seqs = Vec::new();
+        let nodes = self.consensus_path(&params).to_vec();
+        for i in 0..(nodes.len())
+        {
+            cns.push(*self.graph.node_weight(nodes[i]).unwrap() as u64);
+            if i < nodes.len()-1
+            {
+                let edge = self.graph.find_edge(nodes[i],nodes[i+1]).unwrap();
+                cns_edges_seqs.push(self.graph.edge_weight(edge).unwrap().1.clone());
+            }
+        }
+        //println!("[in poa] consensus()/consensus_edge_seqs() lens: {} / {}", cns.len(), cns_edges_seqs.len());
+
+        if debug 
+        {
+            // debug: print graph in dot format
+            let printable_graph = self.graph.map(|_, w| format!("{:?}", w), |_, w| format!("{:?}", w.0));
+            println!("{}", Dot::with_config(&printable_graph, &[]));
         }
 
-        cns.to_vec()
+        (cns.to_vec(), cns_edges_seqs.to_vec())
     }
+
     pub fn consensus_path(&mut self, params : &Params) -> Vec<NodeIndex<usize>> {
         // If we've added no new nodes or edges since the last call, sort first
         let mut node_idx = toposort(&self.graph, None).unwrap();
@@ -1012,7 +1070,7 @@ impl<F: MatchFunc> Poa<F> {
             let mut best_neighbor = None::<NodeIndex<usize>>;
             let mut best_weights = (0, 0); // (Edge-weight, Path-weight)
             for e_ref in self.graph.edges(*node) {
-                let mut weight = *e_ref.weight();
+                let mut weight = e_ref.weight().0;
                 if weight < params.t as i32 {
                     weight = 0;
                 }
@@ -1053,9 +1111,18 @@ impl<F: MatchFunc> Poa<F> {
 
         cns_path
     }
-    pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u64>) {
+    /// Incorporate a new sequence into a graph from an alignment
+    ///
+    /// # Arguments
+    ///
+    /// * `aln` - The alignment of the new sequence to the graph
+    /// * `seq` - The sequence being incorporated
+    ///
+    pub fn add_alignment(&mut self, aln: &Alignment, seq: Vec<u64>, seq_str: Option<&String>, seq_minim_pos: Option<&Vec<usize>>) {
+        let debug = false;
         let mut prev: NodeIndex<usize> = NodeIndex::new(0);
-        let mut i: usize = 0;
+        let mut prev_i = 0;
+        let mut i: usize = aln.ystart;
         for op in aln.operations.iter() {
             match op {
                 AlignmentOperation::Match(None) => {
@@ -1063,27 +1130,36 @@ impl<F: MatchFunc> Poa<F> {
                 }
                 AlignmentOperation::Match(Some((_, p))) => {
                     let node = NodeIndex::new(*p);
-                    //println!("Weight : {}", self.graph.raw_nodes()[*p].weight);
-                    //println!("Node : {:?}", seq[i]);
+                    let between_minims = String::from(&seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize]);
+                    if debug {
+                        println!("Weight : {}", self.graph.raw_nodes()[*p].weight);
+                        println!("Node : {:?}", seq[i]);
+                    }
                     if (seq[i] != self.graph.raw_nodes()[*p].weight) {
+                        if debug {println!("node added");}
                         let node = self.graph.add_node(seq[i]);
-                        self.graph.add_edge(prev, node, 1);
-                        let edge = self.graph.find_edge(prev, node).unwrap();
+                        self.graph.add_edge(prev, node, (1, between_minims));
+                        //let edge = self.graph.find_edge(prev, node).unwrap(); 
+                        // Rayan: I don't see the point of that above line
                         prev = node;
+                        prev_i = i;
                     } else {
                         // increment node weight
                         match self.graph.find_edge(prev, node) {
                             Some(edge) => {
-                                *self.graph.edge_weight_mut(edge).unwrap() += 1;
+                                if debug {println!("edge incremented");}
+                                self.graph.edge_weight_mut(edge).unwrap().0 += 1;
                             }
                             None => {
+                                if debug {println!("edge added");}
                                 // where the previous node was newly added
-                                self.graph.add_edge(prev, node, 1);
-                                let edge = self.graph.find_edge(prev, node).unwrap();
+                                self.graph.add_edge(prev, node, (1, between_minims));
+                                //let edge = self.graph.find_edge(prev, node).unwrap();
                                 //println!("Edge added {:?}", (self.node_index[&prev], self.node_index[&node]));
                             }
                         }
                         prev = node;
+                        prev_i = i;
                     }
                     i += 1;
                 }
@@ -1092,9 +1168,11 @@ impl<F: MatchFunc> Poa<F> {
                 }
                AlignmentOperation::Ins(Some(_)) => {
                     let node = self.graph.add_node(seq[i]);
-                    self.graph.add_edge(prev, node, 1);
-                    let edge = self.graph.find_edge(prev, node).unwrap();
+                    let between_minims = String::from(&seq_str.unwrap()[seq_minim_pos.unwrap()[prev_i] as usize..seq_minim_pos.unwrap()[i] as usize]);
+                    self.graph.add_edge(prev, node, (1, between_minims));
+                    //let edge = self.graph.find_edge(prev, node).unwrap();
                     prev = node;
+                    prev_i = i;
                     i += 1;
                 }
                 AlignmentOperation::Del(_) => {} // we should only have to skip over deleted nodes
@@ -1117,7 +1195,7 @@ impl<F: MatchFunc> Poa<F> {
             let mut y_add = String::new();
             let mut inb_add = String::new();
 
-            let mut i: usize = 0;
+            let mut i: usize = aln.ystart;
             for op in aln.operations.iter() {
                 match op {
                     AlignmentOperation::Match(None) => {

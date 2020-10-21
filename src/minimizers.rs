@@ -211,7 +211,6 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
             .multi_cartesian_product();
-
 //    for lmer in kproduct("ACTG".to_string(), l as u32) {
     for lmer_vec in multi_prod {
         let lmer :String = lmer_vec.into_iter().collect();
