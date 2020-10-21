@@ -17,7 +17,6 @@ use std::path::Path;
 
 pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :&mut HashMap<Kmer,usize>, kmer_seqs :&HashMap<Kmer,String>, kmer_origin: &HashMap<Kmer,String>, dbg_nodes :&HashMap<Kmer,u32> , k:usize, l:usize, minim_shift: &HashMap<Kmer,(usize,usize)>, threads: usize)
 {
-    let new_line = |line: &mut String, br :&mut BufReader<File>| { line.clear(); br.read_line(line).ok(); };
     let output_filename = format!("{}{}",output_prefix.to_string_lossy(),".sequences");
     let path = PathBuf::from(&output_filename);
         let mut out_file = match File::create(path) {
@@ -31,8 +30,8 @@ pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :
     let mut node_count = 0;
     for thread in 0..threads {
         let input_filename = format!("{}.{}.sequences",output_prefix.to_string_lossy(), thread);
-        let path = PathBuf::from(&input_filename);
-        if let Ok(lines) = read_lines(path) {
+        let input_path = PathBuf::from(&input_filename);
+        if let Ok(lines) = read_lines(input_path) {
             for line in lines {
                 if let Ok(ip) = line {
                     //println!("{}", ip);
