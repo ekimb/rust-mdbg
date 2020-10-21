@@ -28,4 +28,4 @@ for line in open(sys.argv[2]):
 
     output.write("S\t%s\t%s\tLN:i:%d\tKC:i:%d\n" % (source[0], source[2], len(source[2]), int(kmer_abundance[source_minims])))
     output.write("S\t%s\t%s\tLN:i:%d\tKC:i:%d\n" % (sink[0], sink[2], len(sink[2]), int(kmer_abundance[sink_minims])))
-    output.write("L\t%s\t%s\t%s\t%s\t%dM\n"% (source[0], source[1], sink[0], sink[1], int(shift)))
+    output.write("L\t%s\t%s\t%s\t%s\t%dM\n"% (source[0], source[1], sink[0], sink[1], int(overlap_length)))
