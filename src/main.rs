@@ -783,11 +783,11 @@ fn main() {
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
-    if (output_base_space)
-    {
+    //if (output_base_space)
+   // {
         println!("writing sequences..");
-        seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
-    }
+        seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l, &minim_shift);
+   // }
     
     let duration = start.elapsed();
     println!("Total execution time: {:?}", duration);

@@ -169,7 +169,7 @@ impl Read {
             let entry = dbg_nodes.entry(node.clone()).or_insert(0);
             *entry += 1;
 
-            if ! output_base_space { continue;}
+           // if ! output_base_space { continue;}
 
 
            // if *entry == min_kmer_abundance as u32 {
