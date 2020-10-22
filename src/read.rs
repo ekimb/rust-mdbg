@@ -10,6 +10,9 @@ use super::ec_reads;
 use super::utils;
 use super::poa;
 use std::io::BufWriter;
+use std::path::PathBuf;
+use std::error::Error;
+use std::io::Write;
 use super::utils::pretty_minvec;
 use super::utils::median;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
@@ -123,7 +126,7 @@ impl Read {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, kmer_seqs_lens: &mut HashMap<Kmer,Vec<u32>>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params) {
+    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params, thread_seq_path :&mut BufWriter<File>) {
         let k = params.k;
         let l = params.l;
         let n = params.n;
@@ -141,7 +144,7 @@ impl Read {
             let entry = dbg_nodes.entry(node.clone()).or_insert(0);
             *entry += 1;
 
-            if ! output_base_space { continue;}
+           // if ! output_base_space { continue;}
 
 
            // if *entry == min_kmer_abundance as u32 {
@@ -150,6 +153,7 @@ impl Read {
                     seq = utils::revcomp(&seq);
                 }
 
+                /* // TODO incorporate that code somehow into writing an adequate sequence 
                 let mut inserted = false;
                 if kmer_seqs.contains_key(&node) { 
                     let median_seq_len : usize = median(kmer_seqs_lens.get(&node).unwrap()) as usize;
@@ -168,9 +172,12 @@ impl Read {
                     inserted = true;
                 }
                 kmer_seqs_lens.entry(node.clone()).or_insert(Vec::new()).push(seq.len() as u32);
+                */
 
-                //let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+                let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+                //kmer_seqs.insert(node.clone(), seq.clone());
                 //kmer_origin.insert(node.clone(), origin);
+                
                 let position_of_second_minimizer = match seq_reversed {
                     true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
                     false => self.minimizers_pos[i+1]-self.minimizers_pos[i]
@@ -180,15 +187,16 @@ impl Read {
                     false => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2]
                 };
 
-                if inserted
-                {
-                    minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
-                }
+                let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
+                //minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+                
                 if levenshtein_minimizers == 0 {
                     for minim in &self.minimizers[i..i+k-1] {
                         debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none())); // something needs to be done about this assert, it's triggered when --release is removed FIXME FIXME TODO FIXME
                     }
                 }
+                let s_line = format!("{}\t{}\t{}\t{:?}",node.print_as_string(), seq, origin, shift);
+                write!(thread_seq_path, "{}\n", s_line).expect("error writing minimizers/sequences");
            // }
         }
     }

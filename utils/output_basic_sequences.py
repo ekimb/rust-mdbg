@@ -15,8 +15,8 @@ for line in open(sys.argv[1]):
         continue
     spl = line.split()
     id = spl[0]
-    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-3]))
-    seq = spl[-3]
+    minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-5]))
+    seq = spl[-5]
     kmer_to_seq[minims] = seq
 
 # read and cache [final.sequences]

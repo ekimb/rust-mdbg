@@ -8,6 +8,8 @@ use super::Kmer;
 use crate::kmer_vec::get;
 use std::collections::HashMap;
 use strsim::levenshtein;
+use petgraph::graph::NodeIndex;
+
 
 use crate::utils::revcomp;
 
@@ -117,9 +119,10 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     shift as u32
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(usize,usize)>, levenshtein_minimizers: usize, output_base_space: bool)  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(usize,usize)>, levenshtein_minimizers: usize, output_base_space: bool, node_indices: &HashMap<Kmer, NodeIndex>) -> HashMap<Kmer, usize>  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
+    let mut node_indices = HashMap::<Kmer, usize>::new();
     let empty_str = String::new();
     
     let path = format!("{}{}",output_prefix.to_str().unwrap(),".gfa");
@@ -131,10 +134,11 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
      write!(file, "H\tVN:Z:1\n").expect("error writing GFA header");
 
 
-    for node in gr.node_indices() {
-        let idx = node.index();
-        let seq = &kmer_seqs.get(nodes_vect[idx]).unwrap_or(&empty_str);
-        let abundance = dbg_nodes[nodes_vect[idx]];
+    for index in gr.node_indices() {
+        let idx = index.index();
+        node_indices.insert(nodes_vect[idx].clone(), idx);
+        let seq = &kmer_seqs.get(&nodes_vect[idx]).unwrap_or(&empty_str);
+        let abundance = dbg_nodes[&nodes_vect[idx]];
         let s_line = format!("S\t{}\t{}\tLN:i:{}\tKC:i:{}\n",idx,seq,seq.len(),abundance);
         write!(file, "{}", s_line).expect("error writing s_line");
        // let s_line = format!("S\t{}\t{}\t{}\n",idx,seq.len(),seq);
@@ -145,9 +149,10 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         let id1 = e.source().index();
         let id2 = e.target().index();
         let (ori1, ori2) = determine_orientation(id1,id2,&nodes_vect);
-        
         let mut kmer1 = nodes_vect[id1].clone();
         let mut kmer2 = nodes_vect[id2].clone();
+        node_indices.insert(kmer1.clone(), id1);
+        node_indices.insert(kmer2.clone(), id2);
         let mut seq1 = kmer_seqs.get(&kmer1).unwrap_or(&empty_str).clone();
         if ori1 == "-" {
             seq1 = revcomp(&seq1);
@@ -159,11 +164,14 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             kmer2 = kmer2.reverse();
         }
         let mut shift = 0;
-        if (output_base_space)
+        /*if (output_base_space)
         {
             shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
-        }
+        }*/
         let mut overlap_length = seq1.len() as u32 -shift;
+
+
+        
 
         //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
         //if (overlap_length as usize) > seq2.len()
@@ -211,4 +219,6 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
         //write!(paf_file, "{}", paf_line).expect("error writing paf_line");
 
     }
+    node_indices
+
 }

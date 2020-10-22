@@ -42,7 +42,6 @@ pub fn normalize_vec(seq :&Vec<u64>)  -> Vec<u64>
     let mut seq_rev = seq.clone();
     seq_rev.reverse();
     std::cmp::min(seq_rev, seq.clone())
-    //seq.clone() // FIXME
 }
 
 

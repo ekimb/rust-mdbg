@@ -457,6 +457,12 @@ fn main() {
                 let mut minim_shift_all = minim_shift_all.clone();
                 let mut buckets_all = buckets_all.clone();
                 let mut ec_entries = ec_entries.clone();
+                let thread_seq_path = PathBuf::from(format!("{}.{}.sequences",    output_prefix.to_str().unwrap(), thread_num));
+                        let mut file = match File::create(&thread_seq_path) {
+                            Err(why) => panic!("couldn't create file: {}", why.description()),
+                            Ok(file) => file,
+                        };
+                        let mut file = BufWriter::new(file);
 
                 let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, ref skip, |_| {
                     let mut dbg_nodes   : HashMap<Kmer,u32> = HashMap::new(); // it's a Counter
@@ -474,8 +480,9 @@ fn main() {
                         let seq_str = String::from_utf8_lossy(seq_inp);
                         let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
                         reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                        
                         if read_obj.transformed.len() > k {
-                            read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_lens, &mut minim_shift, &params);
+                            read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params, &mut file);
                             if error_correct
                             {
                                 ec_entry.push((read_obj.id.to_string(), read_obj.seq, read_obj.transformed.to_vec(), read_obj.minimizers, read_obj.minimizers_pos));
@@ -579,6 +586,12 @@ fn main() {
             thread::scope(|s| {
                 let mut guards = Vec::with_capacity(threads);
                 for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
+                    let thread_seq_path = PathBuf::from(format!("{}.{}.sequences",    output_prefix.to_str().unwrap(), thread_num));
+                            let mut file = match File::create(&thread_seq_path) {
+                                Err(why) => panic!("couldn't create file: {}", why.description()),
+                                Ok(file) => file,
+                            };
+                            let mut file = BufWriter::new(file);
                     let mut dbg_nodes_all = dbg_nodes_all.clone();
                     let mut kmer_seqs_all = kmer_seqs_all.clone();
                     let mut kmer_seqs_lens_all = kmer_seqs_lens_all.clone();
@@ -610,7 +623,7 @@ fn main() {
                             }
                             ec_entry.push((read_obj.id.to_string(), read_obj.seq.to_string(), read_obj.transformed.to_vec(), read_obj.minimizers.to_vec(), read_obj.minimizers_pos.to_vec()));
                             if read_obj.transformed.len() > k { 
-                                read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes_t, &mut kmer_seqs, &mut kmer_seqs_lens, &mut minim_shift, &params);
+                                read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes_t, &mut kmer_seqs, &mut minim_shift, &params, &mut file);
                             }
                         }
 
@@ -661,10 +674,16 @@ fn main() {
     else
     { // restart from postcor
         let chunks = ec_reads::load(&postcor_path);
+        let thread_seq_path = PathBuf::from(format!("{}.restart.sequences",    output_prefix.to_str().unwrap()));
+        let mut file = match File::create(&thread_seq_path) {
+            Err(why) => panic!("couldn't create file: {}", why.description()),
+            Ok(file) => file,
+        };
+        let mut file = BufWriter::new(file);
         for ec_record in chunks.iter() {
             let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false};
             if read_obj.transformed.len() > k { 
-                read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut kmer_seqs_lens, &mut minim_shift, &params);
+                read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params, &mut file);
             }
         }
     }
@@ -742,7 +761,7 @@ fn main() {
         let index = gr.add_node(node.clone());
         node_indices.insert(node.clone(),index);
     }
-    let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.par_iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
+    let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
 
     gr.extend_with_edges( vec_edges );
 
@@ -763,15 +782,15 @@ fn main() {
     
     // gfa output
     println!("writing GFA..");
-    gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers, output_base_space);
+    let mut node_indices = gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, &minim_shift, levenshtein_minimizers, output_base_space, &node_indices);
 
     // write sequences of minimizers for each node
     // and also read sequences corresponding to those minimizers
-    if (output_base_space)
-    {
+    //if (output_base_space)
+   // {
         println!("writing sequences..");
-        seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l);
-    }
+        seq_output::write_minimizers_and_seq_of_kmers(&output_prefix, &mut node_indices, &kmer_seqs, &kmer_origin, &dbg_nodes, k, l, &minim_shift, threads);
+   // }
     
     let duration = start.elapsed();
     println!("Total execution time: {:?}", duration);
