@@ -160,7 +160,10 @@ def process_reads(reads,filename, only_those_reads = None):
         orig_dict[read_id] = minims 
 
     identities = id_dict.values()
-    mean_identity = sum(identities) / (1.0*len(identities))
+    if len(identities) == 0:
+        mean_identity = 0
+    else:
+        mean_identity = sum(identities) / (1.0*len(identities))
     print("for",filename,"mean read identity: %.2f%%" % mean_identity)
     return id_dict, aln_dict, orig_dict
 
@@ -178,6 +181,7 @@ def jac(poa_template,lst):
     if nb_included > 0:
         mean_jac /= nb_included
     return 1-mean_jac
+
 def mash(poa_template,lst):
     mean_mash = 0
     nb_included = 0

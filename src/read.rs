@@ -1,7 +1,7 @@
 use super::Params;
 use super::minimizers;
 use nthash::ntc64;
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 use std::collections::VecDeque;
 use std::fs::File;
 use super::Kmer;
@@ -11,6 +11,7 @@ use super::utils;
 use super::poa;
 use std::io::BufWriter;
 use super::utils::pretty_minvec;
+use super::utils::median;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
 #[derive(Clone)]
 pub struct Read {
@@ -122,7 +123,7 @@ impl Read {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params) {
+    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, kmer_seqs_lens: &mut HashMap<Kmer,Vec<u32>>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params) {
         let k = params.k;
         let l = params.l;
         let n = params.n;
@@ -148,7 +149,26 @@ impl Read {
                 if seq_reversed {
                     seq = utils::revcomp(&seq);
                 }
-                kmer_seqs.insert(node.clone(), seq.clone());
+
+                let mut inserted = false;
+                if kmer_seqs.contains_key(&node) { 
+                    let median_seq_len : usize = median(kmer_seqs_lens.get(&node).unwrap()) as usize;
+                    //println!("node: {} seqlen: {}",node.print_as_string(),seq.len());
+                    // insert that sequence if it's closer to the median length than the current
+                    // inserted string
+                    if ((seq.len() - median_seq_len) as f64).abs() < ((kmer_seqs.get(&node).unwrap().len() - median_seq_len) as f64).abs()
+                    { 
+                        kmer_seqs.insert(node.clone(), seq.clone());
+                        inserted = true;
+                    }
+                }
+                else
+                {
+                    kmer_seqs.insert(node.clone(), seq.clone());
+                    inserted = true;
+                }
+                kmer_seqs_lens.entry(node.clone()).or_insert(Vec::new()).push(seq.len() as u32);
+
                 //let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
                 //kmer_origin.insert(node.clone(), origin);
                 let position_of_second_minimizer = match seq_reversed {
@@ -159,10 +179,14 @@ impl Read {
                     true => self.minimizers_pos[i+1]-self.minimizers_pos[i],
                     false => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2]
                 };
-                minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+
+                if inserted
+                {
+                    minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
+                }
                 if levenshtein_minimizers == 0 {
                     for minim in &self.minimizers[i..i+k-1] {
-                        debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none()));
+                        debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none())); // something needs to be done about this assert, it's triggered when --release is removed FIXME FIXME TODO FIXME
                     }
                 }
            // }
@@ -193,36 +217,34 @@ impl Read {
         let mut read_transformed = &self.transformed;
         let mut seq_id = &self.id;
         let mut seq_str = &self.seq;
-        let mut aligned : HashMap<&Vec<u64>, bool> = HashMap::new();
+        let mut added_reads: HashSet<String> = HashSet::new();
         let mut bucket_reads = Vec::<&Read>::new();
         let mut poa_ids = Vec::<String>::new();
         let mut aligner = poa::Aligner::new(scoring, &read_transformed, Some(seq_str), Some(read_minimizers_pos));
 
         // populate bucket_reads with reads that share n consecutive minimizers with template
+        added_reads.insert(self.id.clone());  
         for i in 0..read_transformed.len()-n+1 {
-            let bucket_idx = &read_transformed[i..i+n];
+            let bucket_idx = &utils::normalize_vec(&read_transformed[i..i+n].to_vec());
             let entry = &buckets[bucket_idx];
             for id in entry.iter() {
                 let query = &reads_by_id[id];
-                if &query.transformed == read_transformed {continue;}
-                let aligned_entry = aligned.entry(&query.transformed).or_insert(false);
-                if !*aligned_entry {
+                if ! added_reads.contains(&query.id) {
                     bucket_reads.push(query);
-                    *aligned_entry = true;  
+                    added_reads.insert(query.id.clone());  
                 }
             }   
         }
         // filter bucket_reads so that it only contains reads below a mash distance of template
         let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < dist_threshold).collect();
+        // sort reads by their distance
         bucket_reads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        for (read, dist) in bucket_reads.iter() {
-            let transformed = &read.transformed;
-            let seq = &read.seq;
-            let pos = &read.minimizers_pos;
+
+        let max_poa_reads = 80;
+        if bucket_reads.len() > max_poa_reads {
+            bucket_reads = bucket_reads[..max_poa_reads].to_vec(); // limit to 50 lowest-distance reads per POA correction
         }
-        let len_before_poa = read_transformed.len();
-        let max_len = read_transformed.len()-n+1;
-        if bucket_reads.len() > max_len {bucket_reads = bucket_reads[0..max_len].to_vec();}
+
         //if bucket_reads.len() == 0 {println!("Read has no neighbors");}
 
         // do a first pass aligning reads to the template to get only the top X best scoring reads
@@ -250,6 +272,8 @@ impl Read {
             }
         }
         */
+        let mut nb_aln_forward = 0;
+        let mut nb_aln_backward = 0;
         for i in 0..bucket_reads.len() {
             poa_ids.push(bucket_reads[i].0.id.to_string());
             // don't know how to save alignments so i'll just waste time and recompute the best
@@ -277,9 +301,11 @@ impl Read {
                if fwd_score > bwd_score { 
                     aligner.semiglobal(&read.transformed, Some(seq), Some(pos));
                     aln_ori = "fwd";
+                    nb_aln_forward += 1;
                 } else { 
                     aligner.semiglobal(&rev_read, Some(&rev_seq), Some(&rev_minim_pos));
                     aln_ori = "bwd";
+                    nb_aln_backward += 1;
                 }
                 aligner.add_to_graph(); 
             }
@@ -289,8 +315,10 @@ impl Read {
         //println!("consensus()/consensus_edge_seqs() lens: {} / {}", consensus.len(), consensus_edge_seqs.len());
         let (consensus, consensus_edge_seqs) = aligner.consensus_boundary(&consensus, &consensus_edge_seqs, &read_transformed, debug);
         let consensus_read = consensus.iter().map(|minim| int_to_minimizer[minim].to_string()).collect::<Vec<String>>();
+        let len_before_poa  = self.transformed.len();
         let len_after_poa  = consensus_read.len();
         if debug { println!("len of template before/after poa: {} / {} (ID: {})", len_before_poa, len_after_poa, seq_id);}
+        if debug { println!("nb bucket read aligned fwd/bwd: {} / {} ", nb_aln_forward, nb_aln_backward);}
         let mut consensus_str = String::new();
         let mut pos_idx = 0;
         let mut consensus_pos = Vec::<usize>::new();

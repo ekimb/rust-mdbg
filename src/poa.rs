@@ -622,7 +622,7 @@ impl<F: MatchFunc> Aligner<F> {
                 AlignmentOperation::Del(None) => {
                     if debug{print!("d");}
                     break; //semiglobal can end anywhere in the first column
-                    j -= 1;
+                    //j -= 1;
                 }
                 AlignmentOperation::Ins(None) => {
                     if debug{print!("i");}
@@ -681,6 +681,7 @@ impl<F: MatchFunc> Aligner<F> {
         let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
         let mut regular_aligner = pairwise::Aligner::with_capacity(x.len(), y.len(), -1, -1, &score);
         let alignment = regular_aligner.semiglobal(x, y);
+        if alignment.yend - alignment.ystart < 2 { return (Vec::new(), Vec::new()); }
         let adjusted_cns = cns   [alignment.ystart..alignment.yend].to_vec().clone();
         let adjusted_es  = cns_es[alignment.ystart..(alignment.yend-1)].to_vec().clone();
         if debug
@@ -1034,7 +1035,7 @@ impl<F: MatchFunc> Poa<F> {
     /// and also
     /// return the sequences associated to edges in the consensus
     pub fn consensus(&mut self, params : &Params) -> (Vec<u64>, Vec<String>) {
-        let debug = false; // prints POA graph in dot format
+        let debug = params.debug; // prints POA graph in dot format
 
         let mut cns = Vec::new();
         let mut cns_edges_seqs = Vec::new();
@@ -1053,7 +1054,7 @@ impl<F: MatchFunc> Poa<F> {
         if debug 
         {
             // debug: print graph in dot format
-            let printable_graph = self.graph.map(|_, w| format!("{:?}", w), |_, w| format!("{:?}", w.0));
+            let printable_graph = self.graph.filter_map(|_, w| Some(format!("{:?}", w)), |_, w| if w.0 > 1 { Some(format!("{:?}", w.0))} else {None});
             println!("{}", Dot::with_config(&printable_graph, &[]));
         }
 

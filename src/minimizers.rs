@@ -204,8 +204,8 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     let density = params.density;
     let mut list_minimizers : Vec<String> = Vec::new();
     let mut count_vec: Vec<(&String, &u32)> = lmer_counts.into_iter().collect();
-    let mut threshold = params.c;
-    let mut min_threshold = 2;
+    let mut max_threshold = params.lmer_counts_max;
+    let mut min_threshold = params.lmer_counts_min;
     let mut skip : HashMap<String, bool> = HashMap::new();
     // the following code replaces what i had before:
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
@@ -223,7 +223,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
         list_minimizers.push(lmer.to_string());
         skip.insert(lmer, false);
     }
-    count_vec.iter().filter(|tup| tup.1 >= &threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
+    count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
     
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();

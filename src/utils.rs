@@ -35,3 +35,28 @@ pub fn pretty_minvec(seq :&Vec<u64>)  -> String
     }
     s
 }
+
+/// for sequences that aren't kminmers (shorer or longer)
+pub fn normalize_vec(seq :&Vec<u64>)  -> Vec<u64>
+{
+    let mut seq_rev = seq.clone();
+    seq_rev.reverse();
+    std::cmp::min(seq_rev, seq.clone())
+    //seq.clone() // FIXME
+}
+
+
+pub fn median(numbers: &Vec<u32>) -> u32 {
+    if numbers.len() == 1 {
+        return numbers[0]
+    }
+    let mut numbers = numbers.clone();
+    numbers.sort();
+    let mid = numbers.len() / 2;
+    if numbers.len() % 2 == 0 {
+        //mean(&vec![numbers[mid - 1], numbers[mid]]) as i32
+        numbers[mid-1] // we don't need to be that precise
+    } else {
+        numbers[mid]
+    }
+}
