@@ -479,7 +479,10 @@ fn main() {
                         let seq_id = record.id();
                         let seq_str = String::from_utf8_lossy(seq_inp);
                         let mut read_obj = Read::extract(seq_id.to_string(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
-                        reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                        if error_correct
+                        {
+                            reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                        }
                         
                         if read_obj.transformed.len() > k {
                             read_obj.read_to_kmers(&mut kmer_origin, &mut dbg_nodes, &mut kmer_seqs, &mut minim_shift, &params, &mut file);
@@ -521,6 +524,7 @@ fn main() {
         for thread_num in 0..threads {
             let mut entry = reads_by_id_all.entry(thread_num).or_insert(HashMap::new());
             for (id, read) in entry.into_iter() {reads_by_id.insert(id.to_string(), read.clone());}
+
             let mut dbg = dbg_nodes_all.entry(thread_num).or_insert(HashMap::new());
             for (node, abund) in dbg.into_iter() {
                 if dbg_nodes.contains_key(&node.clone()) {
