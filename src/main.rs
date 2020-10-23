@@ -158,7 +158,7 @@ fn thread_update_hashmap<U,V>(hashmap_all: &Arc<Mutex<HashMap<usize,HashMap<U,V>
     *entry = hashmap; // I believe hashmap is moved in this function as per https://stackoverflow.com/a/29490907 
 }
 
-fn thread_update_vec<U>(vec_all: &Arc<Mutex<HashMap<usize,Vec<U>>>>, vec: Vec<U>, thread_num: usize)
+pub fn thread_update_vec<U>(vec_all: &Arc<Mutex<HashMap<usize,Vec<U>>>>, vec: Vec<U>, thread_num: usize)
 {
     let mut vec_all = vec_all.lock().unwrap();
     let mut entry = vec_all.entry(thread_num).or_insert(Vec::new());
@@ -777,7 +777,8 @@ fn main() {
     // gfatools simplifications
     if presimp > 0.0
     {
-        presimp::presimp(&mut gr, &dbg_nodes, presimp);
+        let removed_edges_all = presimp::find_removed_edges(&gr, &dbg_nodes, presimp, threads);
+        presimp::presimp(&mut gr, &removed_edges_all);
     }
     
     // gfa output

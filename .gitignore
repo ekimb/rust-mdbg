@@ -17,3 +17,4 @@ ref/
 perf*
 runs
 *.paf
+Cargo.lock
