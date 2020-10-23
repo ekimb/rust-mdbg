@@ -779,7 +779,7 @@ fn main() {
     {
         let removed_edges_all = presimp::find_removed_edges(&gr, &dbg_nodes, presimp, threads);
         presimp::presimp(&mut gr, &removed_edges_all);
-        println!("{} edges removed during presimplification.", removed_edges_all);
+        println!("{:?} edges removed during presimplification.", removed_edges_all);
     }
     
     // gfa output
