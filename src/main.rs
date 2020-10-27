@@ -75,18 +75,6 @@ pub struct Params
     debug: bool,
 }
 
-fn extract_minimizers(seq: &str, params: &Params, int_to_minimizer: &HashMap<u64, String>, minimizer_to_int: &HashMap<String, u64>, mut lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
-{
-    if params.uhs {
-        return minimizers::minhash_uhs(seq.to_string(), params, int_to_minimizer, &mut lmer_counts, uhs_kmers)
-    }
-    if params.w != 0 {
-        return minimizers::minhash_window(seq.to_string(), params, int_to_minimizer, minimizer_to_int, &mut lmer_counts)
-    }
-    minimizers::minhash(seq.to_string(), params, int_to_minimizer, &mut lmer_counts)
-        //wk_minimizers(seq, density) // unfinished
-}
-
 
 fn debug_output_read_minimizers(seq_str: &String, read_minimizers : &Vec<String>, read_minimizers_pos :&Vec<u32>)
 {
@@ -285,6 +273,7 @@ fn main() {
     }
     if opt.reference {
         reference = true;
+        error_correct = false; // rayan->baris: remove this comment once you see it. added this line to make sure we don't do POA on reference
     }
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -388,9 +377,11 @@ fn main() {
             if line.len() == 0                      { break; }
             let trimmed  = line.trim().to_string();   
             let vec : Vec<String> = trimmed.split(" ").map(String::from).collect();
-            let kmer = vec[0].to_string();
+            let lmer = vec[0].to_string();
+            let lmer_rev = utils::revcomp(&lmer);
+            let lmer = if lmer > lmer_rev {lmer} else {lmer_rev}; //don't trust the kmer counter to normalize like we do
             let count = vec[1].parse::<u32>().unwrap();
-            lmer_counts.insert(kmer, count);               
+            lmer_counts.insert(lmer, count);               
             new_line(&mut line, &mut br);
         }
     }
@@ -401,12 +392,11 @@ fn main() {
     //minimizers::lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
  
 
-    let (mut minimizer_to_int, mut int_to_minimizer, skip) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
+    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
     
     // fasta parsing
     let reader = seq_io::fasta::Reader::from_path(&filename).unwrap();
     let queue_len = 20; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
-    let mut nb_reads = 0;
     let seq_path = PathBuf::from(format!("{}.0.sequences", output_prefix.to_str().unwrap()));
 
     let mut uhs_kmers = HashMap::<String, u32>::new();
@@ -465,10 +455,9 @@ fn main() {
 	// worker thread
 	let process_read = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,String,(usize,usize))>,Read) | {
 	    let mut output : Vec<(Kmer,String,String,(usize,usize))> = Vec::new();
-	    let seq_inp = record.seq();
+	    let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
 	    let seq_id = record.id().unwrap().to_string();
-	    let seq_str = String::from_utf8_lossy(seq_inp);
-	    let mut read_obj = Read::extract(seq_id.clone(), seq_str.to_string(), &params, &int_to_minimizer, &skip);
+	    let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
 	    //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
 	    if read_obj.transformed.len() > k {
 		output.extend(read_obj.read_to_kmers(&params));
@@ -510,7 +499,7 @@ fn main() {
 	file.flush().unwrap();
         ec_reads::flush(&mut ec_file);
         pb.finish_print("Done converting reads to k-min-mers.");
-        println!("Number of reads: {}", reads_by_id.len());
+        println!("Number of reads: {}", nb_reads);
 
 
         // this part will correct the reads, and dump them to disk

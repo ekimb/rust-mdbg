@@ -104,32 +104,7 @@ pub fn normalize_minimizer(lmer: &String) -> String
     res
 }
 
-pub fn minhash(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, lmer_counts: &mut HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
-{
-    let size_miniverse = params.size_miniverse as u64;
-    let density = params.density;
-    let l = params.l;
-    let mut read_minimizers = Vec::<String>::new();
-    let mut read_minimizers_pos = Vec::<u32>::new();
-    let mut read_transformed = Vec::<u64>::new();
-    for i in 0..seq.len()-l+1 {
-        let mut lmer = &seq[i..i+l];
-        let lmer_rev = utils::revcomp(&lmer);
-        lmer = std::cmp::min(lmer, &lmer_rev);
-        let hash = ntc64(lmer.as_bytes(), 0, l);
-        if (hash != 0) && (hash as f64) < u64::max_value() as f64 * density/(l as f64) {
-            read_minimizers.push(lmer.to_string());
-            read_minimizers_pos.push(i as u32);
-            read_transformed.push(hash);
-        }
-    }
-    
-    //let mut h1 = RollingAdler32::from_buffer(&seq.as_bytes()[..l]);
-    // convert minimizers to their integer representation
-
-    (read_minimizers, read_minimizers_pos, read_transformed)
-}
-
+// old code
 pub fn minhash_uhs(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, lmer_counts: &mut HashMap<String, u32>, uhs_kmers: &HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     let size_miniverse = params.size_miniverse as u64;
@@ -154,6 +129,9 @@ pub fn minhash_uhs(seq: String, params: &Params, int_to_minimizer : &HashMap<u64
 
     (read_minimizers, read_minimizers_pos, read_transformed)
 }
+
+
+// old code
 pub fn minhash_window(seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, minimizer_to_int : &HashMap<String, u64>, lmer_counts: &mut HashMap<String, u32>) -> (Vec<String>, Vec<u32>, Vec<u64>)
 {
     let l = params.l;
@@ -198,7 +176,7 @@ pub fn minhash_window(seq: String, params: &Params, int_to_minimizer : &HashMap<
 
 // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
 
-pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize, lmer_counts: &HashMap<String, u32>) -> (HashMap<String,u64>, HashMap<u64,String>, HashMap<String, bool>) {
+pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_size: u64, levenshtein_minimizers: usize, lmer_counts: &HashMap<String, u32>) -> (HashMap<String,u64>, HashMap<u64,String>) {
 
     let l = params.l;
     let density = params.density;
@@ -206,7 +184,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     let mut count_vec: Vec<(&String, &u32)> = lmer_counts.into_iter().collect();
     let mut max_threshold = params.lmer_counts_max;
     let mut min_threshold = params.lmer_counts_min;
-    let mut skip : HashMap<String, bool> = HashMap::new();
+    let mut skip : HashSet<String> = HashSet::new();
     // the following code replaces what i had before:
     // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
@@ -221,29 +199,38 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
             if lmer > lmer_rev {continue;} // skip if not canonical
        }
         list_minimizers.push(lmer.to_string());
-        skip.insert(lmer, false);
     }
-    count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| *skip.entry(x.to_string()).or_insert(false) = true);
+    count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| {skip.insert(x.to_string());});
     
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64,String> = HashMap::new();
-    let mut minim_idx : u32 = 0;
     let mut skips = 0;
         // assign numbers to minimizers, the regular way
         for lmer in list_minimizers
         {
             let mut hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
-            if skip[&lmer] {
+
+            let mut hash_new = hash as f64;
+            hash_new = (hash_new) / (u64::max_value() as f64);
+            if skip.contains(&lmer) { 
+                hash_new = hash_new.sqrt().sqrt().sqrt();
                 skips += 1;
             }
-            minimizer_to_int.insert(lmer.to_string(),  hash);
-            int_to_minimizer.insert(hash,         lmer.to_string());
-            minim_idx += 1;
+            if (hash_new as f64) <= (density/(l as f64)) {
+                minimizer_to_int.insert(lmer.to_string(),  hash);
+                int_to_minimizer.insert(hash,  lmer.to_string());
+
+                // also insert the info for the revcomp minimizer, will allow to avoid normalizing
+                // later 
+                let lmer_rev = utils::revcomp(&lmer);
+                minimizer_to_int.insert(lmer_rev.to_string(),  hash);
+                int_to_minimizer.insert(hash,  lmer_rev.to_string());
+            }
         }
     
     println!("selected {} minimizer ID's, {} sequences",int_to_minimizer.len(), minimizer_to_int.len());
     println!("{} frequent l-mers skipped", skips);
-    (minimizer_to_int, int_to_minimizer, skip)
+    (minimizer_to_int, int_to_minimizer)
 }
 
 pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> HashMap<String, u32> {

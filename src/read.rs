@@ -2,6 +2,7 @@ use super::Params;
 use super::minimizers;
 use nthash::ntc64;
 use std::collections::{HashMap,HashSet};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::VecDeque;
 use std::fs::File;
 use super::Kmer;
@@ -33,16 +34,16 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
+    pub fn extract(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>) -> Self {
         if params.w != 0 {
-            return Read::extract_windowed(inp_id, inp_seq, params, int_to_minimizer)
+            return Read::extract_windowed(inp_id, inp_seq, params, minimizer_to_int, int_to_minimizer)
         }
         else {
-            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip)
+            return Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)
         }
     }
 
-    pub fn extract_windowed(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>) -> Self {
+    pub fn extract_windowed(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int: &HashMap<String, u64>, int_to_minimizer : &HashMap<u64, String>) -> Self {
         let l = params.l;
         let w = params.w;
         let mut read_minimizers = Vec::<String>::new();
@@ -94,34 +95,34 @@ impl Read {
         let mut read_minimizers_pos : Vec::<usize> = M.iter().map(|lmer| lmer.pos).collect();
         let mut read_transformed : Vec::<u64> = M.iter().map(|lmer| lmer.hash).collect();
 
-        Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.clone(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq.clone(), corrected: false}
 
     }
-    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
+    pub fn extract_density(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
         let mut read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
-        let inp_seq = if params.reference { inp_seq.replace("\n","") } else {inp_seq}; // seq_io might return newlines in fasta seq?!
+        let inp_seq = if params.reference { inp_seq.replace("\n","") } else {inp_seq.clone()}; // seq_io might return newlines in fasta seq?!
         //println!("parsing new read: {}\n",inp_seq);
         for i in 0..inp_seq.len()-l+1 {
-            let mut lmer = &inp_seq[i..i+l];
-            let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
-            let mut hash = ntc64(lmer.as_bytes(), 0, l);
-            let mut hash_new = hash as f64;
-            hash_new = (hash_new) / (u64::max_value() as f64);
-            if !lmer.contains("N") && skip[&lmer.to_string()] {
-                hash_new = hash_new.sqrt().sqrt().sqrt();
-            }
-            if (!lmer.contains("N")) && (hash_new as f64) <= (density/(l as f64)) {
-                read_minimizers.push(lmer.to_string());
-                read_minimizers_pos.push(i);
-                read_transformed.push(hash);
-            }
+            let lmer = &inp_seq[i..i+l];
+            /* // this value was already precomputed during minimizers_preparation(), so let's use it
+             let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
+             let mut hash = ntc64(lmer.as_bytes(), 0, l);
+             */
+            let hash = match minimizer_to_int.get(lmer)
+            {
+                None => {continue; }
+                Some(x) => { *x}
+            };
+            read_minimizers.push(lmer.to_string());
+            read_minimizers_pos.push(i);
+            read_transformed.push(hash);
         }
-        Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.clone(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }
 
     pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>) {
