@@ -34,6 +34,7 @@ print("number of kmers from %s that are in %s:" % (file1,file2), kmers1_in_kmers
 assert numpy.median(list(kmer_abundance1.values())) == 1, "file1 should be a genome, i.e. kmers median abundance should be 1"
 
 def plot_ascii_histogram(samples):
+    if len(samples) == 0: return
     counts, bin_edges = numpy.histogram(samples, bins=list(range(0,500,5)))
     fig = tpl.figure()
     fig.hist(counts, bin_edges, grid=[15, 25], force_ascii=False)
@@ -67,13 +68,13 @@ if debug_missing_kmers:
     """
 
     print("the",kmers1_not_in_kmers2,"missing kmers:")
+    #f = open("missing_kmers.txt", "a")
     for kmer in [x for x in kmers1 if x not in kmers2]:
         if kmer in origins1:
             origin = origins1[kmer]
-            f = open("missing_kmers.txt", "a")
             print(kmer,origin)
         else:
             print(kmer,"not found in reference '.sequences' file, but should have been")
         if kmer[::-1] in origins1:
             print("Reverse complement in reference")
-    f.close()
+    #f.close()
