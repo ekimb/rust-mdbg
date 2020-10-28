@@ -30,6 +30,7 @@ closure = "0.3.0"
 editdistancewf = "0.1.0"
 libc = "0.2.77"
 bio-types = "0.7.0" # for my reimplementation of needleman-wunsch, bio_types is called by bio too
+seq_io= { git = "https://github.com/markschl/seq_io" } # parallel fastq parser, v.0.4.0 isn't installable otherwise yet
 
 [profile.dev]
 opt-level = 3

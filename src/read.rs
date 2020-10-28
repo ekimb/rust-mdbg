@@ -2,6 +2,7 @@ use super::Params;
 use super::minimizers;
 use nthash::ntc64;
 use std::collections::{HashMap,HashSet};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::VecDeque;
 use std::fs::File;
 use super::Kmer;
@@ -16,7 +17,7 @@ use std::io::Write;
 use super::utils::pretty_minvec;
 use super::utils::median;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Read {
     pub id: String,
     pub minimizers : Vec<String>,
@@ -33,16 +34,16 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn extract(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
+    pub fn extract(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>) -> Self {
         if params.w != 0 {
-            return Read::extract_windowed(inp_id, inp_seq, params, int_to_minimizer)
+            return Read::extract_windowed(inp_id, inp_seq, params, minimizer_to_int, int_to_minimizer)
         }
         else {
-            return Read::extract_density(inp_id, inp_seq, params, int_to_minimizer, skip)
+            return Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)
         }
     }
 
-    pub fn extract_windowed(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer: &HashMap<u64, String>) -> Self {
+    pub fn extract_windowed(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int: &HashMap<String, u64>, int_to_minimizer : &HashMap<u64, String>) -> Self {
         let l = params.l;
         let w = params.w;
         let mut read_minimizers = Vec::<String>::new();
@@ -94,45 +95,47 @@ impl Read {
         let mut read_minimizers_pos : Vec::<usize> = M.iter().map(|lmer| lmer.pos).collect();
         let mut read_transformed : Vec::<u64> = M.iter().map(|lmer| lmer.hash).collect();
 
-        Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.clone(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq.clone(), corrected: false}
 
     }
-    pub fn extract_density(inp_id: String, inp_seq: String, params: &Params, int_to_minimizer : &HashMap<u64, String>, skip: &HashMap<String, bool>) -> Self {
+    pub fn extract_density(inp_id: &String, inp_seq: &String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
         let mut read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
+        let inp_seq = if params.reference { inp_seq.replace("\n","") } else {inp_seq.clone()}; // seq_io might return newlines in fasta seq?!
+        //println!("parsing new read: {}\n",inp_seq);
         for i in 0..inp_seq.len()-l+1 {
-            let mut lmer = &inp_seq[i..i+l];
-            let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
-            let mut hash = ntc64(lmer.as_bytes(), 0, l);
-            let mut hash_new = hash as f64;
-            hash_new = (hash_new) / (u64::max_value() as f64);
-            if !lmer.contains("N") && skip[&lmer.to_string()] {
-                hash_new = hash_new.sqrt().sqrt().sqrt();
-            }
-            if (!lmer.contains("N")) && (hash_new as f64) <= (density/(l as f64)) {
-                read_minimizers.push(lmer.to_string());
-                read_minimizers_pos.push(i);
-                read_transformed.push(hash);
-            }
+            let lmer = &inp_seq[i..i+l];
+            /* // this value was already precomputed during minimizers_preparation(), so let's use it
+             let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
+             let mut hash = ntc64(lmer.as_bytes(), 0, l);
+             */
+            let hash = match minimizer_to_int.get(lmer)
+            {
+                None => {continue; }
+                Some(x) => { *x}
+            };
+            read_minimizers.push(lmer.to_string());
+            read_minimizers_pos.push(i);
+            read_transformed.push(hash);
         }
-        Read {id: inp_id, minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.clone(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }
 
     pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>) {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, kmer_origin: &mut HashMap<Kmer,String>, dbg_nodes: &mut HashMap<Kmer,u32> , kmer_seqs: &mut HashMap<Kmer,String>, minim_shift : &mut HashMap<Kmer, (usize, usize)>, params: &Params, thread_seq_path :&mut BufWriter<File>) {
+    pub fn read_to_kmers(&mut self, params: &Params) -> Vec<(Kmer,String,String,(usize,usize))> {
         let k = params.k;
         let l = params.l;
         let n = params.n;
         let min_kmer_abundance = params.min_kmer_abundance;
         let levenshtein_minimizers = params.levenshtein_minimizers;
-        let output_base_space = params.output_base_space;
+        let mut output : Vec<(Kmer,String,String,(usize,usize))> = Vec::new();
         for i in 0..(self.transformed.len()-k+1) {
             let mut node : Kmer = Kmer::make_from(&self.transformed[i..i+k]);
             let mut seq_reversed = false;
@@ -141,64 +144,57 @@ impl Read {
                 node = node_norm;
                 seq_reversed = reversed;
             } 
-            let entry = dbg_nodes.entry(node.clone()).or_insert(0);
-            *entry += 1;
 
-           // if ! output_base_space { continue;}
-
-
-           if *entry == 1 {
-                let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
-                if seq_reversed {
-                    seq = utils::revcomp(&seq);
-                }
-
-                /* // TODO incorporate that code somehow into writing an adequate sequence 
-                let mut inserted = false;
-                if kmer_seqs.contains_key(&node) { 
-                    let median_seq_len : usize = median(kmer_seqs_lens.get(&node).unwrap()) as usize;
-                    //println!("node: {} seqlen: {}",node.print_as_string(),seq.len());
-                    // insert that sequence if it's closer to the median length than the current
-                    // inserted string
-                    if ((seq.len() - median_seq_len) as f64).abs() < ((kmer_seqs.get(&node).unwrap().len() - median_seq_len) as f64).abs()
-                    { 
-                        kmer_seqs.insert(node.clone(), seq.clone());
-                        inserted = true;
-                    }
-                }
-                else
-                {
-                    kmer_seqs.insert(node.clone(), seq.clone());
-                    inserted = true;
-                }
-                kmer_seqs_lens.entry(node.clone()).or_insert(Vec::new()).push(seq.len() as u32);
-                */
-
-                let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
-                //kmer_seqs.insert(node.clone(), seq.clone());
-                //kmer_origin.insert(node.clone(), origin);
-                
-                let position_of_second_minimizer = match seq_reversed {
-                    true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
-                    false => self.minimizers_pos[i+1]-self.minimizers_pos[i]
-                };
-                let position_of_second_to_last_minimizer = match seq_reversed {
-                    true => self.minimizers_pos[i+1]-self.minimizers_pos[i],
-                    false => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2]
-                };
-
-                let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
-                //minim_shift.insert(node.clone(), (position_of_second_minimizer, position_of_second_to_last_minimizer));
-                
-                if levenshtein_minimizers == 0 {
-                    for minim in &self.minimizers[i..i+k-1] {
-                        debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none())); // something needs to be done about this assert, it's triggered when --release is removed FIXME FIXME TODO FIXME
-                    }
-                }
-                let s_line = format!("{}\t{}\t{}\t{:?}",node.print_as_string(), seq, origin, shift);
-                write!(thread_seq_path, "{}\n", s_line).expect("error writing minimizers/sequences");
+            let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
+            if seq_reversed {
+                seq = utils::revcomp(&seq);
             }
+
+            /* // TODO incorporate that code somehow into writing an adequate sequence 
+              // not just the first sequence that appears for a kmer (at abundance 2)
+              // but rather the seq that has closest length to median length for that kmer
+               let mut inserted = false;
+               if kmer_seqs.contains_key(&node) { 
+               let median_seq_len : usize = median(kmer_seqs_lens.get(&node).unwrap()) as usize;
+            //println!("node: {} seqlen: {}",node.print_as_string(),seq.len());
+            // insert that sequence if it's closer to the median length than the current
+            // inserted string
+            if ((seq.len() - median_seq_len) as f64).abs() < ((kmer_seqs.get(&node).unwrap().len() - median_seq_len) as f64).abs()
+            { 
+            kmer_seqs.insert(node.clone(), seq.clone());
+            inserted = true;
+            }
+            }
+            else
+            {
+            kmer_seqs.insert(node.clone(), seq.clone());
+            inserted = true;
+            }
+            kmer_seqs_lens.entry(node.clone()).or_insert(Vec::new()).push(seq.len() as u32);
+            */
+
+            let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+
+            let position_of_second_minimizer = match seq_reversed {
+                true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
+                false => self.minimizers_pos[i+1]-self.minimizers_pos[i]
+            };
+            let position_of_second_to_last_minimizer = match seq_reversed {
+                true => self.minimizers_pos[i+1]-self.minimizers_pos[i],
+                false => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2]
+            };
+
+            let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
+
+            if levenshtein_minimizers == 0 {
+                for minim in &self.minimizers[i..i+k-1] {
+                    //debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none())); // something needs to be done about this assert, it's triggered when --release is removed FIXME 
+                }
+            }
+
+            output.push((node,seq,origin,shift));
         }
+        output
     }
 
     

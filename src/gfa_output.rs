@@ -119,7 +119,7 @@ fn find_overlap(seq1 :&str, seq2 :&str, ori1 :&str, ori2: &str, kmer1 :&Kmer, km
     shift as u32
 }
 
-pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, minim_shift: &HashMap<Kmer,(usize,usize)>, levenshtein_minimizers: usize, output_base_space: bool, node_indices: &HashMap<Kmer, NodeIndex>) -> HashMap<Kmer, usize>  {
+pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, output_prefix :&PathBuf, kmer_seqs :&HashMap<Kmer,String>, int_to_minimizer :&HashMap<u64,String>, levenshtein_minimizers: usize, node_indices: &HashMap<Kmer, NodeIndex>) -> HashMap<Kmer, usize>  {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     let mut node_indices = HashMap::<Kmer, usize>::new();
@@ -164,10 +164,8 @@ pub fn output_gfa(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, outp
             kmer2 = kmer2.reverse();
         }
         let mut shift = 0;
-        /*if (output_base_space)
-        {
-            shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
-        }*/
+        // this is no longer done as sequences are output in a separate file and not in the gfa
+        //shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
         let mut overlap_length = seq1.len() as u32 -shift;
 
 

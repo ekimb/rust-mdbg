@@ -15,7 +15,7 @@ use std::path::Path;
 // for reconstructing sequences in assemblies. otherwise having just 
 // the graph would be a bit useless
 
-pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :&mut HashMap<Kmer,usize>, kmer_seqs :&HashMap<Kmer,String>, kmer_origin: &HashMap<Kmer,String>, dbg_nodes :&HashMap<Kmer,u32> , k:usize, l:usize, minim_shift: &HashMap<Kmer,(usize,usize)>, threads: usize)
+pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :&mut HashMap<Kmer,usize>, kmer_origin: &HashMap<Kmer,String>, dbg_nodes :&HashMap<Kmer,u32> , k:usize, l:usize)
 {
     let output_filename = format!("{}{}",output_prefix.to_string_lossy(),".sequences");
     let path = PathBuf::from(&output_filename);
@@ -28,34 +28,30 @@ pub fn write_minimizers_and_seq_of_kmers(output_prefix :&PathBuf, node_indices :
     write!(out_file, "# structure of remaining of the file:\n").unwrap();
     write!(out_file, "# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n").expect("error writing sequences file");
     let mut node_count = 0;
-    for thread in 0..threads {
-        let input_filename = format!("{}.{}.sequences",output_prefix.to_string_lossy(), thread);
-        let input_path = PathBuf::from(&input_filename);
-        if let Ok(lines) = read_lines(input_path) {
-            for line in lines {
-                if let Ok(ip) = line {
-                    //println!("{}", ip);
-                    let str_vec : Vec<&str> = ip.trim().split("\t").collect();
-                    let node_raw : Vec<u64> = str_vec[0].split(|c| c == '[' || c == ']' || c == ' ' || c == ',').filter(|&c| c != "").map(|s| s.parse().unwrap()).collect::<Vec<u64>>();
-                    let kmer_seq = str_vec[1].to_string();  
-                    let kmer_origin = str_vec[2].to_string(); 
-                    let node_shift : Vec<usize> = str_vec[3].trim().split(|c| c == '(' || c == ')' || c == ' ' || c == ',').filter(|&c| c != "").map(|s| s.parse().unwrap()).collect::<Vec<usize>>();
-                    let mut node : Kmer = Kmer::make_from(&node_raw);
-                    let max_node = usize::max_value();
-                    let index = node_indices.get(&node).unwrap_or(&max_node);
-                    if index != &max_node {
-                        let abundance = dbg_nodes[&node];
-                        node_count += 1;
-                        let s_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",index,node.print_as_string(), kmer_seq, abundance, kmer_origin, node_shift);
-                        write!(out_file, "{}\n", s_line).expect("error writing minimizers/sequences");
-                        node_indices.remove(&node);
-                    }
-
+    let input_filename = format!("{}.0.sequences",output_prefix.to_string_lossy());
+    let input_path = PathBuf::from(&input_filename);
+    if let Ok(lines) = read_lines(input_path) {
+        for line in lines {
+            if let Ok(ip) = line {
+                //println!("{}", ip);
+                let str_vec : Vec<&str> = ip.trim().split("\t").collect();
+                let node_raw : Vec<u64> = str_vec[0].split(|c| c == '[' || c == ']' || c == ' ' || c == ',').filter(|&c| c != "").map(|s| s.parse().unwrap()).collect::<Vec<u64>>();
+                let kmer_seq = str_vec[1].to_string();  
+                let kmer_origin = str_vec[2].to_string(); 
+                let node_shift : Vec<usize> = str_vec[3].trim().split(|c| c == '(' || c == ')' || c == ' ' || c == ',').filter(|&c| c != "").map(|s| s.parse().unwrap()).collect::<Vec<usize>>();
+                let mut node : Kmer = Kmer::make_from(&node_raw);
+                let max_node = usize::max_value();
+                let index = node_indices.get(&node).unwrap_or(&max_node);
+                if index != &max_node {
+                    let abundance = dbg_nodes[&node];
+                    node_count += 1;
+                    let s_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",index,node.print_as_string(), kmer_seq, abundance, kmer_origin, node_shift);
+                    write!(out_file, "{}\n", s_line).expect("error writing minimizers/sequences");
+                    node_indices.remove(&node);
                 }
-            }
-            
-        }        
 
+            }
+        }
     }
    /* for (node, index) in node_indices {
         println!("{} {}", node.print_as_string(), dbg_nodes[&node])
