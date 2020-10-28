@@ -18,3 +18,4 @@ perf*
 runs
 *.paf
 Cargo.lock
+src/graph.py
