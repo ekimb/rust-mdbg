@@ -18,7 +18,7 @@ cp ../dsk/build/bin/* .
 start=`date +%s`
 echo "Running reads..."
 
-command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/hg002_hifi_hpc.fa -k $K -l $L --presimp $P --lmer-counts-max $C --density $DENSITY --threads $TH --minabund 2 --correction-threshold $threshold --lmer-counts HG002_hifi_hpc.ascii.txt --distance $distance --no-error-correct --prefix hg002_hifi 2>&1 | tee -a bench/hg002-bench-$1$2.txt
+command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch1/ekim/HG002_hifi/HG002_hifi_hpc.fa -k $K -l $L --presimp $P --lmer-counts-max $C --density $DENSITY --threads $TH --minabund 2 --correction-threshold $threshold --lmer-counts HG002_hifi_hpc.ascii.txt --distance $distance --no-error-correct --prefix hg002_hifi 2>&1 | tee -a bench/hg002-bench-$1$2.txt
 end=`date +%s`
 echo "Completing GFA..."
 python utils/complete_gfa.py hg002_hifi.sequences hg002_hifi.gfa
