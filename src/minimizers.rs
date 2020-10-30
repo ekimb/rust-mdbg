@@ -216,7 +216,7 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
                 hash_new = hash_new.sqrt().sqrt().sqrt();
                 skips += 1;
             }
-            if (hash_new as f64) <= (density/(l as f64)) {
+            if (hash_new as f64) <= (density as f64) {
                 minimizer_to_int.insert(lmer.to_string(),  hash);
                 int_to_minimizer.insert(hash,  lmer.to_string());
 

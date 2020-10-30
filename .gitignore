@@ -19,3 +19,4 @@ runs
 *.paf
 Cargo.lock
 src/graph.py
+compute_err.py
