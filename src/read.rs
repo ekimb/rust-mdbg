@@ -129,13 +129,13 @@ impl Read {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, params: &Params) -> Vec<(Kmer,String,String,(usize,usize))> {
+    pub fn read_to_kmers(&mut self, params: &Params) -> Vec<(Kmer,String,bool,String,(usize,usize))> {
         let k = params.k;
         let l = params.l;
         let n = params.n;
         let min_kmer_abundance = params.min_kmer_abundance;
         let levenshtein_minimizers = params.levenshtein_minimizers;
-        let mut output : Vec<(Kmer,String,String,(usize,usize))> = Vec::new();
+        let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
         for i in 0..(self.transformed.len()-k+1) {
             let mut node : Kmer = Kmer::make_from(&self.transformed[i..i+k]);
             let mut seq_reversed = false;
@@ -146,9 +146,9 @@ impl Read {
             } 
 
             let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
-            if seq_reversed {
-                seq = utils::revcomp(&seq);
-            }
+            //if seq_reversed {
+            //    seq = utils::revcomp(&seq);
+            //}
 
             /* // TODO incorporate that code somehow into writing an adequate sequence 
               // not just the first sequence that appears for a kmer (at abundance 2)
@@ -192,7 +192,7 @@ impl Read {
                 }
             }
 
-            output.push((node,seq,origin,shift));
+            output.push((node,seq,seq_reversed,origin,shift));
         }
         output
     }

@@ -420,9 +420,9 @@ fn main() {
     let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
     let mut reads_by_id = HashMap::<String, Read>::new();
 
-    let mut add_kminmers = |vec: Vec<(Kmer,String,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut BufWriter<File>, node_index: &mut u64| 
+    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut BufWriter<File>, node_index: &mut u64| 
     {
-        for (node, seq, origin, shift) in vec.iter() {
+        for (node, seq, seq_reversed, origin, shift) in vec.iter() {
             let mut abundance: u32 = 1;
             let mut cur_node_index;
             // do everything that read_to_kmers should have done
@@ -441,6 +441,7 @@ fn main() {
             // hum that's it actually!
             // now write the node sequence along with the final node index
             if params.reference && abundance == 1 {
+                let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
                 write!(sequences_file, "{}\n", seq_line);
             }
@@ -448,6 +449,7 @@ fn main() {
                 // (note that this doesnt enable to
                 // control which seq we save based on
                 // median seq length)
+                let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
                 write!(sequences_file, "{}\n", seq_line);
             }
@@ -462,8 +464,8 @@ fn main() {
         }
 
 	// worker thread
-	let process_read = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,String,(usize,usize))>,Read) | {
-	    let mut output : Vec<(Kmer,String,String,(usize,usize))> = Vec::new();
+	let process_read = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
+	    let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
 	    let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
 	    let seq_id = record.id().unwrap().to_string();
 	    let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
