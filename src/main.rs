@@ -53,7 +53,9 @@ const revcomp_aware: bool = true; // shouldn't be set to false except for strand
 //use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
-
+type DbgIndex = u32;// heavily optimized assuming we won't get more than 2B kminmers of abundance <= 65535
+type DbgAbundance = u16;
+struct DbgEntry { index: DbgIndex, abundance: DbgAbundance } 
 pub struct Params
 {
     l: usize,
@@ -66,7 +68,7 @@ pub struct Params
     average_lmer_count : f64,
     lmer_counts_min : u32,
     lmer_counts_max : u32,
-    min_kmer_abundance : u32,
+    min_kmer_abundance : DbgAbundance,
     levenshtein_minimizers : usize,
     correction_threshold: i32,
     distance: usize ,
@@ -255,7 +257,7 @@ fn main() {
     let mut t: usize = 0;
     let mut w: usize = 0;
     let mut density :f64 = 0.10;
-    let mut min_kmer_abundance: u32 = 2;
+    let mut min_kmer_abundance: DbgAbundance = 2;
     let mut levenshtein_minimizers: usize = 0;
     let mut distance: usize = 0;
     let mut error_correct: bool = true;
@@ -293,7 +295,7 @@ fn main() {
     if !opt.t.is_none() { t = opt.t.unwrap() } else { println!("Warning: using default t value ({})",t); }
 
     if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
-    if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() as u32 } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
+    if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() as DbgAbundance } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.presimp.is_none() { presimp = opt.presimp.unwrap(); } else { println!("Warning: Using default no-presimp"); }
     if !opt.threads.is_none() { threads = opt.threads.unwrap(); } else { println!("Warning: Using default num threads (8)"); }
@@ -404,11 +406,10 @@ fn main() {
         uhs_kmers = minimizers::uhs_preparation(&mut params, &uhs_filename)
     }
 
-    struct DbgEntry { index: u64, abundance: u32 };
     // dbg_nodes is a hash table containing (kmers -> (index,count))
     // it will keep only those with count > 1
     let mut dbg_nodes     : HashMap<Kmer,DbgEntry> = HashMap::new(); // it's a Counter
-    let mut node_index :u64 = 0; // associates a unique integer to each dbg node
+    let mut node_index : DbgIndex = 0; // associates a unique integer to each dbg node
     let mut kmer_seqs     : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node (k-min-mer) to an arbitrary sequence from the reads
     let mut kmer_seqs_lens: HashMap<Kmer,Vec<u32>> = HashMap::new(); // associate a dBG node to the lengths of all its sequences from the reads
     let mut kmer_origin   : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
@@ -420,10 +421,10 @@ fn main() {
     let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
     let mut reads_by_id = HashMap::<String, Read>::new();
 
-    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut BufWriter<File>, node_index: &mut u64| 
+    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut BufWriter<File>, node_index: &mut DbgIndex| 
     {
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
-            let mut abundance: u32 = 1;
+            let mut abundance: u16 = 1;
             let mut cur_node_index;
             // do everything that read_to_kmers should have done
             match dbg_nodes.entry(node.clone()) {
@@ -617,7 +618,7 @@ fn main() {
 
     // now DBG creation can start
     println!("nodes before abund-filter: {}", dbg_nodes.len());
-    dbg_nodes.retain(|x,c| c.abundance >= (min_kmer_abundance as u32));
+    dbg_nodes.retain(|x,c| c.abundance >= (min_kmer_abundance as DbgAbundance));
     println!("nodes after: {}", dbg_nodes.len());
     let mut dbg_edges : Vec<(&Kmer,&Kmer)> = Vec::new();
 
@@ -653,7 +654,7 @@ fn main() {
 
     let mut nb_edges = 0;
     let mut presimp_removed = 0;
-    let mut removed_edges : HashSet<(u64,u64)> = HashSet::new();
+    let mut removed_edges : HashSet<(DbgIndex,DbgIndex)> = HashSet::new();
     let mut vec_edges = Vec::new(); // for presimp, keep a list of all edges to insert
 
     // create a vector of dbg edges (if we want to create a petgraph)
@@ -673,7 +674,7 @@ fn main() {
             if km_index.contains_key(&key)
             {
                 let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
-                let mut potential_edges : Vec<(u32,u64,String,String)> = Vec::new();
+                let mut potential_edges : Vec<(DbgAbundance,DbgIndex,String,String)> = Vec::new();
                 let mut vec_add_edge = |n1,n2,ori1 :&str,ori2 :&str|{
                     let n2_entry = dbg_nodes.get(n2).unwrap();
                     let n2_abundance = n2_entry.abundance;

@@ -39,7 +39,7 @@ impl KmerVec
     {
         if !revcomp_aware { return (self.clone(), false)}
         let rev = self.reverse();
-        if self.clone() < rev {
+        if *self < rev {
             (self.clone(), false)
         }
         else {

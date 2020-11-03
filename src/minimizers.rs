@@ -94,12 +94,12 @@ pub fn lmer_counting(lmer_counts: &mut HashMap<String,u32>, filename :&PathBuf, 
     params.average_lmer_count = lmer_counts.values().sum::<u32>() as f64 / lmer_counts.len() as f64;
     println!("average lmer count: {}",params.average_lmer_count);
 }
-pub fn normalize_minimizer(lmer: &String) -> String
+pub fn normalize_minimizer(lmer: &str) -> String
 {
-    let mut res = lmer.clone();
+    let mut res = lmer.to_string();
     if revcomp_aware {
         let rev = utils::revcomp(&lmer);
-        if rev < res { res = rev; }
+        if rev < res { res = rev.clone(); }
     }
     res
 }
