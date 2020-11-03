@@ -1,6 +1,6 @@
 use super::Params;
 use super::minimizers;
-use nthash::ntc64;
+use nthash::{ntc64,NtHashIterator};
 use std::collections::{HashMap,HashSet};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::VecDeque;
@@ -107,18 +107,25 @@ impl Read {
         let mut read_transformed = Vec::<u64>::new();
         let inp_seq = if params.reference { inp_seq.replace("\n","") } else {inp_seq.clone()}; // seq_io might return newlines in fasta seq?!
         //println!("parsing new read: {}\n",inp_seq);
-        for i in 0..inp_seq.len()-l+1 {
+        let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
+        for (i,hash) in iter {
+        /*for i in 0..inp_seq.len()-l+1 {
             let lmer = &inp_seq[i..i+l];
-            /* // this value was already precomputed during minimizers_preparation(), so let's use it
+        */
+            /* // real slow version (for debugging I guess)
              let mut lmer = minimizers::normalize_minimizer(&lmer.to_string());
              let mut hash = ntc64(lmer.as_bytes(), 0, l);
              */
-            let hash = match minimizer_to_int.get(lmer)
+            // lookup-based minimizer computation
+            /*let hash = match minimizer_to_int.get(lmer)
             {
                 None => {continue; }
                 Some(x) => { *x}
-            };
-            read_minimizers.push(lmer.to_string());
+            };*/
+            let lmer = &inp_seq[i..i+l];
+            let hash = *minimizer_to_int.get(lmer).unwrap(); // allows to take the 'skip' array into account
+            //read_minimizers.push(lmer.to_string()); // actually only needed for debugging
             read_minimizers_pos.push(i);
             read_transformed.push(hash);
         }
@@ -173,7 +180,8 @@ impl Read {
             kmer_seqs_lens.entry(node.clone()).or_insert(Vec::new()).push(seq.len() as u32);
             */
 
-            let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string());
+            let origin = "*".to_string(); // uncomment the line below to track where the kmer is coming from (but not needed in production)
+            //let origin = format!("{}_{}_{}", self.id, self.minimizers_pos[i].to_string(), self.minimizers_pos[i+k-1].to_string()); 
 
             let position_of_second_minimizer = match seq_reversed {
                 true => self.minimizers_pos[i+k-1]-self.minimizers_pos[i+k-2],
@@ -187,9 +195,9 @@ impl Read {
             let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
 
             if levenshtein_minimizers == 0 {
-                for minim in &self.minimizers[i..i+k-1] {
+                //for minim in &self.minimizers[i..i+k-1] {
                     //debug_assert!((!&seq.find(minim).is_none()) || (!utils::revcomp(&seq).find(minim).is_none())); // something needs to be done about this assert, it's triggered when --release is removed FIXME 
-                }
+                //}
             }
 
             output.push((node,seq,seq_reversed,origin,shift));
