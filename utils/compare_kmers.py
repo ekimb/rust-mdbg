@@ -13,6 +13,11 @@ from parse_sequences_file import parse
 k, l, node_minims,  kmer_seq1, kmer_abundance1, origins1, minim_shift = parse(file1)
 osef, osef, node_minims2, kmer_seq2, kmer_abundance2, origins2, minim_shift2 = parse(file2)
 
+# in new version, sequences file don't hold abundance anymore, so read it off the gfa
+import parse_gfa
+kmer_abundance1 = parse_gfa.parse(file1.replace('.sequences','.gfa'))
+kmer_abundance2 = parse_gfa.parse(file2.replace('.sequences','.gfa'))
+
 kmers1 = set(kmer_seq1.keys())
 kmers2 = set(kmer_seq2.keys())
 
@@ -31,6 +36,7 @@ print("number of kmers from %s that are in %s:" % (file1,file2), kmers1_in_kmers
 # 2) that are erroneous
 
 # assumes file1 is the genome and file2 is the reads
+#print(kmer_abundance1)
 assert numpy.median(list(kmer_abundance1.values())) == 1, "file1 should be a genome, i.e. kmers median abundance should be 1"
 
 def plot_ascii_histogram(samples):

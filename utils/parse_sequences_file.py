@@ -18,11 +18,12 @@ def parse(filename):
         seq_id = spl[0]
         minims = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[1:-5]))
         if spl[-4] != "PLACEHOLDER": 
-            abundance = int(spl[-4])
-            kmer_abundance[minims] = abundance
+            abundance = spl[-4]
+            if abundance != "*": abundance = int(abundance)
+            kmer_abundance[seq_id] = abundance
         origin = spl[-2]
         seq = spl[-5]
-        shifts = tuple(map(lambda x: int(x.strip('[').strip(']').replace(',','')),spl[-2:]))
+        shifts = tuple(map(lambda x: int(x.strip('(').strip(')').replace(',','')),spl[-2:]))
         node_minims[seq_id] = minims
         kmer_to_seq[minims] = seq
         kmer_origins[minims] = origin
