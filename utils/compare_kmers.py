@@ -47,11 +47,12 @@ def plot_ascii_histogram(samples):
     fig.show()
 
 
-genomic_kmers = [abundance for (kmer,abundance) in kmer_abundance2.items() if kmer in kmers1]
+genomic_kmers = [abundance for (kmer,abundance) in kmer_abundance2.items() if kmer in node_minims and node_minims[kmer] in kmers1]
+#print(genomic_kmers)
 plot_ascii_histogram(genomic_kmers)
 print("^ genomic k-min-mers abundance histogram (total: %d)" % len(genomic_kmers))
 
-erroneous_kmers = [abundance for (kmer,abundance) in kmer_abundance2.items() if kmer not in kmers1]
+erroneous_kmers = [abundance for (kmer,abundance) in kmer_abundance2.items() if kmer not in node_minims]
 plot_ascii_histogram(erroneous_kmers)
 print("^ erroneous k-min-mers abundance histogram (total: %d)" % len(erroneous_kmers))
 

@@ -3,6 +3,7 @@ name = "rust-mhdbg"
 version = "0.1.0"
 authors = ["rayan"]
 edition = "2018"
+default-run = "rust-mhdbg"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -34,3 +35,8 @@ seq_io= { git = "https://github.com/markschl/seq_io" } # parallel fastq parser, 
 
 [profile.dev]
 opt-level = 3
+
+
+[[bin]]
+name = "to_basespace"
+path = "src/to_basespace.rs"

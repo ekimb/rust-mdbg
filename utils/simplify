@@ -1,4 +1,5 @@
 #!/bin/bash
+# -- this is an old version that used gfaview and also used a bunch of script to keep trace fo sequences corresponding to the (non-seq) gfa file
 # this script simplifies a gfa graph using gfaview (tip, bubbles)
 # and outputs a fasta assembly 
 

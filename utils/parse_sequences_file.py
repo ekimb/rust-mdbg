@@ -21,7 +21,7 @@ def parse(filename):
             abundance = spl[-4]
             if abundance != "*": abundance = int(abundance)
             kmer_abundance[seq_id] = abundance
-        origin = spl[-2]
+        origin = spl[-3]
         seq = spl[-5]
         shifts = tuple(map(lambda x: int(x.strip('(').strip(')').replace(',','')),spl[-2:]))
         node_minims[seq_id] = minims

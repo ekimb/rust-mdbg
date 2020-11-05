@@ -8,11 +8,11 @@ use std::io::Write;
 use std::io::{BufWriter, BufRead, BufReader};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use petgraph_graphml::GraphMl;
+/*use petgraph_graphml::GraphMl;
 use petgraph::graph::DiGraph;
 use petgraph::{Graph, Outgoing};
 use petgraph::graph::NodeIndex;
-use petgraph::algo::toposort;
+use petgraph::algo::toposort;*/
 use itertools::Itertools;
 use closure::closure;
 use std::iter::FromIterator;
@@ -28,7 +28,6 @@ use structopt::StructOpt;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::path::PathBuf;
 use strsim::levenshtein;
-use rayon::prelude::*;
 use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use seq_io::fasta;
@@ -757,8 +756,7 @@ fn main() {
     }
 
     // create a real bidirected dbg object using petgraph
-    if false
-    {
+    /*{
         let mut gr = DiGraph::<Kmer,Kmer>::new();
         let mut node_indices : HashMap<Kmer,NodeIndex> = HashMap::new(); // bit redundant info, as nodes indices are in order of elements in dbg_nodes already; but maybe don't want to binary search inside it.
         for node in dbg_nodes.keys() { 
@@ -768,7 +766,7 @@ fn main() {
         let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
 
         gr.extend_with_edges( vec_edges );
-    }
+    }*/
 
     // graphml output
     //let graphml = GraphMl::new(&gr).pretty_print(true);
