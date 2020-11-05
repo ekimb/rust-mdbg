@@ -153,10 +153,10 @@ fn main() {
             else {
                 let is_last = i == unitig_vec.len()-1 ;
                 if *ori { // +
-                    load_node.insert(*node_id,if is_last { LoadKind::RightLast } else {LoadKind::Right});
+                    load_node.insert(*node_id, if is_last { LoadKind::RightLast } else {LoadKind::Right});
                 }
                 else {
-                    load_node.insert(*node_id,if is_last { LoadKind::LeftLast } else {LoadKind::Left});
+                    load_node.insert(*node_id, if is_last { LoadKind::LeftLast } else {LoadKind::Left});
                 }
             }
         }
@@ -228,8 +228,8 @@ fn main() {
         let mut res = String::new();
         //println!("reconstructing unitig {}",unitig_name);
         let unitig = unitigs.get(unitig_name).unwrap();
-        for (kminmer, ori) in unitig.iter() {
-            let kminmer_seq = sequences.get(&kminmer).unwrap();
+        for (node_id, ori) in unitig.iter() {
+            let kminmer_seq = sequences.get(&node_id).unwrap();
             res.push_str(kminmer_seq);
         }
         res
@@ -250,7 +250,7 @@ fn main() {
             let unitig_name = v[1].clone();
             let seq = reconstruct_seq(&unitig_name);
             v[2]= seq.clone();
-            v[3] = String::from(format!("LN:i:{}",seq.len()));
+            //v[3] = String::from(format!("LN:i:{}",seq.len())); // should already be there
             seq_lens.insert(unitig_name,seq.len());
             let s_line = v.join("\t");
             write!(complete_gfa_file, "{}\n", s_line).expect("error writing S_line");
@@ -258,20 +258,24 @@ fn main() {
         if is_L {
             //L       utg0000083l     -       utg0000084l     +       0M      L1:i:1  L2:i:1
             let mut v : Vec<String> = line.split('\t').map(|s| s.to_string()).collect();
-            // find the overlap length
-            let source_name = &v[1];
-            let sink_name   = &v[3];
-            //println!("{}",source_name);
-            let source_shift = shifts.get(source_name).unwrap();
-            let source_shift = if v[2] == "+" { source_shift.0 } else { source_shift.1 }; // find_overlap() from complete_gfa.py
-            let source_len = source_shift.1; //*seq_lens.get(source_name).unwrap() as u32;
-            let source_shift = source_shift.0;
-            let sink_shift = shifts.get(sink_name).unwrap();
-            let sink_shift = if v[4] == "+" { sink_shift.0 } else { sink_shift.1 }; // find_overlap() from complete_gfa.py
-            let sink_len   = sink_shift.1; //*seq_lens.get(sink_name).unwrap() as u32;
-            let overlap_len =  std::cmp::min(source_len - source_shift, sink_len - 1);
-            v[5] = String::from(format!("{}M",overlap_len));
-            let l_line = v[..6].join("\t"); // deletes the L1:i and L2:i fields for now, I don't think they're essential
+            // find the overlap length // actually it's maybe buggy. I ended up storing sequence
+            // lengths and overlap lengths in the original GFA
+            if false {
+                let source_name = &v[1];
+                let sink_name   = &v[3];
+                //println!("{}",source_name);
+                let source_shift = shifts.get(source_name).unwrap();
+                let source_shift = if v[2] == "+" { source_shift.0 } else { source_shift.1 }; // find_overlap() from complete_gfa.py
+                let source_len = source_shift.1; //*seq_lens.get(source_name).unwrap() as u32;
+                let source_shift = source_shift.0;
+                let sink_shift = shifts.get(sink_name).unwrap();
+                let sink_shift = if v[4] == "+" { sink_shift.0 } else { sink_shift.1 }; // find_overlap() from complete_gfa.py
+                let sink_len   = sink_shift.1; //*seq_lens.get(sink_name).unwrap() as u32;
+                let overlap_len =  std::cmp::min(source_len - source_shift, sink_len - 1);
+                v[5] = String::from(format!("{}M",overlap_len));
+            }
+            //let l_line = v[..6].join("\t"); // deletes the L1:i and L2:i fields for now, I don't think they're essential
+            let l_line = v.join("\t");
             write!(complete_gfa_file, "{}\n", l_line).expect("error writing L_linex");
         }
         if is_A {

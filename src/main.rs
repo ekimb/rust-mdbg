@@ -54,7 +54,7 @@ type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
 type DbgIndex = u32;// heavily optimized assuming we won't get more than 2B kminmers of abundance <= 65535
 type DbgAbundance = u16;
-struct DbgEntry { index: DbgIndex, abundance: DbgAbundance } 
+struct DbgEntry { index: DbgIndex, abundance: DbgAbundance, seqlen: u32, shift: (u16,u16) } 
 pub struct Params
 {
     l: usize,
@@ -425,17 +425,19 @@ fn main() {
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
             let mut abundance: u16 = 1;
             let mut cur_node_index;
-            // do everything that read_to_kmers should have done
-            match dbg_nodes.entry(node.clone()) {
+            let entry = dbg_nodes.entry(node.clone());
+            let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+            match entry {
                 Entry::Vacant(e) => { 
-                    e.insert(DbgEntry{index: *node_index, abundance: 1}); 
+                    e.insert(DbgEntry{index: *node_index, abundance: 1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
                     cur_node_index = *node_index;
                     *node_index += 1;
                 },
                 Entry::Occupied(mut e) => { 
-                    abundance = e.get_mut().abundance + 1;
-                    e.get_mut().abundance = abundance;
-                    cur_node_index = e.get().index;
+                    let entry_mut = e.get_mut();
+                    abundance = entry_mut.abundance + 1;
+                    entry_mut.abundance = abundance;
+                    cur_node_index = entry_mut.index;
                 }
             }
             // hum that's it actually!
@@ -445,13 +447,18 @@ fn main() {
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
                 write!(sequences_file, "{}\n", seq_line);
             }
-            else if abundance == min_kmer_abundance { // only save each kminmer once, once we're sure it'll pass the filter.
-                // (note that this doesnt enable to
-                // control which seq we save based on
+            else if abundance == min_kmer_abundance { 
+                // only save each kminmer once, once we're sure it'll pass the filter.
+                // (note that this doesnt enable to control which seq we save based on
                 // median seq length)
                 let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
                 write!(sequences_file, "{}\n", seq_line);
+                // update the index so that it has the exact length of the sequence we just saved,
+                // and minim shifts
+                let mut entry_mut = dbg_nodes.get_mut(&node).unwrap();
+                entry_mut.seqlen = seq.len() as u32;
+                entry_mut.shift = lowprec_shift;
             }
         }
     };
@@ -634,7 +641,7 @@ fn main() {
     {
         // take this iteration opportunity to write S lines
         let entry = &dbg_nodes[&node];
-        let length = "1"; // dummy length
+        let length = entry.seqlen;
         let s_line = format!("S\t{}\t{}\tLN:i:{}\tKC:i:{}\n",entry.index,"*",length,entry.abundance);
         write!(gfa_file, "{}", s_line).expect("error writing s_line");
 
@@ -673,62 +680,64 @@ fn main() {
             if km_index.contains_key(&key)
             {
                 let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
-                let mut potential_edges : Vec<(DbgAbundance,DbgIndex,String,String)> = Vec::new();
-                let mut vec_add_edge = |n1,n2,ori1 :&str,ori2 :&str|{
-                    let n2_entry = dbg_nodes.get(n2).unwrap();
-                    let n2_abundance = n2_entry.abundance;
-                    let n2_index     = n2_entry.index;
-                    potential_edges.push((n2_abundance,n2_index,ori1.to_owned(),ori2.to_owned()));
-                };
+                let mut potential_edges : Vec<(&DbgEntry,String,String)> = Vec::new();
                 for n2 in list_of_n2s {
+                    let n2_entry = dbg_nodes.get(n2).unwrap();
+                    let mut vec_add_edge = |ori1 :&str,ori2 :&str|{
+                        potential_edges.push((n2_entry,ori1.to_owned(),ori2.to_owned()));
+                    };
                     let rev_n2 = n2.reverse();
                     if n1.suffix() == n2.prefix() {
                         //dbg_edges.push((n1,n2));
-                        vec_add_edge(n1,n2,"+","+");
+                        vec_add_edge("+","+");
                     }
                     if revcomp_aware {
                         if n1.suffix() == rev_n2.prefix()
                         {
                             //dbg_edges.push((n1,n2));
-                            vec_add_edge(n1,n2,"+","-");
+                            vec_add_edge("+","-");
                         }
                         if rev_n1.suffix() == n2.prefix()
                         {
                             //dbg_edges.push((n1,n2));
-                            vec_add_edge(n1,n2,"-","+");
+                            vec_add_edge("-","+");
                         }
                         if rev_n1.suffix() == rev_n2.prefix() {
                             //dbg_edges.push((n1,n2));
-                            vec_add_edge(n1,n2,"-","-");
+                            vec_add_edge("-","-");
                         }
                     }
                 }
                 if potential_edges.len() == 0 { continue;}
-                let abundance_max = potential_edges.iter().max().unwrap().0;
+                let abundance_max = potential_edges.iter().map(|x| x.0.abundance).max().unwrap();
                 let abundance_ref = std::cmp::min(abundance_max,n1_abundance);
                 // write those edges to gfa
                 for edge in potential_edges.iter()
                 {
-                    let (n2_abundance,n2_index,ori1,ori2) = edge;
+                    let (n2_entry,ori1,ori2) = edge;
+                    let n2_abundance = n2_entry.abundance;
+                    let n2_index     = n2_entry.index;
+                    let n2_seqlen    = n2_entry.seqlen;
                     if presimp > 0.0 && potential_edges.len() >= 2
                     {
-                        if (*n2_abundance as f32) < presimp*(abundance_ref as f32) {
+                        if (n2_abundance as f32) < presimp*(abundance_ref as f32) {
                             presimp_removed += 1;
-                            removed_edges.insert((n1_index,*n2_index));
+                            removed_edges.insert((n1_index,n2_index));
                             continue;
                         }
                     }
+                    let shift = if ori1 == "+" { n1_entry.shift.0 } else { n1_entry.shift.1 };
+                    let overlap_length = std::cmp::min( n1_entry.seqlen - shift as u32, n2_entry.seqlen - 1 );
                     if presimp == 0.0
                     { // no presimp means we can write edges now
-                        let overlap_length = "1M"; // it's initially a dummy overlap length, complete_gfa.py will fill in the correct one
-                        let l_line = format!("L\t{}\t{}\t{}\t{}\t{}\n", n1_index, ori1, n2_index, ori2, overlap_length);
+                        let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", n1_index, ori1, n2_index, ori2, overlap_length);
                         write!(gfa_file, "{}", l_line).expect("error writing l_line");
                         nb_edges += 1;
                     }
                     else
                     { 
                         // write edges later, once we know if reverse wasn't affected by presimp
-                        vec_edges.push((n1_index, ori1.clone(), *n2_index, ori2.clone()));
+                        vec_edges.push((n1_index, ori1.clone(), n2_index, ori2.clone(), overlap_length));
                     }
 
                 };
@@ -739,13 +748,12 @@ fn main() {
     { // write edges now because we couldn't earlier
         for edge in vec_edges.iter()
         {
-            let (n1_index, ori1, n2_index, ori2) = edge;
+            let (n1_index, ori1, n2_index, ori2, overlap_length) = edge;
             if removed_edges.contains(&(*n1_index,*n2_index)) ||removed_edges.contains(&(*n2_index,*n1_index))
             { // don't insert an edge if its reverse was deleted by presimp
                 continue;
             }
-            let overlap_length = "1M"; // it's initially a dummy overlap length, complete_gfa.py will fill in the correct one
-            let l_line = format!("L\t{}\t{}\t{}\t{}\t{}\n", *n1_index, *ori1, *n2_index, *ori2, overlap_length);
+            let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", *n1_index, *ori1, *n2_index, *ori2, overlap_length);
             write!(gfa_file, "{}", l_line).expect("error writing l_line");
             nb_edges += 1;
         }
