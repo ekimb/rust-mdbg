@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use std::path::Path;
+use lzzzz::lz4f::BufReadDecompressor;
 
 mod utils;
 
@@ -58,6 +59,12 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
+}
+
+fn read_lines_lz4<P>(filename: P) -> io::Result<io::Lines<BufReadDecompressor<'static, BufReader<File>>>>
+where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(BufReadDecompressor::new(BufReader::new(file)).unwrap().lines())
 }
 
 fn main() {
@@ -205,7 +212,7 @@ fn main() {
         shifts.insert(unitig_name.unwrap().clone(),cur_shift); // re-insert shifts in case they were modified
     };
     
-    if let Ok(lines) = read_lines(&sequences_file) {
+    if let Ok(lines) = read_lines_lz4(&sequences_file) {
 	for line in lines {
 	    if let Ok(line_contents) = line {
 		process_sequence_line(&line_contents);

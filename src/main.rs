@@ -33,6 +33,7 @@ use std::mem::{self, MaybeUninit};
 use seq_io::fasta;
 use seq_io::BaseRecord;
 use seq_io::parallel::read_process_fasta_records;
+use lzzzz::lz4f::{WriteCompressor, ReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
 
 use editdistancewf as wf;
 mod utils;
@@ -55,6 +56,7 @@ type Overlap= kmer_vec::KmerVec;
 type DbgIndex = u32;// heavily optimized assuming we won't get more than 2B kminmers of abundance <= 65535
 type DbgAbundance = u16;
 struct DbgEntry { index: DbgIndex, abundance: DbgAbundance, seqlen: u32, shift: (u16,u16) } 
+type SeqFileType<'a> = WriteCompressor<&'a mut File>;
 pub struct Params
 {
     l: usize,
@@ -420,7 +422,13 @@ fn main() {
     let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
     let mut reads_by_id = HashMap::<String, Read>::new();
 
-    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut BufWriter<File>, node_index: &mut DbgIndex| 
+
+    let mut seq_write = |file : &mut SeqFileType,s|
+    {
+        write!(file,"{}",s);
+    };
+
+    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut SeqFileType, node_index: &mut DbgIndex| 
     {
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
             let mut abundance: u16 = 1;
@@ -445,7 +453,7 @@ fn main() {
             if params.reference && abundance == 1 {
                 let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-                write!(sequences_file, "{}\n", seq_line);
+                seq_write(sequences_file, format!("{}\n", seq_line));
             }
             else if abundance == min_kmer_abundance { 
                 // only save each kminmer once, once we're sure it'll pass the filter.
@@ -453,7 +461,7 @@ fn main() {
                 // median seq length)
                 let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-                write!(sequences_file, "{}\n", seq_line);
+                seq_write(sequences_file, format!("{}\n", seq_line));
                 // update the index so that it has the exact length of the sequence we just saved,
                 // and minim shifts
                 let mut entry_mut = dbg_nodes.get_mut(&node).unwrap();
@@ -489,11 +497,14 @@ fn main() {
             Err(why) => panic!("couldn't create file: {}", why.description()),
             Ok(file) => file,
         };
-        let mut sequences_file = BufWriter::new(file);
-        write!(sequences_file, "# k = {}\n",k).unwrap();
-        write!(sequences_file, "# l = {}\n",l).unwrap();
-        write!(sequences_file, "# structure of remaining of the file:\n").unwrap();
-        write!(sequences_file, "# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n").expect("error writing sequences file");
+        //let mut sequences_file = BufWriter::new(file);
+        let mut sequences_file = WriteCompressor::new(&mut file, Preferences::default()).unwrap(); // regular lz4f
+        //let mut sequences_file = WriteCompressor::new(&mut file, PreferencesBuilder::new().compression_level(CLEVEL_HIGH).build()).unwrap();  // too slow
+
+        seq_write(&mut sequences_file,format!("# k = {}\n",k));
+        seq_write(&mut sequences_file,format!("# l = {}\n",l));
+        seq_write(&mut sequences_file,"# structure of remaining of the file:\n".to_string());
+        seq_write(&mut sequences_file,"# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n".to_string());
 
 	// parallel fasta parsing, with a main thread that writes to disk and populates hash tables
 	read_process_fasta_records(reader, threads as u32, queue_len,
@@ -603,7 +614,8 @@ fn main() {
             Err(why) => panic!("couldn't create file: {}", why.description()),
             Ok(file) => file,
         };
-        let mut sequences_file = BufWriter::new(file);
+        //let mut sequences_file = BufWriter::new(file);
+        let mut sequences_file = WriteCompressor::new(&mut file, Preferences::default()).unwrap();
         write!(sequences_file, "# k = {}\n",k).unwrap();
         write!(sequences_file, "# l = {}\n",l).unwrap();
         write!(sequences_file, "# structure of remaining of the file:\n").unwrap();
@@ -671,6 +683,7 @@ fn main() {
         let n1_entry = dbg_nodes.get(n1).unwrap();
         let n1_abundance = n1_entry.abundance;
         let n1_index     = n1_entry.index;
+        let n1_seqlen    = n1_entry.seqlen;
 
         // bit of a rust noob way to code this, because i'm not too familiar with types yet..
         let key1=n1.suffix().normalize().0;
@@ -728,6 +741,7 @@ fn main() {
                     }
                     let shift = if ori1 == "+" { n1_entry.shift.0 } else { n1_entry.shift.1 };
                     let overlap_length = std::cmp::min( n1_entry.seqlen - shift as u32, n2_entry.seqlen - 1 );
+                    //if overlap_length == n2_entry.seqlen - 1 { println!("huh, node {} (minus shift {}) has overlap length as long as its neighbor {}",n1_seqlen,shift, n2_seqlen); }
                     if presimp == 0.0
                     { // no presimp means we can write edges now
                         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", n1_index, ori1, n2_index, ori2, overlap_length);
