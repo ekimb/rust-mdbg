@@ -12,7 +12,7 @@ for quickly assembling reads. It performs mDBG construction of a human genome in
 
 Clone the repository (make sure you have a working Rust environment), and run `cargo build --release`.
 
-For performing graph simplifications, gfatools[https://github.com/lh3/gfatools/] is required.
+For performing graph simplifications, gfatools [https://github.com/lh3/gfatools/] is required.
 
 # Quick start
 
