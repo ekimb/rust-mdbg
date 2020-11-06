@@ -258,8 +258,12 @@ fn main() {
             let seq = reconstruct_seq(&unitig_name);
             v[2]= seq.clone();
             //v[3] = String::from(format!("LN:i:{}",seq.len())); // should already be there
+            v[3] = String::from(format!("LN:i:{}",seq.len())); // but actually we want to fix it given that overlaps 
+                                                               // were very approximately calculated. then gfatools complains
+                                                               // and might even crash
             seq_lens.insert(unitig_name,seq.len());
             let s_line = v.join("\t");
+            let s_line = v[..4].join("\t"); // deletes the RC/lc fields
             write!(complete_gfa_file, "{}\n", s_line).expect("error writing S_line");
         }
         if is_L {
@@ -281,8 +285,17 @@ fn main() {
                 let overlap_len =  std::cmp::min(source_len - source_shift, sink_len - 1);
                 v[5] = String::from(format!("{}M",overlap_len));
             }
-            //let l_line = v[..6].join("\t"); // deletes the L1:i and L2:i fields for now, I don't think they're essential
+            let overlap_len = v[5][..v[5].len()-1].parse::<usize>().unwrap();
+            let source_name = v[1].clone(); // am in a hurry
+            let sink_name   = v[3].clone();
+            if overlap_len > seq_lens[&source_name] || overlap_len > seq_lens[&sink_name]
+            {
+                let overlap_len = std::cmp::min(seq_lens[&source_name]-1,seq_lens[&sink_name]-1);
+                println!("fixing overlap for {} (len:{})/{} (len:{}) from {} to {}M",source_name,seq_lens[&source_name],sink_name,seq_lens[&sink_name],v[5],overlap_len);
+                v[5] = String::from(format!("{}M",overlap_len));
+            }
             let l_line = v.join("\t");
+            let l_line = v[..6].join("\t"); // deletes the L1:i and L2:i fields for now, I don't think they're essential
             write!(complete_gfa_file, "{}\n", l_line).expect("error writing L_linex");
         }
         if is_A {
