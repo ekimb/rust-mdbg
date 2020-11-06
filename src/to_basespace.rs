@@ -291,7 +291,7 @@ fn main() {
             if overlap_len > seq_lens[&source_name] || overlap_len > seq_lens[&sink_name]
             {
                 let overlap_len = std::cmp::min(seq_lens[&source_name]-1,seq_lens[&sink_name]-1);
-                println!("fixing overlap for {} (len:{})/{} (len:{}) from {} to {}M",source_name,seq_lens[&source_name],sink_name,seq_lens[&sink_name],v[5],overlap_len);
+                println!("fixing overlap for L-line {} (len:{}) {} (len:{}) from {} to {}M",source_name,seq_lens[&source_name],sink_name,seq_lens[&sink_name],v[5],overlap_len);
                 v[5] = String::from(format!("{}M",overlap_len));
             }
             let l_line = v.join("\t");
