@@ -1,7 +1,7 @@
 rust-mdbg
 =========
 
-`rust-mdbg` is an ultra-fast minimizer de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
+`rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
 
 # Purpose
 
