@@ -1,20 +1,20 @@
-rust-mdbg
+`rust-mdbg`: Minimizer-space de Bruijn graph (mdBG) for whole-genome assembly
 =========
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
 
-# Purpose
+## Purpose
 
 `rust-mdbg` does not replace a conventional genome assembler, as it has slightly lower contiguity and completeness. However, it can be useful
 for quickly assembling reads. It performs mDBG construction of a human genome in 22 minutes on 8 threads, with 9 GB of maximum RAM usage.
 
-# Installation
+## Installation
 
 Clone the repository (make sure you have a working Rust environment), and run `cargo build --release`.
 
 For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools/) is required.
 
-# Quick start
+## Quick start
 
 Currently, `rust-mdbg` only takes a single FASTA input, and requires the user to specify the k, density and l values, as discussed in the article. 
 
@@ -41,3 +41,17 @@ In the case that you only want to convert to base-space with no graph simplifica
 which will create an `example.complete.gfa` file that you can convert to FASTA with
 
 `bash $DIR/gfa2fasta.sh example.complete`
+
+## License
+
+`rust-mdbg` is freely available under the [MIT License](https://opensource.org/licenses/MIT).
+
+## Contributors
+
+Development of `rust-mdbg` is led by [Barış Ekim](http://people.csail.mit.edu/ekim/), collaboratively in the labs of [Bonnie Berger](http://people.csail.mit.edu/bab/) at the Computer Science and Artificial Intelligence Laboratory (CSAIL) at Massachusetts Institute of Technology (MIT), and [Rayan Chikhi](http://rayan.chikhi.name) at the Department of Computational Biology at Institut Pasteur.
+
+## Contact
+
+Should you have any inquiries, please contact [Barış Ekim](http://people.csail.mit.edu/ekim/) at baris [at] mit [dot] edu, or [Rayan Chikhi] at rchikhi [at] pasteur [dot] fr.
+
+
