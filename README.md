@@ -52,6 +52,6 @@ Development of `rust-mdbg` is led by [Barış Ekim](http://people.csail.mit.edu/
 
 ## Contact
 
-Should you have any inquiries, please contact [Barış Ekim](http://people.csail.mit.edu/ekim/) at baris [at] mit [dot] edu, or [Rayan Chikhi] at rchikhi [at] pasteur [dot] fr.
+Should you have any inquiries, please contact [Barış Ekim](http://people.csail.mit.edu/ekim/) at baris [at] mit [dot] edu, or [Rayan Chikhi](http://rayan.chikhi.name) at rchikhi [at] pasteur [dot] fr.
 
 
