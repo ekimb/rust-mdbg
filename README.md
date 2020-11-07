@@ -1,4 +1,4 @@
-`rust-mdbg`: Minimizer-space de Bruijn graph (mdBG) for whole-genome assembly
+`rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly
 =========
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
