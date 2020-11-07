@@ -6,21 +6,15 @@ N=$4
 T=$5
 abund=$6
 threshold=$7
-distance=2
-C=$8
+distance=$8
 TH=$9
-touch bench/canu-bench-hifi-$1$2.txt
-echo "Running reference..."
-cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/dmel_ref_hpc.fa -k $K -l $L -n $N -t 1 --threads $TH --density $DENSITY --minabund 1 --levenshtein-minimizers 0 --prefix canu_hifi_ref --reference --no-error-correct 
 start=`date +%s`
 echo "Running reads..."
 #./dsk -file /scratch2/ekim/canu_hifi_hpc.fa -kmer-size $L
 #./dsk2ascii -file canu_hifi_hpc.h5 -out canu_hifi_hpc.ascii.txt
-command time -v cargo run --manifest-path ../rust-mhdbg/Cargo.toml --release -- /scratch2/ekim/canu_hifi_hpc.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix canu_hifi 2>&1 | tee -a bench/canu-bench-hifi-$1$2.txt
+command time -v cargo run --manifest-path ../rust-mdbg/Cargo.toml --release -- /scratch2/ekim/canu_hifi_hpc.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix canu_hifi
 end=`date +%s`
 echo "Completing GFA..."
-python utils/complete_gfa.py canu_hifi.sequences canu_hifi.gfa
-echo "Comparing k-mers..."
-python utils/compare_kmers.py canu_hifi_ref.sequences canu_hifi.sequences
+utils/magic_simplify canu_hifi
 runtime=$((end-start))
 echo "Runtime was $runtime seconds."

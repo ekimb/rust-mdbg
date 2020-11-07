@@ -8,11 +8,6 @@ use std::io::Write;
 use std::io::{BufWriter, BufRead, BufReader};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-/*use petgraph_graphml::GraphMl;
-use petgraph::graph::DiGraph;
-use petgraph::{Graph, Outgoing};
-use petgraph::graph::NodeIndex;
-use petgraph::algo::toposort;*/
 use itertools::Itertools;
 use closure::closure;
 use std::iter::FromIterator;
@@ -21,7 +16,6 @@ use crate::read::Read;
 use std::fs::{File,remove_file};
 use std::collections::HashSet;
 extern crate array_tool;
-//use adler32::RollingAdler32;
 use std::fs;
 use crossbeam_utils::{thread};
 use structopt::StructOpt;
@@ -47,10 +41,8 @@ mod read;
 mod pairwise;
 mod presimp;
 use std::env;
-// mod kmer_array; // not working yet
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
-//use typenum::{U31,U32}; // for KmerArray
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
 type DbgIndex = u32;// heavily optimized assuming we won't get more than 2B kminmers of abundance <= 65535
