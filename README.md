@@ -16,7 +16,37 @@ For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools
 
 ## Quick start
 
+```
+cargo build
+gunzip example/reads-0.00.fa.gz
+target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
+utils/magic_simplify example
+```
+
+## Overview
+
+`rust-mdbg` is a **modular** assembler. It consists of three components:
+
+ 1) `rust-mdbg`, to perform assembly in minimizer-space
+ 2) `gfatools` (external component), to perform graph simplifications
+ 3) `to_basespace`, to convert a minimizer-space assembly to base-space
+
+For convenience, components 2) and 3) are wrapped into a script called `magic_simplify`.
+
+## Input
+
 Currently, `rust-mdbg` only takes a single FASTA input, and requires the user to specify the k, density and l values, as discussed in the article. 
+
+## Output data
+
+The output of the `rust-mdbg` program consists of:
+
+* a `.gfa` file containing the minimizer-space de Bruijn graph, without sequences
+* a `.sequences` file containing the sequences of the nodes of the graph
+
+The `to_basespace` program allows to combine both outputs and produde a `.gfa` file with sequences.
+
+## Running an example
 
 A sample set of reads was provided in the `example/` folder.  Uncompress them:
 
@@ -24,7 +54,7 @@ A sample set of reads was provided in the `example/` folder.  Uncompress them:
 
 then run:
 
-`target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix`
+`target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example`
 
 which will create an `example.gfa` file.
 
@@ -34,11 +64,17 @@ In order to populate the `.gfa` file with base-space sequences and perform graph
 
 which will create `example.msimpl.gfa` and `example.msimpl.fa` files.
 
-In the case that you only want to convert to base-space with no graph simplification, run
+In the case that you only want to convert to base-space with no graph simplification, there are two ways:
+* with `gfatools`
 
-`target/release/to_basespace --gfa example.gfa --sequences example.sequences`
+`gfatools asm -u  example.gfa > example.unitigs.gfa`
+`target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences`
 
-which will create an `example.complete.gfa` file that you can convert to FASTA with
+* without `gfatools` (slower, but the code is more straightforward to understand)
+
+`utils/complete_gfa.py example.sequences example.gfa`
+
+In both cases this will create an `example.complete.gfa` file that you can convert to FASTA with
 
 `bash $DIR/gfa2fasta.sh example.complete`
 
@@ -49,6 +85,10 @@ which will create an `example.complete.gfa` file that you can convert to FASTA w
 ## Contributors
 
 Development of `rust-mdbg` is led by [Barış Ekim](http://people.csail.mit.edu/ekim/), collaboratively in the labs of [Bonnie Berger](http://people.csail.mit.edu/bab/) at the Computer Science and Artificial Intelligence Laboratory (CSAIL) at Massachusetts Institute of Technology (MIT), and [Rayan Chikhi](http://rayan.chikhi.name) at the Department of Computational Biology at Institut Pasteur.
+
+## Citation
+
+A pre-print will be posted at a later date.
 
 ## Contact
 
