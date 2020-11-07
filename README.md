@@ -6,7 +6,7 @@
 ## Purpose
 
 `rust-mdbg` does not replace a conventional genome assembler, as it has slightly lower contiguity and completeness. However, it can be useful
-for quickly assembling reads. It performs mDBG construction of a human genome in 22 minutes on 8 threads, with 9 GB of maximum RAM usage.
+for quickly assembling reads. It performs mDBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
 
 ## Installation
 
