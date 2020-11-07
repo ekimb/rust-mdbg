@@ -1,12 +1,10 @@
-pub fn revcomp(dna: &str) -> String{
-    // result vector
-    let mut rdna: String = String::with_capacity(dna.len()); 
 
-    // iterate through the input &str
-    for c in dna.chars().rev() {
-        rdna.push(switch_base(c))
-    }
-    rdna
+
+pub fn revcomp(dna: &str) -> String{
+	dna.chars()
+        .rev()
+        .map(|a| switch_base(a))
+        .collect::<String>()
 }
 
 fn switch_base(c:char) -> char {

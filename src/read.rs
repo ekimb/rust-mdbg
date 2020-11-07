@@ -124,11 +124,15 @@ impl Read {
                 Some(x) => { *x}
             };*/
             let lmer = &inp_seq[i..i+l];
-            let hash = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
-            if ! hash.is_some() { continue ; } // possible discrepancy between what's calculated in minimizers_preparation() and here
+            let mut hash :u64 = hash;
+            if params.error_correct || params.has_lmer_counts {
+                let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
+                if ! res.is_some() { continue ; } // possible discrepancy between what's calculated in minimizers_preparation() and here
+                hash = *res.unwrap();
+            }
             //read_minimizers.push(lmer.to_string()); // actually only needed for debugging
             read_minimizers_pos.push(i);
-            read_transformed.push(*hash.unwrap());
+            read_transformed.push(hash);
         }
         Read {id: inp_id.clone(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }

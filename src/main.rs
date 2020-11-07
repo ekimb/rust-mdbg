@@ -67,6 +67,8 @@ pub struct Params
     distance: usize ,
     reference: bool,
     uhs: bool,
+    error_correct: bool,
+    has_lmer_counts: bool,
     debug: bool,
 }
 
@@ -347,6 +349,8 @@ fn main() {
         correction_threshold,
         reference,
         uhs,
+        error_correct,
+        has_lmer_counts,
         debug,
     };
     // init some useful objects
@@ -387,7 +391,17 @@ fn main() {
     //minimizers::lmer_counting(&mut lmer_counts, &filename, file_size, &mut params);
  
 
-    let (mut minimizer_to_int, mut int_to_minimizer) = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
+    let mut minimizer_to_int: HashMap<String,u64> = HashMap::new();
+    let mut int_to_minimizer: HashMap<u64,String> = HashMap::new();
+
+
+    // only need to initialize the minimizer_to_int / int_to_minimizer array if we do POA or use robust minimizers
+    // they can be costly for k=14
+    if has_lmer_counts || error_correct {
+        let res = minimizers::minimizers_preparation(&mut params, &filename, file_size, levenshtein_minimizers, &lmer_counts);
+        minimizer_to_int = res.0;
+        int_to_minimizer = res.1;
+    }
     
     // fasta parsing
     let reader = seq_io::fasta::Reader::from_path(&filename).unwrap();
