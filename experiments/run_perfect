@@ -12,6 +12,8 @@ echo "Running reads..."
 command time -v cargo run --manifest-path ../rust-mdbg/Cargo.toml --release -- /scratch2/ekim/dmel-100kb-100x.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund 2 --correction-threshold $threshold --distance $distance --no-error-correct --prefix perfect
 end=`date +%s`
 echo "Completing GFA..."
-python utils/complete_gfa.py perfect.sequences perfect.gfa
+gfatools asm perfect.gfa -u > perfect.unitigs.gfa
+cargo run --manifest-path $DIR/../Cargo.toml --release --bin to_basespace -- --gfa perfect.unitigs.gfa --sequences perfect.sequences
+bash $DIR/gfa2fasta.sh perfect.complete
 runtime=$((end-start))
 echo "Runtime was $runtime seconds."
