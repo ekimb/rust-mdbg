@@ -67,8 +67,10 @@ which will create `example.msimpl.gfa` and `example.msimpl.fa` files.
 In the case that you only want to convert to base-space with no graph simplification, there are two ways:
 * with `gfatools`
 
-`gfatools asm -u  example.gfa > example.unitigs.gfa`
-`target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences`
+```
+gfatools asm -u  example.gfa > example.unitigs.gfa
+target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences
+```
 
 * without `gfatools` (slower, but the code is more straightforward to understand)
 
