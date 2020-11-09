@@ -17,7 +17,7 @@ For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools
 ## Quick start
 
 ```
-cargo build
+cargo build --release
 target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
 utils/magic_simplify example
 ```
