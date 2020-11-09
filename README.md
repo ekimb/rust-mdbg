@@ -18,8 +18,7 @@ For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools
 
 ```
 cargo build
-gunzip example/reads-0.00.fa.gz
-target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
+target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
 utils/magic_simplify example
 ```
 
@@ -35,7 +34,7 @@ For convenience, components 2) and 3) are wrapped into a script called `magic_si
 
 ## Input
 
-Currently, `rust-mdbg` only takes a single FASTA input, and requires the user to specify the k, density and l values, as discussed in the article. 
+`rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not), and requires the user to specify the k, density and l values, as discussed in the article. 
 
 ## Output data
 
@@ -48,13 +47,9 @@ The `to_basespace` program allows to combine both outputs and produde a `.gfa` f
 
 ## Running an example
 
-A sample set of reads was provided in the `example/` folder.  Uncompress them:
+A sample set of reads was provided in the `example/` folder. Run
 
-`gunzip example/reads-0.00.fa.gz`
-
-then run:
-
-`target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example`
+`target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example`
 
 which will create an `example.gfa` file.
 
