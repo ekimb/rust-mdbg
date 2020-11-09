@@ -24,12 +24,13 @@ use std::path::PathBuf;
 use strsim::levenshtein;
 use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
+use editdistancewf as wf;
 use seq_io::fasta;
 use seq_io::BaseRecord;
 use seq_io::parallel::read_process_fasta_records;
 use lzzzz::lz4f::{WriteCompressor, ReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
+use xx_bloomfilter::Bloom;
 
-use editdistancewf as wf;
 mod utils;
 mod gfa_output;
 mod seq_output;
@@ -416,6 +417,7 @@ fn main() {
     // dbg_nodes is a hash table containing (kmers -> (index,count))
     // it will keep only those with count > 1
     let mut dbg_nodes     : HashMap<Kmer,DbgEntry> = HashMap::new(); // it's a Counter
+    let mut bloom = Bloom::new_with_rate(100_000_000, 1e-6); // a bf to avoid putting stuff into dbg_nodes too early
     let mut node_index : DbgIndex = 0; // associates a unique integer to each dbg node
     let mut kmer_seqs     : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node (k-min-mer) to an arbitrary sequence from the reads
     let mut kmer_seqs_lens: HashMap<Kmer,Vec<u32>> = HashMap::new(); // associate a dBG node to the lengths of all its sequences from the reads
@@ -437,15 +439,12 @@ fn main() {
     let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut SeqFileType, node_index: &mut DbgIndex| 
     {
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
-            let mut abundance: u16 = 1;
+            let mut abundance: u16 = 0;
             let mut cur_node_index;
             let entry = dbg_nodes.entry(node.clone());
-            let lowprec_shift = (shift.0 as u16, shift.1 as u16);
             match entry {
                 Entry::Vacant(e) => { 
-                    e.insert(DbgEntry{index: *node_index, abundance: 1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
                     cur_node_index = *node_index;
-                    *node_index += 1;
                 },
                 Entry::Occupied(mut e) => { 
                     let entry_mut = e.get_mut();
@@ -454,26 +453,41 @@ fn main() {
                     cur_node_index = entry_mut.index;
                 }
             }
-            // hum that's it actually!
-            // now write the node sequence along with the final node index
-            if params.reference && abundance == 1 {
-                let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
-                let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-                seq_write(sequences_file, format!("{}\n", seq_line));
+            // 1) check if the kminmer is in the BF
+            if ! bloom.check_and_add(&elt) 
+            {
+                // if not, necessarily it wasn't seen before so abundance is 1, and insert in BF
+                // and then, if we're dealing with a reference genome, insert in dbg_nodes
+                abundance = 1;
             }
-            else if abundance == min_kmer_abundance { 
+            else
+            {
+                // it was in the BF. get its true abundance
+                // maybe it's already in dbg_nodes, let's check
+            }
+            
+            if (params.reference && abundance == 1) || ((!params.reference) && abundance == min_abundance {
                 // only save each kminmer once, once we're sure it'll pass the filter.
                 // (note that this doesnt enable to control which seq we save based on
                 // median seq length)
                 let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
                 seq_write(sequences_file, format!("{}\n", seq_line));
-                // update the index so that it has the exact length of the sequence we just saved,
-                // and minim shifts
-                let mut entry_mut = dbg_nodes.get_mut(&node).unwrap();
-                entry_mut.seqlen = seq.len() as u32;
-                entry_mut.shift = lowprec_shift;
+            
+                // now record what we just saved
+                let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+                dbg_nodes.insert(DbgEntry{index: *node_index, abundance: 2, seqlen: seq.len() as u32, shift: lowprec_shift}); 
+                *node_index += 1;
             }
+			else
+            {
+                // just increase abundance if already inserted
+                if bloom.check(elt)
+                {
+                    dbg_nodes.
+                }
+            }
+
         }
     };
 
