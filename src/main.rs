@@ -13,6 +13,7 @@ use closure::closure;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
 use crate::read::Read;
+use std::io::Read as OtherRead;
 use std::fs::{File,remove_file};
 use std::collections::HashSet;
 extern crate array_tool;
@@ -25,10 +26,11 @@ use strsim::levenshtein;
 use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use seq_io::fasta;
+use seq_io::core::BufReader as OtherBufReader;
 use seq_io::BaseRecord;
-use seq_io::parallel::read_process_fasta_records;
+use seq_io::parallel::{read_process_fasta_records, read_process_fastq_records};
 use lzzzz::lz4f::{WriteCompressor, ReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
-
+use flate2::read::GzDecoder;
 use editdistancewf as wf;
 mod utils;
 mod gfa_output;
@@ -175,6 +177,23 @@ fn thread_gather_hashmap<V: Copy>(hashmap_all: &mut MutexGuard<HashMap<usize,Has
         hashmap.insert(a.clone(), *b);
     }
 }
+
+fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
+    let filetype = "gz";
+    let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) => panic!("There was a problem opening the file: {:?}", error),
+        };
+
+    let reader: Box<OtherRead + Send> = match filetype { 
+        "gz" => Box::new(GzDecoder::new(file)) as Box<dyn OtherRead + Send>, 
+        _ => Box::new(file) as Box<dyn OtherRead + Send>, 
+        
+    }; 
+    reader
+}
+
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
@@ -402,9 +421,9 @@ fn main() {
         minimizer_to_int = res.0;
         int_to_minimizer = res.1;
     }
+    let mut fasta_bool : bool = false;
+    let mut fastq_bool : bool = true;
     
-    // fasta parsing
-    let reader = seq_io::fasta::Reader::from_path(&filename).unwrap();
     let queue_len = 20; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
     let seq_path = PathBuf::from(format!("{}.sequences", output_prefix.to_str().unwrap()));
 
@@ -485,7 +504,18 @@ fn main() {
         }
 
 	// worker thread
-	let process_read = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
+	let process_read_fasta = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
+	    let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
+	    let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+	    let seq_id = record.id().unwrap().to_string();
+	    let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
+	    //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
+	    if read_obj.transformed.len() > k {
+		output = read_obj.read_to_kmers(&params);
+	    }
+	    *found = (output, read_obj);
+    };
+    let process_read_fastq = |record: seq_io::fastq::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
 	    let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
 	    let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
 	    let seq_id = record.id().unwrap().to_string();
@@ -512,34 +542,77 @@ fn main() {
         seq_write(&mut sequences_file,"# structure of remaining of the file:\n".to_string());
         seq_write(&mut sequences_file,"# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n".to_string());
 
-	// parallel fasta parsing, with a main thread that writes to disk and populates hash tables
-	read_process_fasta_records(reader, threads as u32, queue_len,
-	    process_read,
-	    |record, found| { // runs in main thread
-		nb_reads += 1;
-		let (vec, read_obj) = found;
-		//println!("Received read in main thread, nb kmers: {}", vec.len());
+    // parallel fasta parsing, with a main thread that writes to disk and populates hash tables
+    let filename_str = filename.to_str().unwrap();
+    if filename_str.ends_with(".fasta.gz") || filename_str.ends_with(".fa.gz")  || filename_str.ends_with(".fa") || filename_str.ends_with(".fasta") {
+        fastq_bool = false;
+        fasta_bool = true;
+        println!("{}", filename_str);
+        println!("Detected FASTA file.");
+    }
+    let buf = BufReader::new(get_reader(&filename));
+    if fasta_bool {
+        println!("Parsing FASTA...");
+        let reader = seq_io::fasta::Reader::new(buf);
+        read_process_fasta_records(reader, threads as u32, queue_len,
+            process_read_fasta,
+            |record, found| { // runs in main thread
+            nb_reads += 1;
+            let (vec, read_obj) = found;
+            //println!("Received read in main thread, nb kmers: {}", vec.len());
 
-                add_kminmers(vec.to_vec(), &mut dbg_nodes, &mut sequences_file, &mut node_index);
+                    add_kminmers(vec.to_vec(), &mut dbg_nodes, &mut sequences_file, &mut node_index);
 
-                if error_correct || reference
-                {
-                    reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                    if error_correct || reference
+                    {
+                        reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
 
-                    ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
-                    
-                    for i in 0..read_obj.transformed.len()-n+1 {
-                        let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
-                        let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());
-                        entry.push(read_obj.id.to_string());
+                        ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
+                        
+                        for i in 0..read_obj.transformed.len()-n+1 {
+                            let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
+                            let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());
+                            entry.push(read_obj.id.to_string());
+                        }
                     }
-                }
 
-		// Some(value) will stop the reader, and the value will be returned.
-		// In the case of never stopping, we need to give the compiler a hint about the
-		// type parameter, thus the special 'turbofish' notation is needed.
-		None::<()>
-	    });
+            // Some(value) will stop the reader, and the value will be returned.
+            // In the case of never stopping, we need to give the compiler a hint about the
+            // type parameter, thus the special 'turbofish' notation is needed.
+            None::<()>
+            });
+    }
+    else if fastq_bool {
+        println!("Parsing FASTQ...");
+        let reader = seq_io::fastq::Reader::new(buf);
+        read_process_fastq_records(reader, threads as u32, queue_len,
+            process_read_fastq,
+            |record, found| { // runs in main thread
+            nb_reads += 1;
+            let (vec, read_obj) = found;
+            //println!("Received read in main thread, nb kmers: {}", vec.len());
+
+                    add_kminmers(vec.to_vec(), &mut dbg_nodes, &mut sequences_file, &mut node_index);
+
+                    if error_correct || reference
+                    {
+                        reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+
+                        ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
+                        
+                        for i in 0..read_obj.transformed.len()-n+1 {
+                            let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
+                            let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());
+                            entry.push(read_obj.id.to_string());
+                        }
+                    }
+
+            // Some(value) will stop the reader, and the value will be returned.
+            // In the case of never stopping, we need to give the compiler a hint about the
+            // type parameter, thus the special 'turbofish' notation is needed.
+            None::<()>
+            });
+    }
 
 
                         
