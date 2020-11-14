@@ -13,6 +13,7 @@ use closure::closure;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
 use crate::read::Read;
+use std::io::Read as OtherRead;
 use std::fs::{File,remove_file};
 use std::collections::HashSet;
 extern crate array_tool;
@@ -26,11 +27,18 @@ use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use editdistancewf as wf;
 use seq_io::fasta;
+use seq_io::core::BufReader as OtherBufReader;
 use seq_io::BaseRecord;
-use seq_io::parallel::read_process_fasta_records;
+use seq_io::parallel::{read_process_fasta_records, read_process_fastq_records};
 use lzzzz::lz4f::{WriteCompressor, ReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
 use xx_bloomfilter::Bloom;
-
+use flate2::read::GzDecoder;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use glob::glob;
+use dashmap::{DashMap,mapref::one::Ref};
+use thread_id;
+use std::cell::UnsafeCell;
+use std::io::Result;
 mod utils;
 mod gfa_output;
 mod seq_output;
@@ -44,12 +52,49 @@ mod presimp;
 use std::env;
 
 const revcomp_aware: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
+
 type Kmer = kmer_vec::KmerVec;
 type Overlap= kmer_vec::KmerVec;
 type DbgIndex = u32;// heavily optimized assuming we won't get more than 2B kminmers of abundance <= 65535
 type DbgAbundance = u16;
+#[derive(Clone)] // TODO opt I only put this derive(Clone) to copy the DbgEntry in n2_entry in the code below, remove it when no more copies occur
 struct DbgEntry { index: DbgIndex, abundance: DbgAbundance, seqlen: u32, shift: (u16,u16) } 
-type SeqFileType<'a> = WriteCompressor<&'a mut File>;
+//type SeqFileType = WriteCompressor<File>;
+struct SeqFileType (WriteCompressor<File>);
+unsafe impl Sync for SeqFileType {} // same trick as below. we won't share files among threads but Rust can't know that.
+impl SeqFileType {
+    fn new(v: WriteCompressor<File>) -> SeqFileType   {
+        SeqFileType(v)
+    }
+}
+impl Write for SeqFileType {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        self.write(buf)
+    }
+    fn flush(&mut self) -> Result<()> {
+        self.flush()
+    }
+}
+
+
+struct RacyBloom(UnsafeCell<Bloom>); // intentionnally allowing data races as a tradeoff for bloom speed
+unsafe impl Sync for RacyBloom {}
+
+// follows https://sodocumentation.net/rust/topic/6018/unsafe-guidelines
+// don't try this at home
+impl RacyBloom {
+    fn new(v: Bloom) -> RacyBloom {
+        RacyBloom(UnsafeCell::new(v))
+    }
+    fn get(&self) -> &mut Bloom {
+        // UnsafeCell::get() returns a raw pointer to the value it contains
+        // Dereferencing a raw pointer is also "unsafe"
+        unsafe { &mut *self.0.get() }
+    }
+}
+
+type ThreadIdType = usize;
+
 pub struct Params
 {
     l: usize,
@@ -123,19 +168,6 @@ fn get_memory_rusage() -> usize {
 
 
 // thread helpers
-fn thread_update_common_hashmaps<A,B,C,D,E,F,G>(
-                                 dbg_nodes_all:        &Arc<Mutex<HashMap<usize,HashMap<A,B>>>>, dbg_nodes:   HashMap<A,B>, 
-                                 kmer_seqs_all:        &Arc<Mutex<HashMap<usize,HashMap<C,D>>>>, kmer_seqs:HashMap<C,D>, 
-                                 kmer_seqs_lens_all:   &Arc<Mutex<HashMap<usize,HashMap<C,G>>>>, kmer_seqs_lens:HashMap<C,G>, 
-                                 kmer_origin_all:      &Arc<Mutex<HashMap<usize,HashMap<C,D>>>>, kmer_origin: HashMap<C,D>, 
-                                 thread_num: usize)
-{
-    thread_update_hashmap(&dbg_nodes_all, dbg_nodes, thread_num);
-    thread_update_hashmap(&kmer_seqs_all, kmer_seqs, thread_num);
-    thread_update_hashmap(&kmer_seqs_lens_all, kmer_seqs_lens, thread_num);
-    thread_update_hashmap(&kmer_origin_all, kmer_origin, thread_num);
-}
-
 fn thread_update_hashmap<U,V>(hashmap_all: &Arc<Mutex<HashMap<usize,HashMap<U,V>>>>, hashmap: HashMap<U,V>, thread_num: usize)
 {
     let mut hashmap_all = hashmap_all.lock().unwrap();
@@ -150,32 +182,22 @@ pub fn thread_update_vec<U>(vec_all: &Arc<Mutex<HashMap<usize,Vec<U>>>>, vec: Ve
     *entry = vec;
 }
 
-fn thread_gather_hashmap_string(hashmap_all: &mut MutexGuard<HashMap<usize,HashMap<Kmer,String>>>, hashmap: &mut HashMap<Kmer,String>, thread_num: usize)
-{
-    let mut items = hashmap_all.entry(thread_num).or_insert(HashMap::new());
-    for (a, b) in items.into_iter() {
-        hashmap.insert(a.clone(), b.to_string());
-    }
+fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
+    let filetype = "gz";
+    let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) => panic!("There was a problem opening the file: {:?}", error),
+        };
+
+    let reader: Box<OtherRead + Send> = match filetype { 
+        "gz" => Box::new(GzDecoder::new(file)) as Box<dyn OtherRead + Send>, 
+        _ => Box::new(file) as Box<dyn OtherRead + Send>, 
+        
+    }; 
+    reader
 }
 
-fn thread_gather_hashmap_vecu32(hashmap_all: &mut MutexGuard<HashMap<usize,HashMap<Kmer,Vec<u32>>>>, hashmap: &mut HashMap<Kmer,Vec<u32>>, thread_num: usize)
-{
-    let mut items = hashmap_all.entry(thread_num).or_insert(HashMap::new());
-    for (a, b) in items.into_iter() {
-        if !hashmap.contains_key(a) { hashmap.insert(a.clone(),Vec::new());}
-        for val in b
-        {
-            hashmap.get_mut(a).unwrap().push(*val); // inefficient
-        }
-    }
-}
-fn thread_gather_hashmap<V: Copy>(hashmap_all: &mut MutexGuard<HashMap<usize,HashMap<Kmer,V>>>, hashmap: &mut HashMap<Kmer,V>, thread_num: usize)
-{
-    let mut items = hashmap_all.entry(thread_num).or_insert(HashMap::new());
-    for (a, b) in items.into_iter() {
-        hashmap.insert(a.clone(), *b);
-    }
-}
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
@@ -403,11 +425,9 @@ fn main() {
         minimizer_to_int = res.0;
         int_to_minimizer = res.1;
     }
+    let mut fasta_reads : bool = false;
     
-    // fasta parsing
-    let reader = seq_io::fasta::Reader::from_path(&filename).unwrap();
-    let queue_len = 20; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
-    let seq_path = PathBuf::from(format!("{}.sequences", output_prefix.to_str().unwrap()));
+    let queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
 
     let mut uhs_kmers = HashMap::<String, u32>::new();
     if params.uhs {
@@ -416,9 +436,9 @@ fn main() {
 
     // dbg_nodes is a hash table containing (kmers -> (index,count))
     // it will keep only those with count > 1
-    let mut dbg_nodes     : HashMap<Kmer,DbgEntry> = HashMap::new(); // it's a Counter
-    let mut bloom = Bloom::new_with_rate(100_000_000, 1e-6); // a bf to avoid putting stuff into dbg_nodes too early
-    let mut node_index : DbgIndex = 0; // associates a unique integer to each dbg node
+    let mut dbg_nodes     : Arc<DashMap<Kmer,DbgEntry>> = Arc::new(DashMap::new()); // it's a Counter
+    let mut bloom : RacyBloom = RacyBloom::new(Bloom::new_with_rate(100_000_000, 1e-6)); // a bf to avoid putting stuff into dbg_nodes too early
+    static node_index: AtomicUsize = AtomicUsize::new(0); // associates a unique integer to each dbg node
     let mut kmer_seqs     : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node (k-min-mer) to an arbitrary sequence from the reads
     let mut kmer_seqs_lens: HashMap<Kmer,Vec<u32>> = HashMap::new(); // associate a dBG node to the lengths of all its sequences from the reads
     let mut kmer_origin   : HashMap<Kmer,String> = HashMap::new(); // remember where in the read/refgenome the kmer comes from, for debugging only
@@ -430,66 +450,86 @@ fn main() {
     let poa_path     = PathBuf::from(format!("{}.poa",    output_prefix.to_str().unwrap()));
     let mut reads_by_id = HashMap::<String, Read>::new();
 
+    // delete all previous sequence files
+    for path in glob(&format!("{}*.sequences", output_prefix.to_str().unwrap()).to_string()).expect("Failed to read glob pattern")  {
+        let path = path.unwrap();
+        let path = path.to_str().unwrap(); // rust really requires me to split the let statement in two..
+        println!("removing old sequences file: {}",&path);
+        fs::remove_file(path);
+    }
 
     let mut seq_write = |file : &mut SeqFileType,s|
     {
         write!(file,"{}",s);
     };
 
-    let mut add_kminmers = |vec: Vec<(Kmer,String,bool,String,(usize,usize))>, dbg_nodes : &mut HashMap<Kmer,DbgEntry>, sequences_file: &mut SeqFileType, node_index: &mut DbgIndex| 
+    let mut sequences_files : Arc<DashMap<ThreadIdType,SeqFileType>> = Arc::new(DashMap::new());
+    let create_sequences_file = |thread_id:ThreadIdType| -> SeqFileType {
+        let seq_path = PathBuf::from(format!("{}.{}.sequences", output_prefix.to_str().unwrap(), thread_id));
+        let mut file = match File::create(&seq_path) {
+            Err(why) => panic!("couldn't create file: {}", why.description()),
+            Ok(file) => file,
+        };
+        //let mut sequences_file = BufWriter::new(file);
+        let mut sequences_file = SeqFileType::new(WriteCompressor::new(file, Preferences::default()).unwrap()); // regular lz4f
+        //let mut sequences_file = WriteCompressor::new(&mut file, PreferencesBuilder::new().compression_level(CLEVEL_HIGH).build()).unwrap();  // too slow
+        seq_write(&mut sequences_file,format!("# k = {}\n",k));
+        seq_write(&mut sequences_file,format!("# l = {}\n",l));
+        seq_write(&mut sequences_file,"# structure of remaining of the file:\n".to_string());
+        seq_write(&mut sequences_file,"# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n".to_string());
+        sequences_file
+    };
+
+    let mut add_kminmers = |vec: &Vec<(Kmer,String,bool,String,(usize,usize))>| 
     {
+        let thread_id :usize =  thread_id::get();
+        // determine to which sequence files to write
+        if sequences_files.get(&thread_id).is_none()  {
+            sequences_files.insert(thread_id, create_sequences_file(thread_id));
+        }
+        let sequences_file = sequences_files.get(&thread_id).unwrap().value();
+
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
             let mut abundance: u16 = 0;
-            let mut cur_node_index;
-            let entry = dbg_nodes.entry(node.clone());
-            match entry {
-                Entry::Vacant(e) => { 
-                    cur_node_index = *node_index;
-                },
-                Entry::Occupied(mut e) => { 
-                    let entry_mut = e.get_mut();
-                    abundance = entry_mut.abundance + 1;
-                    entry_mut.abundance = abundance;
-                    cur_node_index = entry_mut.index;
+            // 1) check if the kminmer is in the BF
+            unsafe {
+                if ! bloom.get().check_and_add(&node)   { 
+                    // if not, necessarily it wasn't seen before so abundance is 1, and insert in BF
+                    // and then, if we're dealing with a reference genome, insert in dbg_nodes
+                    abundance = 1;
+                } else {
+                    // it was in the BF. get its true abundance
+                    abundance = 2; // assume since it's in the BF that the abundance is >= 2 regardless of whether it's in dbg_nodes
+                    // but maybe it's already in dbg_nodes, let's check
+                    // TODO optimize that code
+                    if dbg_nodes.contains_key(&node)  {
+                        abundance = dbg_nodes.get(&node).unwrap().abundance;
+                    }
                 }
             }
-            // 1) check if the kminmer is in the BF
-            if ! bloom.check_and_add(&elt) 
-            {
-                // if not, necessarily it wasn't seen before so abundance is 1, and insert in BF
-                // and then, if we're dealing with a reference genome, insert in dbg_nodes
-                abundance = 1;
-            }
-            else
-            {
-                // it was in the BF. get its true abundance
-                // maybe it's already in dbg_nodes, let's check
-            }
-            
-            if (params.reference && abundance == 1) || ((!params.reference) && abundance == min_abundance {
+            //println!("abundance: {}",abundance);
+            if (params.reference && abundance == 1) || ((!params.reference) && abundance == min_kmer_abundance) {
                 // only save each kminmer once, once we're sure it'll pass the filter.
                 // (note that this doesnt enable to control which seq we save based on
                 // median seq length)
                 let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
+                let cur_node_index :DbgIndex = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-                seq_write(sequences_file, format!("{}\n", seq_line));
-            
+
+                seq_write(&mut sequences_files.get_mut(&thread_id).unwrap(), format!("{}\n", seq_line));
+
                 // now record what we just saved
                 let lowprec_shift = (shift.0 as u16, shift.1 as u16);
-                dbg_nodes.insert(DbgEntry{index: *node_index, abundance: 2, seqlen: seq.len() as u32, shift: lowprec_shift}); 
-                *node_index += 1;
+                dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 2, seqlen: seq.len() as u32, shift: lowprec_shift}); 
             }
-			else
-            {
-                // just increase abundance if already inserted
-                if bloom.check(elt)
-                {
-                    dbg_nodes.
-                }
+            else  {
+                // at this point the element _has_ to already have been inserted in dbg_nodes
+                // just increase its abundance 
+                dbg_nodes.get_mut(&node).unwrap().abundance += 1; // if that code crashes it has to be a race condition i didnt check carefully
             }
-
         }
     };
+
 
     if ! restart_from_postcor
     {
@@ -497,67 +537,75 @@ fn main() {
         if error_correct || reference { // write this file even for an uncorrected reference, needed by evaluate_ec.py
             ec_file = ec_reads::new_file(&output_prefix); // reads before correction
         }
+        
+        // worker thread
+        let process_read_aux = |seq_str: &str, seq_id: &str | -> (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) {
+            let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
+            let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
+            println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
+            if read_obj.transformed.len() > k {
+                output = read_obj.read_to_kmers(&params);
+            }
 
-	// worker thread
-	let process_read = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
-	    let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
-	    let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
-	    let seq_id = record.id().unwrap().to_string();
-	    let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
-	    //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
-	    if read_obj.transformed.len() > k {
-		output = read_obj.read_to_kmers(&params);
-	    }
-	    *found = (output, read_obj);
-	};
+            add_kminmers(&output); 
 
-
-        // sequence output
-        let mut file = match File::create(&seq_path) {
-            Err(why) => panic!("couldn't create file: {}", why.description()),
-            Ok(file) => file,
+            (output, read_obj)
         };
-        //let mut sequences_file = BufWriter::new(file);
-        let mut sequences_file = WriteCompressor::new(&mut file, Preferences::default()).unwrap(); // regular lz4f
-        //let mut sequences_file = WriteCompressor::new(&mut file, PreferencesBuilder::new().compression_level(CLEVEL_HIGH).build()).unwrap();  // too slow
+        let process_read_fasta = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
+            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+            let seq_id = record.id().unwrap().to_string();
+            *found = process_read_aux(&seq_str,&seq_id);
+        };
+        let process_read_fastq = |record: seq_io::fastq::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
+            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+            let seq_id = record.id().unwrap().to_string();
+            *found = process_read_aux(&seq_str,&seq_id);
+        };
 
-        seq_write(&mut sequences_file,format!("# k = {}\n",k));
-        seq_write(&mut sequences_file,format!("# l = {}\n",l));
-        seq_write(&mut sequences_file,"# structure of remaining of the file:\n".to_string());
-        seq_write(&mut sequences_file,"# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n".to_string());
 
-	// parallel fasta parsing, with a main thread that writes to disk and populates hash tables
-	read_process_fasta_records(reader, threads as u32, queue_len,
-	    process_read,
-	    |record, found| { // runs in main thread
-		nb_reads += 1;
-		let (vec, read_obj) = found;
-		//println!("Received read in main thread, nb kmers: {}", vec.len());
+        // parallel fasta parsing, with a main thread that writes to disk and populates hash tables
+        let mut main_thread =  |found: &(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)| { // runs in main thread
+            nb_reads += 1;
+            let (vec, read_obj) = found;
+            println!("Received read in main thread, nb kmers: {}", vec.len());
 
-                add_kminmers(vec.to_vec(), &mut dbg_nodes, &mut sequences_file, &mut node_index);
+            if error_correct || reference
+            {
+                reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
 
-                if error_correct || reference
-                {
-                    reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
 
-                    ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
-                    
-                    for i in 0..read_obj.transformed.len()-n+1 {
-                        let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
-                        let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());
-                        entry.push(read_obj.id.to_string());
-                    }
+                for i in 0..read_obj.transformed.len()-n+1 {
+                    let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
+                    let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());
+                    entry.push(read_obj.id.to_string());
                 }
+            }
 
-		// Some(value) will stop the reader, and the value will be returned.
-		// In the case of never stopping, we need to give the compiler a hint about the
-		// type parameter, thus the special 'turbofish' notation is needed.
-		None::<()>
-	    });
+            // Some(value) will stop the reader, and the value will be returned.
+            // In the case of never stopping, we need to give the compiler a hint about the
+            // type parameter, thus the special 'turbofish' notation is needed.
+            None::<()>
+        };
 
+        let filename_str = filename.to_str().unwrap();
+        if filename_str.ends_with(".fasta.gz") || filename_str.ends_with(".fa.gz")  || filename_str.ends_with(".fa") || filename_str.ends_with(".fasta") {
+            fasta_reads = true;
+            println!("Input file: {}", filename_str);
+            println!("Format: FASTA");
+        }
+        let buf = BufReader::new(get_reader(&filename));
+        println!("Parsing input sequences...");
 
-                        
-	sequences_file.flush().unwrap();
+        if fasta_reads {
+            let reader = seq_io::fasta::Reader::new(buf);
+            read_process_fasta_records(reader, threads as u32, queue_len, process_read_fasta, |record,found| { main_thread(found) });
+        }
+        else {
+            let reader = seq_io::fastq::Reader::new(buf);
+            read_process_fastq_records(reader, threads as u32, queue_len, process_read_fastq, |record,found| { main_thread(found) });
+        }
+
         pb.finish_print("Done converting reads to k-min-mers.");
         println!("Number of reads: {}", nb_reads);
 
@@ -569,7 +617,7 @@ fn main() {
             let mut chunk_length = 1;
             let mut ec_entries      = Arc::new(Mutex::new(HashMap::<usize, Vec<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>>::new()));
             let mut poa_entries     = Arc::new(Mutex::new(HashMap::<usize, HashMap<String, Vec<String>>>::new()));
-    
+
             let mut ec_file_poa     = ec_reads::new_file(&poa_path);      // POA debug info (which reads were recruited per template, I think. Baris can correct/confirm)
             let mut ec_file_postcor = ec_reads::new_file(&postcor_path);  // reads after correction
 
@@ -622,7 +670,7 @@ fn main() {
             ec_reads::flush(&mut ec_file_poa);
         }
     }
-    
+
     // now load the error corrected reads and construct the dbg from it
     // it's a little slow because read_to_kmers is called single threaded, there's room for
     // introducing multithreading here
@@ -630,29 +678,23 @@ fn main() {
     {
         dbg_nodes.clear(); // will be populated by add_kminmers()
         let chunks = ec_reads::load(&postcor_path);
-        let mut file = match File::create(&seq_path) { // TODO factorize this code duplication later ---snip
-            Err(why) => panic!("couldn't create file: {}", why.description()),
-            Ok(file) => file,
-        };
-        //let mut sequences_file = BufWriter::new(file);
-        let mut sequences_file = WriteCompressor::new(&mut file, Preferences::default()).unwrap();
-        write!(sequences_file, "# k = {}\n",k).unwrap();
-        write!(sequences_file, "# l = {}\n",l).unwrap();
-        write!(sequences_file, "# structure of remaining of the file:\n").unwrap();
-        write!(sequences_file, "# [node name]\t[list of minimizers]\t[sequence of node]\t[abundance]\t[origin]\t[shift]\n").expect("error writing sequences file"); // --- snip
 
+        let mut sequences_file = create_sequences_file(0);
 
-        node_index = 0;
+        node_index.store(0,Ordering::Relaxed);
         for ec_record in chunks.iter() {
             let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false};
             if read_obj.transformed.len() > k { 
                 let output = read_obj.read_to_kmers(&params);
-                add_kminmers(output, &mut dbg_nodes, &mut sequences_file, &mut node_index);
+                add_kminmers(&output);
             }
         }
-	sequences_file.flush().unwrap();
+        sequences_file.flush().unwrap();
     }
 
+    for mut sequences_file in sequences_files.iter_mut() {
+        sequences_file.flush().unwrap();
+    }
 
     // now DBG creation can start
     println!("nodes before abund-filter: {}", dbg_nodes.len());
@@ -668,11 +710,14 @@ fn main() {
     write!(gfa_file, "H\tVN:Z:1\n").expect("error writing GFA header");
 
     // index k-1-mers
-    let mut km_index : HashMap<Overlap,Vec<&Kmer>> = HashMap::new();
-    for node in dbg_nodes.keys()
+    // TODO opt: used to be a Vec<&Kmer> but unfortunately dashmap
+    // doesnt seem to let me keep references of its keys.
+    let mut km_index : HashMap<Overlap,Vec<Kmer>> = HashMap::new(); 
+    for item in dbg_nodes.iter()
     {
+        let node = item.key();
+        let entry = item.value();
         // take this iteration opportunity to write S lines
-        let entry = &dbg_nodes[&node];
         let length = entry.seqlen;
         let s_line = format!("S\t{}\t{}\tLN:i:{}\tKC:i:{}\n",entry.index,"*",length,entry.abundance);
         write!(gfa_file, "{}", s_line).expect("error writing s_line");
@@ -686,8 +731,8 @@ fn main() {
                 Entry::Occupied(mut e) => { e.get_mut().push(val); }
             }
         };
-        insert_km(first,node);
-        insert_km(second,node);
+        insert_km(first,node.clone());
+        insert_km(second,node.clone());
     }
 
     let mut nb_edges = 0;
@@ -697,10 +742,11 @@ fn main() {
 
     // create a vector of dbg edges (if we want to create a petgraph)
     // otherwise just output edges to gfa without keeping them in mem
-    for n1 in dbg_nodes.keys() 
+    for item in dbg_nodes.iter() 
     {
+        let n1 = item.key();
+        let n1_entry = item.value();
         let rev_n1 = n1.reverse();
-        let n1_entry = dbg_nodes.get(n1).unwrap();
         let n1_abundance = n1_entry.abundance;
         let n1_index     = n1_entry.index;
         let n1_seqlen    = n1_entry.seqlen;
@@ -712,31 +758,28 @@ fn main() {
         {
             if km_index.contains_key(&key)
             {
-                let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
-                let mut potential_edges : Vec<(&DbgEntry,String,String)> = Vec::new();
+                let list_of_n2s : &Vec<Kmer> = km_index.get(&key).unwrap();
+                let mut potential_edges : Vec<(DbgEntry,String,String)> = Vec::new();
                 for n2 in list_of_n2s {
+                    //let n2_entry = dbg_nodes.get(&n2).unwrap(); // n2_entry didn't live long
+                    //enough so i'm lamely copying the value. this is a TODO opt to pass it as
+                    //reference
                     let n2_entry = dbg_nodes.get(n2).unwrap();
-                    let mut vec_add_edge = |ori1 :&str,ori2 :&str|{
-                        potential_edges.push((n2_entry,ori1.to_owned(),ori2.to_owned()));
+                    let mut vec_add_edge = | ori1 :&str,ori2 :&str|{
+                        potential_edges.push((n2_entry.value().clone(),ori1.to_owned(),ori2.to_owned()));
                     };
                     let rev_n2 = n2.reverse();
                     if n1.suffix() == n2.prefix() {
-                        //dbg_edges.push((n1,n2));
                         vec_add_edge("+","+");
                     }
                     if revcomp_aware {
-                        if n1.suffix() == rev_n2.prefix()
-                        {
-                            //dbg_edges.push((n1,n2));
+                        if n1.suffix() == rev_n2.prefix() {
                             vec_add_edge("+","-");
                         }
-                        if rev_n1.suffix() == n2.prefix()
-                        {
-                            //dbg_edges.push((n1,n2));
+                        if rev_n1.suffix() == n2.prefix() {
                             vec_add_edge("-","+");
                         }
                         if rev_n1.suffix() == rev_n2.prefix() {
-                            //dbg_edges.push((n1,n2));
                             vec_add_edge("-","-");
                         }
                     }
@@ -799,16 +842,16 @@ fn main() {
 
     // create a real bidirected dbg object using petgraph
     /*{
-        let mut gr = DiGraph::<Kmer,Kmer>::new();
-        let mut node_indices : HashMap<Kmer,NodeIndex> = HashMap::new(); // bit redundant info, as nodes indices are in order of elements in dbg_nodes already; but maybe don't want to binary search inside it.
-        for node in dbg_nodes.keys() { 
-            let index = gr.add_node(node.clone());
-            node_indices.insert(node.clone(),index);
-        }
-        let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
+      let mut gr = DiGraph::<Kmer,Kmer>::new();
+      let mut node_indices : HashMap<Kmer,NodeIndex> = HashMap::new(); // bit redundant info, as nodes indices are in order of elements in dbg_nodes already; but maybe don't want to binary search inside it.
+      for node in dbg_nodes.keys() { 
+      let index = gr.add_node(node.clone());
+      node_indices.insert(node.clone(),index);
+      }
+      let vec_edges : Vec<(NodeIndex,NodeIndex)> = dbg_edges.iter().map(|(n1,n2)| (node_indices.get(&n1).unwrap().clone(),node_indices.get(&n2).unwrap().clone())).collect();
 
-        gr.extend_with_edges( vec_edges );
-    }*/
+      gr.extend_with_edges( vec_edges );
+      }*/
 
     // graphml output
     //let graphml = GraphMl::new(&gr).pretty_print(true);
@@ -817,12 +860,12 @@ fn main() {
     // graph pre-simplifications to avoid taking erroneous paths during naive coverage-oblivious
     // gfatools simplifications
     /*if presimp > 0.0
-    {
-        let removed_edges_all = presimp::find_removed_edges(&gr, &dbg_nodes, presimp, threads);
-        presimp::presimp(&mut gr, &removed_edges_all);
-        println!("{:?} edges removed during presimplification.", removed_edges_all.len());
-    }*/ 
-    
+      {
+      let removed_edges_all = presimp::find_removed_edges(&gr, &dbg_nodes, presimp, threads);
+      presimp::presimp(&mut gr, &removed_edges_all);
+      println!("{:?} edges removed during presimplification.", removed_edges_all.len());
+      }*/ 
+
     // gfa output
     //println!("writing GFA..");
     //let mut node_indices = gfa_output::output_gfa(&gr, &dbg_nodes, &output_prefix, &kmer_seqs, &int_to_minimizer, levenshtein_minimizers, &node_indices);

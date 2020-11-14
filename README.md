@@ -3,10 +3,13 @@
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
 
-## Purpose
+## Overview and purpose
 
 `rust-mdbg` does not replace a conventional genome assembler, as it has slightly lower contiguity and completeness. However, it can be useful
-for quickly assembling reads. It performs mDBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
+for quickly assembling reads. It performs mdBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
+
+`rust-mdbg` operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all seen as ordered lists of minimizers, instead of strings of nucleotides. A conversion step is necessary to obtain a classical *base-space* representation.
+
 
 ## Installation
 
@@ -17,9 +20,8 @@ For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools
 ## Quick start
 
 ```
-cargo build
-gunzip example/reads-0.00.fa.gz
-target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
+cargo build --release
+target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
 utils/magic_simplify example
 ```
 
@@ -35,7 +37,7 @@ For convenience, components 2) and 3) are wrapped into a script called `magic_si
 
 ## Input
 
-Currently, `rust-mdbg` only takes a single FASTA input, and requires the user to specify the k, density and l values, as discussed in the article. 
+`rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not), and requires the user to specify the k, density and l values, as discussed in the article. 
 
 ## Output data
 
@@ -48,13 +50,9 @@ The `to_basespace` program allows to combine both outputs and produde a `.gfa` f
 
 ## Running an example
 
-A sample set of reads was provided in the `example/` folder.  Uncompress them:
+A sample set of reads was provided in the `example/` folder. Run
 
-`gunzip example/reads-0.00.fa.gz`
-
-then run:
-
-`target/release/rust-mdbg reads-0.00.fa -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example`
+`target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example`
 
 which will create an `example.gfa` file.
 
