@@ -179,14 +179,15 @@ fn thread_gather_hashmap<V: Copy>(hashmap_all: &mut MutexGuard<HashMap<usize,Has
 }
 
 fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
-    let filetype = "gz";
+    let mut filetype = "unzip";
+    let filename_str = path.to_str().unwrap();
     let file = match File::open(path) {
             Ok(file) => file,
             Err(error) => panic!("There was a problem opening the file: {:?}", error),
         };
-
+    if filename_str.ends_with(".gz") {filetype = "zip";}
     let reader: Box<OtherRead + Send> = match filetype { 
-        "gz" => Box::new(GzDecoder::new(file)) as Box<dyn OtherRead + Send>, 
+        "zip" => Box::new(GzDecoder::new(file)) as Box<dyn OtherRead + Send>, 
         _ => Box::new(file) as Box<dyn OtherRead + Send>, 
         
     }; 
@@ -196,7 +197,7 @@ fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
 
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "rust-mhdbg", about = "Original implementation of MinHash de Bruijn graphs")]
+#[structopt(name = "rust-mdbg", about = "Original implementation of minimizer-space de Bruijn graphs")]
 struct Opt {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
