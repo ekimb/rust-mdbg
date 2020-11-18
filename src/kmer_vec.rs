@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 use std::cmp::Ordering;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct KmerVec 
 {
     data: Vec<u64>
