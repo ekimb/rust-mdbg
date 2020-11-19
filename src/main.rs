@@ -441,7 +441,7 @@ fn main() {
     // dbg_nodes is a hash table containing (kmers -> (index,count))
     // it will keep only those with count > 1
     let mut dbg_nodes     : Arc<DashMap<Kmer,DbgEntry>> = Arc::new(DashMap::new()); // it's a Counter
-    let mut bloom : RacyBloom = RacyBloom::new(Bloom::new_with_rate(100_000_000, 1e-7)); // a bf to avoid putting stuff into dbg_nodes too early
+    let mut bloom : RacyBloom = RacyBloom::new(Bloom::new_with_rate(if use_bf {100_000_000} else {1}, 1e-7)); // a bf to avoid putting stuff into dbg_nodes too early
     static node_index: AtomicUsize = AtomicUsize::new(0); // associates a unique integer to each dbg node
     let mut kmer_seqs     : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node (k-min-mer) to an arbitrary sequence from the reads
     let mut kmer_seqs_lens: HashMap<Kmer,Vec<u32>> = HashMap::new(); // associate a dBG node to the lengths of all its sequences from the reads
@@ -548,7 +548,7 @@ fn main() {
                 dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 2, seqlen: seq.len() as u32, shift: lowprec_shift}); 
             }
             else  {
-                if min_kmer_abundance == 2 && (!params.reference) && prelim_abundance == 0 { continue; } // nothing to do if true_abundance is 1 here, it's taken care of in the bf code
+                if min_kmer_abundance == 2 && (!params.reference) && prelim_abundance == 0 { continue; } // nothing to do if true_abundance is 1 here, it's taken care of in the bf code above
                 // at this point the element _has_ to already have been inserted in dbg_nodes
                 // just increase its abundance 
                 dbg_nodes.get_mut(&node).unwrap().abundance += 1; // if that code crashes it has to be a race condition i didnt check carefully
