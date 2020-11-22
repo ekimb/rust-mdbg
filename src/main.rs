@@ -35,7 +35,7 @@ use xx_bloomfilter::Bloom;
 use flate2::read::GzDecoder;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use glob::glob;
-use dashmap::{DashMap,mapref::one::Ref};
+use dashmap::DashMap;
 use thread_id;
 use std::cell::UnsafeCell;
 use std::io::Result;
@@ -441,7 +441,8 @@ fn main() {
     // dbg_nodes is a hash table containing (kmers -> (index,count))
     // it will keep only those with count > 1
     let mut dbg_nodes     : Arc<DashMap<Kmer,DbgEntry>> = Arc::new(DashMap::new()); // it's a Counter
-    let mut bloom : RacyBloom = RacyBloom::new(Bloom::new_with_rate(if use_bf {100_000_000} else {1}, 1e-7)); // a bf to avoid putting stuff into dbg_nodes too early
+    //let mut bloom : RacyBloom = RacyBloom::new(Bloom::new_with_rate(if use_bf {100_000_000} else {1}, 1e-7)); // a bf to avoid putting stuff into dbg_nodes too early
+    let mut bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000)); // same bf but making sure we use only 1 hash function for speed
     static node_index: AtomicUsize = AtomicUsize::new(0); // associates a unique integer to each dbg node
     let mut kmer_seqs     : HashMap<Kmer,String> = HashMap::new(); // associate a dBG node (k-min-mer) to an arbitrary sequence from the reads
     let mut kmer_seqs_lens: HashMap<Kmer,Vec<u32>> = HashMap::new(); // associate a dBG node to the lengths of all its sequences from the reads
@@ -494,64 +495,74 @@ fn main() {
         let sequences_file = sequences_files.get(&thread_id).unwrap().value();
 
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
-            let mut true_abundance: u16 = 0;
-            let mut prelim_abundance: u16 = 0; // for convenience, is true_abundance - 1
-            // FIXME that whole code won't work with min_kmer_abundance > 2
+            let mut previous_abundance: u16 = 0; // for convenience, is the abundance of the kmer _before_ it was seen now
+            let mut cur_node_index: DbgIndex = 0 as DbgIndex;
+            let mut contains_key = false;
 
             // this code takes care of kminmers having abundances 1 and 2
-            if min_kmer_abundance == 2 && use_bf {
-                // this code only works when min_kmer_abundance == 2 as we're not doing nested BFs (for now)
+            if use_bf && (!params.reference) {
+                // this code only optimized for when min_kmer_abundance == 2 as we're not doing nested BFs (for now)
                 unsafe {
                     // 1) check if the kminmer is in the BF
                     if ! bloom.get().check_and_add(&node)   { 
                         // 2) if not, it wasn't seen before so abundance has to be 1, and it gets inserted into BF
                         // for technical purposes, let's set it to preliminary abundance 0
-                        prelim_abundance = 0;
+                        previous_abundance = 0;
+                        continue; // actually there is nothing more to do
                     } else {
-                        // 3) it was already in BF. meaning it was also inserted in dbg_nodes. get its true abundance
-                        prelim_abundance = 1; // assume since it's in the BF that the true abundance is >= 2 regardless of whether it's in dbg_nodes
-                        // TODO optimize that code
-                        if dbg_nodes.contains_key(&node)  {
-                            prelim_abundance = dbg_nodes.get(&node).unwrap().abundance;
-                        }
+                        // 3) it was already in BF. meaning it was also inserted in dbg_nodes. we will get its true abundance later
+                        previous_abundance = 1; 
                     }
                 }
+                contains_key = dbg_nodes.contains_key(node);
             }
             else 
-            { // old version without bf, just get abundance from the hash table
-                if dbg_nodes.contains_key(&node)  {
-                    dbg_nodes.get_mut(&node).unwrap().abundance += 1;
-                    true_abundance = dbg_nodes.get(&node).unwrap().abundance;
-                    prelim_abundance = true_abundance - 1;
+            { // old version without bf, just record abundance=1 in the hash table too
+                contains_key = dbg_nodes.contains_key(node);
+                if contains_key {
+                    let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
+                    previous_abundance = entry_mut.abundance;
+                    entry_mut.abundance += 1;
+                    cur_node_index = entry_mut.index;
                 }
                 else {
-                    let cur_node_index :DbgIndex = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
+                    cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
                     let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+                    previous_abundance = 0;
+                    // simulate the bf by inserting with abundance 1
                     dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
-                    true_abundance = 1;
-                    prelim_abundance = true_abundance - 1;
+                    contains_key = true;
                 }
             }
             //println!("abundance: {}",abundance);
-            if (params.reference && prelim_abundance == 0) || ((!params.reference) && prelim_abundance == 1) {
-                // only save each kminmer once, once we're sure it'll pass the filter.
-                // (note that this doesnt enable to control which seq we save based on
-                // median seq length)
-                let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
-                let cur_node_index :DbgIndex = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
-                let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-
-                seq_write(&mut sequences_files.get_mut(&thread_id).unwrap(), format!("{}\n", seq_line));
-
-                // now record what we just saved
+            if params.reference || ((!params.reference) && (previous_abundance >= 1)) {
+                // now record what we will save
+                // or, record in the hash table anyway to save later
                 let lowprec_shift = (shift.0 as u16, shift.1 as u16);
-                dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 2, seqlen: seq.len() as u32, shift: lowprec_shift}); 
-            }
-            else  {
-                if min_kmer_abundance == 2 && (!params.reference) && prelim_abundance == 0 { continue; } // nothing to do if true_abundance is 1 here, it's taken care of in the bf code above
-                // at this point the element _has_ to already have been inserted in dbg_nodes
-                // just increase its abundance 
-                dbg_nodes.get_mut(&node).unwrap().abundance += 1; // if that code crashes it has to be a race condition i didnt check carefully
+                if contains_key {
+                    let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
+                    cur_node_index = entry_mut.index;
+                    previous_abundance = entry_mut.abundance;
+                    if previous_abundance  == min_kmer_abundance-1 {
+                        entry_mut.seqlen = seq.len() as u32;
+                        entry_mut.shift = lowprec_shift;
+                    }
+                    entry_mut.abundance += 1;
+                }
+                else{ 
+                    cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
+                    dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
+                }
+
+                if previous_abundance == (min_kmer_abundance-1)
+                {
+                    // only save each kminmer once, exact at the time it passes the abundance filter.
+                    // (note that this doesnt enable to control which seq we save based on
+                    // median seq length, unfortunately)
+                    let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
+                    let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
+                    seq_write(&mut sequences_files.get_mut(&thread_id).unwrap(), format!("{}\n", seq_line));
+                }
             }
         }
     };
@@ -786,9 +797,6 @@ fn main() {
                 let list_of_n2s : &Vec<&Kmer> = km_index.get(&key).unwrap();
                 let mut potential_edges : Vec<(&DbgEntry,String,String)> = Vec::new();
                 for n2 in list_of_n2s {
-                    //let n2_entry = dbg_nodes.get(&n2).unwrap(); // n2_entry didn't live long
-                    //enough so i'm lamely copying the value. this is a TODO opt to pass it as
-                    //reference
                     let n2_entry = dbg_nodes_view.get(n2).unwrap();
                     let mut vec_add_edge = | ori1 :&str,ori2 :&str|{
                         potential_edges.push((n2_entry.clone(),ori1.to_owned(),ori2.to_owned()));
