@@ -1,13 +1,11 @@
 /target
 **/*.rs.bk
-*.fa
 *.ec_data
 *.sequences
 *.gfa
 small-example/*
 *.fasta
 src/trash.rs
-*.gz
 ref/
 *.graphml
 *.png
