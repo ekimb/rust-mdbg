@@ -485,14 +485,12 @@ fn main() {
         sequences_file
     };
 
-    let mut add_kminmers = |vec: &Vec<(Kmer,String,bool,String,(usize,usize))>| 
+    let mut add_kminmers = |vec: &Vec<(Kmer,String,bool,String,(usize,usize))>, thread_id: usize| 
     {
-        let thread_id :usize =  thread_id::get();
         // determine to which sequence files to write
-        if sequences_files.get(&thread_id).is_none()  {
+        if sequences_files.get(&thread_id).is_none() && (!params.error_correct || thread_id == 0) {
             sequences_files.insert(thread_id, create_sequences_file(thread_id));
         }
-        let sequences_file = sequences_files.get(&thread_id).unwrap().value();
 
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
             let mut previous_abundance: u16 = 0; // for convenience, is the abundance of the kmer _before_ it was seen now
@@ -554,6 +552,7 @@ fn main() {
                     dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
                 }
 
+                if params.error_correct && thread_id != 0 { continue; } // in error correct mode, only write sequences during second pass
                 if previous_abundance == (min_kmer_abundance-1)
                 {
                     // only save each kminmer once, exact at the time it passes the abundance filter.
@@ -577,6 +576,7 @@ fn main() {
         
         // worker thread
         let process_read_aux = |seq_str: &str, seq_id: &str | -> (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) {
+            let thread_id :usize =  thread_id::get();
             let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
             let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
             //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
@@ -584,7 +584,7 @@ fn main() {
                 output = read_obj.read_to_kmers(&params);
             }
 
-            add_kminmers(&output); 
+            add_kminmers(&output, thread_id); 
 
             (output, read_obj)
         };
@@ -716,17 +716,14 @@ fn main() {
         dbg_nodes.clear(); // will be populated by add_kminmers()
         let chunks = ec_reads::load(&postcor_path);
 
-        let mut sequences_file = create_sequences_file(0);
-
         node_index.store(0,Ordering::Relaxed);
         for ec_record in chunks.iter() {
             let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false};
             if read_obj.transformed.len() > k { 
                 let output = read_obj.read_to_kmers(&params);
-                add_kminmers(&output);
+                add_kminmers(&output, 0);
             }
         }
-        sequences_file.flush().unwrap();
     }
 
     for mut sequences_file in sequences_files.iter_mut() {

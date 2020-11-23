@@ -129,6 +129,10 @@ fn main() {
 		if !process_gfa_line(&line_contents, &mut current_unitig) { break; }
 	    }
 	}
+        // insert last unitig
+        if current_unitig.1.len() > 0 {
+            unitigs.insert(current_unitig.0.clone(),current_unitig.1.to_vec());
+        }
     }
 
     println!("Done parsing GFA, got {} unitigs", unitigs.len());
