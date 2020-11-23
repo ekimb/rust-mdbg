@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use std::mem::{self, MaybeUninit};
 use std::path::Path;
 use lzzzz::lz4f::BufReadDecompressor;
+use glob::glob;
 
 mod utils;
 
@@ -74,7 +75,7 @@ fn main() {
     let mut sequences_file;
 
     if !opt.gfa.is_none()       { gfa_file       = opt.gfa.unwrap(); } 	     else { panic!("please specify an input gfa file (output of `gfatool asm [..] -u`)"); } 
-    if !opt.sequences.is_none() { sequences_file = opt.sequences.unwrap(); } else { panic!("please specify an input sequences file"); } 
+    if !opt.sequences.is_none() { sequences_file = opt.sequences.unwrap(); } else { panic!("please specify the prefix of [prefix].*.sequences files"); } 
 
     let debug = opt.debug;
     //let mut pb = ProgressBar::on(stderr(),file_size);
@@ -212,12 +213,17 @@ fn main() {
         shifts.insert(unitig_name.unwrap().clone(),cur_shift); // re-insert shifts in case they were modified
     };
     
-    if let Ok(lines) = read_lines_lz4(&sequences_file) {
-	for line in lines {
-	    if let Ok(line_contents) = line {
-		process_sequence_line(&line_contents);
-	    }
-	}
+
+    for path in glob(&format!("{}.*.sequences", &sequences_file.to_str().unwrap())).expect("Failed to read glob pattern for sequences files")  {
+        let path = path.unwrap();
+        let path = path.to_str().unwrap(); // rust really requires me to split the let statement in two..
+        if let Ok(lines) = read_lines_lz4(path) {
+            for line in lines {
+                if let Ok(line_contents) = line {
+                    process_sequence_line(&line_contents);
+                }
+            }
+        }
     }
     
     println!("Done parsing .sequences file, recorded {} sequences", sequences.len());
