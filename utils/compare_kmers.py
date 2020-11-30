@@ -1,8 +1,8 @@
 import sys
 import termplotlib as tpl # pip install termplotlib
 import numpy
-if len(sys.argv) < 3 or ".sequences" not in sys.argv[2] or ".sequences" not in sys.argv[1]:
-    exit("input: <file1.sequences> <file2.sequences> [genome.fasta]\n will compare the set of kmers in those two files\nand optionnally analyze the missing kmers across the refgenome\n")
+if len(sys.argv) < 3:
+    exit("input: <[prefix] of sequences1> <[prefix] of sequences2> [genome.fasta]\n will compare the set of kmers in those two files\nand optionnally analyze the missing kmers across the refgenome\n")
 
 # tip: make file1 be the .sequences file constructed from a reference genome
 # and file2 be one made from the reads
@@ -15,8 +15,8 @@ osef, osef, node_minims2, kmer_seq2, kmer_abundance2, origins2, minim_shift2 = p
 
 # in new version, sequences file don't hold abundance anymore, so read it off the gfa
 import parse_gfa
-kmer_abundance1 = parse_gfa.parse(file1.replace('.sequences','.gfa'))
-kmer_abundance2 = parse_gfa.parse(file2.replace('.sequences','.gfa'))
+kmer_abundance1 = parse_gfa.parse(file1+".gfa")
+kmer_abundance2 = parse_gfa.parse(file2+".gfa")
 
 kmers1 = set(kmer_seq1.keys())
 kmers2 = set(kmer_seq2.keys())

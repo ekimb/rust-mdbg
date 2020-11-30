@@ -117,6 +117,7 @@ pub struct Params
     uhs: bool,
     error_correct: bool,
     has_lmer_counts: bool,
+    use_bf: bool,
     debug: bool,
 }
 
@@ -250,6 +251,8 @@ struct Opt {
     restart_from_postcor: bool,
     #[structopt(long)]
     reference: bool,
+    #[structopt(long)]
+    bf: bool,
     #[structopt(parse(from_os_str), long)]
     lmer_counts: Option<PathBuf>,
     #[structopt(long)]
@@ -260,7 +263,6 @@ struct Opt {
     presimp: Option<f32>,
     #[structopt(long)]
     threads: Option<usize>,
-
 }
 
 
@@ -290,7 +292,7 @@ fn main() {
     let mut lmer_counts_min: u32 = 2;
     let mut lmer_counts_max: u32 = 100000;
     let mut presimp :f32 = 0.0;
-    let mut use_bf :bool = true;
+    let mut use_bf :bool = false;
     let mut threads : usize = 8;
     if opt.no_error_correct {
         error_correct = false;
@@ -331,6 +333,7 @@ fn main() {
     if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
     if opt.distance.is_none() { println!("Warning: using default distance metric ({})",distance_type); }
     if opt.restart_from_postcor { restart_from_postcor = true;}
+    if opt.bf { use_bf = true;}
 
 
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
@@ -378,6 +381,7 @@ fn main() {
         uhs,
         error_correct,
         has_lmer_counts,
+        use_bf,
         debug,
     };
     // init some useful objects
@@ -498,13 +502,14 @@ fn main() {
             let mut contains_key = false;
 
             // this code takes care of kminmers having abundances 1 and 2
-            if use_bf && (!params.reference) {
-                // this code only optimized for when min_kmer_abundance == 2 as we're not doing nested BFs (for now)
+            if use_bf && (!params.reference) && min_kmer_abundance > 1{
+                // this code discards abundances of 1 as we're not doing nested BFs (for now)
                 unsafe {
                     // 1) check if the kminmer is in the BF
                     if ! bloom.get().check_and_add(&node)   { 
                         // 2) if not, it wasn't seen before so abundance has to be 1, and it gets inserted into BF
-                        // for technical purposes, let's set it to preliminary abundance 0
+                        // for technical purposes, let's record the abundance before it's inserted (0) and not
+                        // the true abundance (1)
                         previous_abundance = 0;
                         continue; // actually there is nothing more to do
                     } else {
@@ -515,25 +520,23 @@ fn main() {
                 contains_key = dbg_nodes.contains_key(node);
             }
             else 
-            { // old version without bf, just record abundance=1 in the hash table too
+            { // old version without bf, just record abundance=1 kminmers in the hash table too
                 contains_key = dbg_nodes.contains_key(node);
                 if contains_key {
-                    let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
-                    previous_abundance = entry_mut.abundance;
-                    entry_mut.abundance += 1;
-                    cur_node_index = entry_mut.index;
+                    previous_abundance = 1; // a sufficient placeholder. all we know is that the kminmer was previously seen so has abundance >= 1
                 }
                 else {
                     cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
                     let lowprec_shift = (shift.0 as u16, shift.1 as u16);
                     previous_abundance = 0;
-                    // simulate the bf by inserting with abundance 1
+                    // simulate the bf by inserting with abundance 0; will be incremented to 1 in
+                    // the code below
                     dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
                     contains_key = true;
                 }
             }
             //println!("abundance: {}",abundance);
-            if params.reference || ((!params.reference) && (previous_abundance >= 1)) {
+            if params.reference || min_kmer_abundance == 1 || previous_abundance >= 1 {
                 // now record what we will save
                 // or, record in the hash table anyway to save later
                 let lowprec_shift = (shift.0 as u16, shift.1 as u16);
