@@ -88,7 +88,7 @@ Have a look at the next section for some examples of how to set them. For optima
 |Dataset                 | Genome size (hpc)   | Cov  | Parameters                           | N50     | Time (rust-mdbg + gfatools + to_basespace) | Memory |
 |:-----------------------|:-------------:|:----:|:------------------------------------:|--------:|:------------------------------------------|-------:|
 |[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | k=35 l=12 d=0.002  | 3.9Mbp  |  1m40s (1m18s + 8s + 14s)                  |   1.8G |
-|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | k=21 l=14 d=0.003 presimp=0.01 | 13.6Mbp |  21m48s (15m59s + 3m19s + 2m30s)           |  14.5G |
+|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | k=21 l=14 d=0.003 | 13.6Mbp |  24m47s (18m58s + 3m19s + 2m30s)           |  10.6G |
 
 The following runs were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
 Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
