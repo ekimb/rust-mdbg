@@ -78,6 +78,22 @@ In both cases this will create an `example.complete.gfa` file that you can conve
 
 `bash $DIR/gfa2fasta.sh example.complete`
 
+## Parameters
+
+The main parameters of `rust-mdbg` are the k-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper).
+Have a look at the next section for some examples of how to set them. For optimal results, we recommend trying `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005.
+
+## Performance
+
+|Dataset                 | Genome size   | Cov  | Parameters                           | N50     | Time (rust-mdbg + gfatools + to_basespace) | Memory |
+|:-----------------------|:-------------:|:----:|:------------------------------------:|--------:|:------------------------------------------|-------:|
+|[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 130 Mbp | 100x | k=35 l=12 d=0.002  | 3.9Mbp  |  1m40s (1m18s + 8s + 14s)                  |   1.8G |
+|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | k=21 l=14 d=0.003 presimp=0.01 | 13.6Mbp |  21m48s (15m59s + 3m19s + 2m30s)           |  14.5G |
+
+The following runs were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
+Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
+In addition to the parameters shown in the table, the `rust-mdbg` command line also contained: `--bf --no-error-correct --threads 8`.
+
 ## License
 
 `rust-mdbg` is freely available under the [MIT License](https://opensource.org/licenses/MIT).
