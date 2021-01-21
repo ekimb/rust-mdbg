@@ -629,7 +629,7 @@ fn main() {
         };
 
         let filename_str = filename.to_str().unwrap();
-        if filename_str.contains(".fasta.") || filename_str.contains(".fa.")  { // not so robust but will have to do for now
+        if filename_str.contains(".fasta.") || filename_str.contains(".fa.") || filename_str.ends_with(".fa") || filename_str.ends_with(".fasta")  { // not so robust but will have to do for now
             fasta_reads = true;
             println!("Input file: {}", filename_str);
             println!("Format: FASTA");
