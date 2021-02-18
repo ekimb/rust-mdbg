@@ -5,7 +5,7 @@
 
 ## Rationale
 
-`rust-mdbg` can quickly assemble HiFi reads. It performs mdBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
+`rust-mdbg` can quickly assemble HiFi reads. It performs mdBG construction of a 52x human genome HiFi data in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
 
 `rust-mdbg` is fast because it operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all represented as ordered lists of minimizers, instead of strings of nucleotides. A conversion step then yields a classical *base-space* representation.
 
