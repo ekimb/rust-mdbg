@@ -11,7 +11,7 @@
 
 ## Limitations
 
-However, this high efficiency comes at a cost :) `rust-mdbg` cannot (yet) replace a conventional long-read genome assembler. It has lower contiguity and completeness than state-of-the-art assemblers such as hiCanu and hifiasm. Also, `rust-mdbg` performs best with data having at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
+However, this high efficiency comes at a cost :) `rust-mdbg` cannot (yet) replace a conventional long-read genome assembler as it gives results of lower contiguity and completeness than state-of-the-art assemblers such as hiCanu and hifiasm. Also, `rust-mdbg` performs best with data having at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
 
 Finding the right set of parameters that yield optimal results is also an open question. See the 'Parameters' section of this Readme.
 
