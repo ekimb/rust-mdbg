@@ -3,12 +3,17 @@
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
 
-## Overview and purpose
+## Rationale
 
-`rust-mdbg` does not replace a conventional genome assembler, as it has slightly lower contiguity and completeness. However, it can be useful
-for quickly assembling reads. It performs mdBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
+`rust-mdbg` can quickly assemble HiFi reads. It performs mdBG construction of a human genome in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
 
-`rust-mdbg` operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all seen as ordered lists of minimizers, instead of strings of nucleotides. A conversion step is necessary to obtain a classical *base-space* representation.
+`rust-mdbg` is fast because it operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all represented as ordered lists of minimizers, instead of strings of nucleotides. A conversion step then yields a classical *base-space* representation.
+
+## Limitations
+
+However, this high efficiency comes at a cost :) `rust-mdbg` cannot (yet) replace a conventional long-read genome assembler. It has lower contiguity and completeness than state-of-the-art assemblers such as hiCanu and hifiasm. Also, `rust-mdbg` performs best with data having at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
+
+Finding the right set of parameters that yield optimal results is also an open question. See the 'Parameters' section of this Readme.
 
 
 ## Installation
@@ -81,7 +86,7 @@ In both cases this will create an `example.complete.gfa` file that you can conve
 ## Parameters
 
 The main parameters of `rust-mdbg` are the k-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper).
-Have a look at the next section for some examples of how to set them. For optimal results, we recommend trying `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005.
+Have a look at the next section for some examples of how to set them. For optimal results, we recommend trying `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005. Setting `k` and `d` such that the ratio k/d is slightly below the read length appears to be most effective. 
 
 ## Performance
 
