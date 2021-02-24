@@ -201,7 +201,54 @@ fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
     reader
 }
 
+fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
+{
+    let max_reads = 100; // don't look beyong 100 reads
 
+    let buf = BufReader::new(get_reader(&filename));
+    println!("Parsing input sequences to estimate mean read length...");
+
+    let mut mean_length = 0;
+    let mut nb_reads = 0;
+
+    // todo should factorize
+    if fasta_reads {
+        let mut reader = seq_io::fasta::Reader::new(buf);
+        while let Some(record) = reader.next() {
+            let record = record.unwrap();
+            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+            mean_length += seq_str.len();
+            nb_reads += 1;
+            if nb_reads == max_reads { break;}
+        }
+
+    }
+    else
+    {
+        let mut reader = seq_io::fastq::Reader::new(buf);
+        while let Some(record) = reader.next() {
+            let record = record.unwrap();
+            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+            mean_length += seq_str.len();
+            nb_reads += 1;
+            if nb_reads == max_reads { break;}
+        }
+
+    }
+
+    mean_length /= nb_reads;
+    println!("Detected mean read length: {} bp",mean_length);
+
+    // a bit crude, but let's try
+    let d=0.003;
+    let slightly_below_readlen : f64 = (mean_length as f64)*3.0/4.0;
+    let k = (d*slightly_below_readlen) as usize;
+    let l=12;
+    
+    println!("Setting k={} l={} density={}",k,l,d);
+
+    (k,l,d)
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rust-mdbg", about = "Original implementation of minimizer-space de Bruijn graphs")]
@@ -313,12 +360,35 @@ fn main() {
         if opt.l.is_none() { l = 12; }
         if opt.density.is_none() { density = 0.1 };
     }
-    if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
-    if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
-    if !opt.n.is_none() { n = opt.n.unwrap() } else { println!("Warning: using default n value ({})",n); }
-    if !opt.t.is_none() { t = opt.t.unwrap() } else { println!("Warning: using default t value ({})",t); }
 
-    if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
+    if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
+    if filename.as_os_str().is_empty() { panic!("please specify an input file"); }
+
+    let mut fasta_reads : bool = false;
+    let filename_str = filename.to_str().unwrap();
+        if filename_str.contains(".fasta.") || filename_str.contains(".fa.") || filename_str.ends_with(".fa") || filename_str.ends_with(".fasta")  { // not so robust but will have to do for now
+            fasta_reads = true;
+            println!("Input file: {}", filename_str);
+            println!("Format: FASTA");
+    }
+    
+    if opt.k.is_none() && opt.l.is_none()  && opt.density.is_none()
+    {
+        println!("autodetecting values for k, l, density");
+        let (ak,al,ad) = autodetect_k_l_d(&filename,fasta_reads);
+        k=ak; l=al; density=ad;
+    }
+    else
+    {
+        if !opt.k.is_none() { k = opt.k.unwrap() } else { println!("Warning: using default k value ({})",k); } 
+        if !opt.l.is_none() { l = opt.l.unwrap() } else { println!("Warning: using default l value ({})",l); }
+        if !opt.density.is_none() { density = opt.density.unwrap() } else { println!("Warning: using default minhash density ({}%)",density*100.0); }
+    }
+
+    if !opt.n.is_none() { n = opt.n.unwrap() } //else { println!("Warning: using default n value ({})",n); }
+    if !opt.t.is_none() { t = opt.t.unwrap() } //else { println!("Warning: using default t value ({})",t); }
+
+
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() as DbgAbundance } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.presimp.is_none() { presimp = opt.presimp.unwrap(); } else { println!("Warning: Using default no-presimp"); }
@@ -338,7 +408,6 @@ fn main() {
 
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
 
-    if !opt.reads.is_none() { filename = opt.reads.unwrap().clone(); } 
     if !opt.lmer_counts.is_none() { 
         has_lmer_counts = true;
         lmer_counts_filename = opt.lmer_counts.unwrap().clone(); 
@@ -352,8 +421,6 @@ fn main() {
     } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
     
-    if filename.as_os_str().is_empty() { panic!("please specify an input file"); }
-
     let debug = opt.debug;
 
     let size_miniverse = match revcomp_aware
@@ -433,7 +500,6 @@ fn main() {
         minimizer_to_int = res.0;
         int_to_minimizer = res.1;
     }
-    let mut fasta_reads : bool = false;
     
     let queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
 
@@ -628,12 +694,6 @@ fn main() {
             None::<()>
         };
 
-        let filename_str = filename.to_str().unwrap();
-        if filename_str.contains(".fasta.") || filename_str.contains(".fa.") || filename_str.ends_with(".fa") || filename_str.ends_with(".fasta")  { // not so robust but will have to do for now
-            fasta_reads = true;
-            println!("Input file: {}", filename_str);
-            println!("Format: FASTA");
-        }
         let buf = BufReader::new(get_reader(&filename));
         println!("Parsing input sequences...");
 

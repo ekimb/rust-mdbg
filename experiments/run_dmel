@@ -1,0 +1,27 @@
+TH=6
+abund=2
+prefix=dmel
+
+# pasteur stuff
+dir=/pasteur/sonic/scratch/public/rchikhi/dmel-mdbg/
+mkdir $dir
+cd /pasteur/sonic/scratch/public/rchikhi/dmel-mdbg
+
+reads=$dir/dmel_hifi_40x.hpc.fasta
+
+echo "Running reads..."
+command time -v cargo run --manifest-path $HOME/rust-mdbg/Cargo.toml --release -- $reads --threads $TH --minabund $abund --no-error-correct --prefix $prefix 
+#	-k 35 -l 12 --density 0.003
+#	-k $K -l $L --density $DENSITY 
+# testing autodetect
+#
+
+end=`date +%s`
+echo "Completing GFA..."
+$HOME/rust-mdbg/utils/magic_simplify $prefix
+runtime=$((end-start))
+echo "Runtime was $runtime seconds."
+
+assembly=$prefix.msimpl.fa
+n50 $assembly | tee $assembly.n50
+
