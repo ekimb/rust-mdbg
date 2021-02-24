@@ -42,7 +42,12 @@ For convenience, components 2) and 3) are wrapped into a script called `magic_si
 
 ## Input
 
-`rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not), and requires the user to specify the k, density and l values, as discussed in the article. 
+`rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not). 
+
+For better results, please use the provided script `https://raw.githubusercontent.com/ekimb/rust-mdbg/master/utils/remove_homopoly.py` to homopolymer-compress your reads. 
+Usage example:
+
+`seqtk seq -A reads.fq.gz | python remove_homopoly.py /dev/stdin | gzip -1 -c > reads.fa.hpc.gz`
 
 ## Output data
 
