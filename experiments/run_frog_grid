@@ -1,0 +1,44 @@
+inputfile=$HOME/data/mdbg-tests/frog/SRR11606868_SRR12048570.fastq.gz
+#zcat $HOME/data/mdbg-tests/frog/SRR11606868_SRR12048570.fastq.gz | seqtk seq -A | python ~/rust-mdbg/utils/remove_homopoly.py  /dev/stdin | gzip -1 -c > $HOME/data/mdbg-tests/frog/SRR11606868_SRR12048570.fasta.hpc.gz
+inputfile=$HOME/data/mdbg-tests/frog/SRR11606868_SRR12048570.fasta.hpc.gz
+org=frog
+
+#for DENSITY in 0.0005 0.001 0.002 0.003 0.007
+for DENSITY in 0.01 0.02 0.05
+do
+    for L in 10 12 14
+    do
+        for K in  8 11 17 25 31 38 46
+        do
+
+
+abund=2
+TH=4
+prefix="$org"-K"$K"-L"$L"-D"$DENSITY"
+
+# pasteur stuff
+dir=/pasteur/scratch/public/rchikhi/"$org"-mdbg/
+mkdir $dir
+cd /pasteur/scratch/public/rchikhi/"$org"-mdbg
+
+echo "Running assembly..."
+start=`date +%s`
+command time -v cargo run --manifest-path $HOME/rust-mdbg/Cargo.toml --release -- $inputfile -k $K -l $L --density $DENSITY --threads $TH --minabund $abund --no-error-correct --prefix $prefix
+end=`date +%s`
+echo "Completing GFA..."
+$HOME/rust-mdbg/utils/magic_simplify $prefix
+runtime=$((end-start))
+echo "Runtime was $runtime seconds."
+
+assembly=/pasteur/scratch/public/rchikhi/"$org"-mdbg/$prefix.msimpl.fa
+n50 $assembly | tee $assembly.n50
+
+
+            rm -rf *.sequences *.fa *.gfa
+        done
+    done
+done
+
+
+
+

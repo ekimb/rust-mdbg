@@ -1,0 +1,42 @@
+
+for DENSITY in 0.0005 0.001 0.002 0.003 0.007
+do
+    for L in 10 12 14
+    do
+        for K in  8 11 17 25 31 38 46
+        do
+
+
+abund=2
+TH=4
+prefix=strawberry-K"$K"-L"$L"-D"$DENSITY"
+
+reads=/pasteur/sonic/scratch/public/rchikhi/strawberry-mdbg/SRR11606867.hpc.fasta
+
+# pasteur stuff
+dir=/pasteur/scratch/public/rchikhi/strawberry-mdbg/hpc
+dir=/pasteur/sonic/scratch/public/rchikhi/strawberry-mdbg/hpc
+mkdir -p $dir
+cd $dir
+
+echo "Running assembly..."
+start=`date +%s`
+command time -v cargo run --manifest-path $HOME/rust-mdbg/Cargo.toml --release -- $reads -k $K -l $L --density $DENSITY --threads $TH --minabund $abund --no-error-correct --prefix $prefix
+end=`date +%s`
+echo "Completing GFA..."
+$HOME/rust-mdbg/utils/magic_simplify $prefix
+runtime=$((end-start))
+echo "Runtime was $runtime seconds."
+
+assembly=$prefix.msimpl.fa
+n50 $assembly | tee $assembly.n50
+
+
+            rm -rf *.sequences *.fa *.gfa
+        done
+    done
+done
+
+
+
+

@@ -1,0 +1,73 @@
+#!/bin/bash
+# multi-k rust-mdbg 
+#arguments: [reads.fq] [prefix] [threads]
+
+
+if ! command -v seqtk &> /dev/null
+then
+	echo "please install seqtk, it is a prerequisite for this script"
+	exit
+fi
+
+if [ "$#" -lt 3 ]
+then
+	echo "usage: multik <reads.fq.gz> <prefix> <nb_threads> [restart_from]"
+fi
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+density=0.003
+l=12
+
+reads=$1
+prefix=$2
+threads=$3
+restart_from=$4
+
+# determine max read length
+# (in order to fix max k)
+# converts a multiFASTA file into one where all sequences are one one line
+# # this is the needed format in REINDEER query files 
+avg_readlen=$(zcat -f $reads |head -n 10000 | awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' | awk '!/^>/ {print length}'  | awk '{sum+=$1} END {print int(sum/NR)}')
+
+max_k=$(printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
+echo "avg readlen: $avg_readlen, max k: $max_k"
+
+function assemble {
+	cur_reads=$1
+	k=$2
+	l=$3
+	d=$4
+	tprefix=$5
+	threads=$6
+	DIR=$7
+	echo "assembly with k=$k"
+	cargo run --manifest-path $DIR/../Cargo.toml --release $cur_reads -k $k -l $l --density $d --minabund 2 --threads $threads --prefix $tprefix >/dev/null
+	$DIR/magic_simplify $tprefix >/dev/null 2>/dev/null
+
+}
+
+
+if [ -z "$restart_from" ]
+then
+	# init with just the reads at first
+	k=10
+	tprefix=$prefix-k10
+	assemble $reads $k $l $density $tprefix $threads $DIR
+	start_k=15
+else
+	start_k=$restart_from
+	tprefix=$prefix-k$((start_k-5))
+fi
+
+for k in $(seq $start_k 5 $max_k)
+do
+    zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa $reads |seqtk seq -A > multik_reads.fa
+    tprefix=$prefix-k$k
+    assemble $PWD/multik_reads.fa $k $l $density $tprefix $threads $DIR
+    echo "zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa $reads |seqtk seq -A "
+    rm -f *.sequences
+done
+
+mv $tprefix-k.msimpl.fa $prefix-final.msimpl.fa
+echo "assembly done, results are in: $prefix-final.msimpl.fa"

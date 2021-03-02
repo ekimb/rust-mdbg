@@ -241,7 +241,8 @@ fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
 
     // a bit crude, but let's try
     let d=0.003;
-    let slightly_below_readlen : f64 = (mean_length as f64)*3.0/4.0;
+    let coeff : f64 = 3.0/4.0;
+    let slightly_below_readlen : f64 = (mean_length as f64);
     let k = (d*slightly_below_readlen) as usize;
     let l=12;
     
@@ -293,7 +294,7 @@ struct Opt {
     #[structopt(long)]
     test2: bool,
     #[structopt(long)]
-    no_error_correct: bool,
+    error_correct: bool,
     #[structopt(long)]
     restart_from_postcor: bool,
     #[structopt(long)]
@@ -330,7 +331,7 @@ fn main() {
     let mut min_kmer_abundance: DbgAbundance = 2;
     let mut levenshtein_minimizers: usize = 0;
     let mut distance: usize = 0;
-    let mut error_correct: bool = true;
+    let mut error_correct: bool = false;
     let mut restart_from_postcor: bool = false;
     let mut correction_threshold : i32 = 0;
     let mut reference : bool = false;
@@ -341,8 +342,8 @@ fn main() {
     let mut presimp :f32 = 0.0;
     let mut use_bf :bool = false;
     let mut threads : usize = 8;
-    if opt.no_error_correct {
-        error_correct = false;
+    if opt.error_correct {
+        error_correct = true;
     }
     if opt.reference {
         reference = true;

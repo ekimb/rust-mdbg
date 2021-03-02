@@ -1,0 +1,29 @@
+TH=6
+abund=2
+prefix=hg002
+
+# pasteur stuff
+dir=/pasteur/sonic/scratch/public/rchikhi/hg002-mdbg/
+mkdir -p $dir
+cd $dir
+
+reads=$dir/all.hpc.fasta.gz
+
+echo "Running reads..."
+command time -v cargo run --manifest-path $HOME/rust-mdbg/Cargo.toml --release -- $reads --threads $TH --minabund $abund --prefix $prefix --bf \
+	-k 21 -l 14 --density 0.003 # good one
+#	-k 48 -l 12 --density 0.003
+#	-k $K -l $L --density $DENSITY 
+# testing autodetect
+
+
+
+end=`date +%s`
+echo "Completing GFA..."
+$HOME/rust-mdbg/utils/magic_simplify $prefix
+runtime=$((end-start))
+echo "Runtime was $runtime seconds."
+
+assembly=$prefix.msimpl.fa
+n50 $assembly | tee $assembly.n50
+

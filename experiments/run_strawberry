@@ -1,22 +1,23 @@
-TH=6
+K=35
+L=14
+DENSITY=0.002
+T=$5
 abund=2
-prefix=dmel
+TH=10
+prefix=strawberry
 
 # pasteur stuff
-dir=/pasteur/sonic/scratch/public/rchikhi/dmel-mdbg/
+dir=/pasteur/sonic/scratch/public/rchikhi/strawberry-mdbg/
 mkdir $dir
-cd /pasteur/sonic/scratch/public/rchikhi/dmel-mdbg
+cd /pasteur/sonic/scratch/public/rchikhi/strawberry-mdbg
 
-reads=$dir/dmel_hifi_100x.hpc.fasta
+reads=/pasteur/sonic/scratch/public/rchikhi/strawberry-mdbg/SRR11606867.hpc.fasta
 
 echo "Running reads..."
 command time -v cargo run --manifest-path $HOME/rust-mdbg/Cargo.toml --release -- $reads --threads $TH --minabund $abund --no-error-correct --prefix $prefix \
-	-k 35 -l 12 --density 0.002 # good one
-#	-k 48 -l 12 --density 0.003
+#	-k 35 -l 12 --density 0.003
 #	-k $K -l $L --density $DENSITY 
 # testing autodetect
-
-
 
 end=`date +%s`
 echo "Completing GFA..."
