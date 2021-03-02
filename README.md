@@ -11,10 +11,10 @@
 
 ## Limitations
 
-However, this high efficiency comes at a cost :) `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as hiCanu and hifiasm. Also, `rust-mdbg` performs best with data having at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
-
-Finding the right set of parameters that yield optimal results is also an open question. See the 'Parameters' section of this Readme.
-
+However, this high speed comes at a cost :) 
+* `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as HiCanu and hifiasm. 
+* `rust-mdbg` performs best with at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
+* no polishing step is implemented; so, assemblies will have around the same accuracy as the reads.
 
 ## Installation
 
@@ -80,21 +80,6 @@ In order to populate the `.gfa` file with base-space sequences and perform graph
 
 which will create `example.msimpl.gfa` and `example.msimpl.fa` files.
 
-In the case that you only want to convert to base-space with no graph simplification, there are two ways:
-* with `gfatools`
-
-```
-gfatools asm -u  example.gfa > example.unitigs.gfa
-target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences
-```
-
-* without `gfatools` (slower, but the code is more straightforward to understand)
-
-`utils/complete_gfa.py example.sequences example.gfa`
-
-In both cases this will create an `example.complete.gfa` file that you can convert to FASTA with
-
-`bash $DIR/gfa2fasta.sh example.complete`
 
 ## Parameters
 
@@ -114,14 +99,37 @@ For better results, try the multi-k strategy (see Multi-k assembly section).
 
 ## Performance
 
-|Dataset                 | Genome size (hpc)   | Cov  | <div style="width:1090px">Parameters</div> | N50     | Time (rust-mdbg + gfatools + to_basespace) | Memory |
+|Dataset                 | Genome size (hpc)   | Cov  | <div style="width:1090px">Parameters</div> | N50     | Time | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
-|[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>auto, multi-k<br>k=35,l=12,d=0.002 | 0.5Mbp<br>2.6Mbp<br>3.9Mbp  |  1m40s (1m18s+8s+14s)<br>22mins<br>1m40s                  |   1.8G |
-|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>k=21,l=14,d=0.003 | 1.0Mbp<br>13.6Mbp |  24m47s (18m58s+3m19s+2m30s)           |  10.6G |
+|[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>auto, multi-k<br>k=35,l=12,d=0.002 | 0.5Mbp<br>2.6Mbp<br>3.9Mbp  |  1mXXs<br>22mins<br>1m40s                  |   1.8G |
+|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>k=21,l=14,d=0.003 | 1.0Mbp<br>13.6Mbp |  24mXXs<br>24m47s            |  10.6G |
 
-The following runs were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
+Time breakdown:<br>
+D. melanogaster: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
+H. Sapiens: 24m47s = 18m58s `rust-mdbg` + 3m19s `gfatools` + 2m30s `to_basespace`
+
+Custom-parameters run were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
 Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
 In addition to the parameters shown in the table, the `rust-mdbg` command line also contained: `--bf --no-error-correct --threads 8`.
+
+## Running `rust-mdbg` without graph simplifications
+
+For converting an assembly to base-space without performing any graph simplification, there are two ways:
+
+* with `gfatools`
+
+```
+gfatools asm -u  example.gfa > example.unitigs.gfa
+target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences
+```
+
+* without `gfatools` (slower, but the code is more straightforward to understand)
+
+`utils/complete_gfa.py example.sequences example.gfa`
+
+In both cases this will create an `example.complete.gfa` file that you can convert to FASTA with
+
+`bash $DIR/gfa2fasta.sh example.complete`
 
 ## License
 
