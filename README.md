@@ -83,7 +83,8 @@ which will create `example.msimpl.gfa` and `example.msimpl.fa` files.
 
 ## Parameters
 
-The main parameters of `rust-mdbg` are the k-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper).
+The main parameters of `rust-mdbg` are the k-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper). 
+For better results, and also without the need to set any parameter, try the multi-k strategy (see Multi-k assembly section). However, for obtaining an initial draft assembly quicky, then this section will explain how parameters are set for single-k assembly.
 
 Those parameters have a huge influence on results quality, pretty much as `k` in classical de Bruijn graph assemblers. When you run `rust-mdbg` without specifying parameters, it sets them to:
 
@@ -95,7 +96,6 @@ Those parameters have a huge influence on results quality, pretty much as `k` in
    
 These parameters will give reasonable assemblies but far from optimal. We experimentally found that best results are often obtained with `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005. Setting `k` and `d` such that the ratio k/d is slightly below the read length appears to be an effective strategy. 
 
-For better results, try the multi-k strategy (see Multi-k assembly section).
 
 ## Performance
 
