@@ -108,7 +108,7 @@ Time breakdown:<br>
 D. melanogaster: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
 H. Sapiens: 24m47s = 18m58s `rust-mdbg` + 3m19s `gfatools` + 2m30s `to_basespace`
 
-Custom-parameters run were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
+The runs with custom parameters (and best results) were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
 Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
 In addition to the parameters shown in the table, the `rust-mdbg` command line also contained: `--bf --no-error-correct --threads 8`.
 
