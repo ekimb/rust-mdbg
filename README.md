@@ -33,7 +33,7 @@ utils/magic_simplify example
 ## Multi-k assembly
 
 For better contiguity (at the expense of ~10x longer running time), try the provided multi-k assembly script.
-It performs assembly iteratively, starting with k=10, up to an automatically determined largest k. 
+It performs assembly iteratively, starting with k=10, up to an automatically-determined largest k. 
 Usage:
 
 `utils/multik <reads.fq.gz> <some_output_prefix> <nb_threads>`
@@ -110,13 +110,13 @@ Those parameters have a huge influence on results quality, pretty much as `k` in
    
 These parameters will give reasonable assemblies but far from optimal. We experimentally found that best results are often obtained with `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005. Setting `k` and `d` such that the ratio k/d is slightly below the read length appears to be an effective strategy. 
 
-For optimal results, try the multi-k strategy (see Multi-k assembly section).
+For better results, try the multi-k strategy (see Multi-k assembly section).
 
 ## Performance
 
 |Dataset                 | Genome size (hpc)   | Cov  | <div style="width:1090px">Parameters</div> | N50     | Time (rust-mdbg + gfatools + to_basespace) | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
-|[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>k=35,l=12,d=0.002 | 0.5Mbp<br>3.9Mbp<br>  |  1m40s (1m18s+8s+14s)<br>same<br>                  |   1.8G |
+|[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>auto, multi-k<br>k=35,l=12,d=0.002 | 0.5Mbp<br>2.6Mbp<br>3.9Mbp  |  1m40s (1m18s+8s+14s)<br>22mins<br>1m40s                  |   1.8G |
 |[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>k=21,l=14,d=0.003 | 1.0Mbp<br>13.6Mbp |  24m47s (18m58s+3m19s+2m30s)           |  10.6G |
 
 The following runs were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
