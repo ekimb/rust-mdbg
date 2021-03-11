@@ -13,7 +13,7 @@
 
 However, this high speed comes at a cost :) 
 * `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as HiCanu and hifiasm. 
-* `rust-mdbg` performs best with at least 40x of coverage; at 30x we observed ~33% contiguity degradation.
+* `rust-mdbg` performs best with at least 40x-50x of coverage
 * no polishing step is implemented; so, assemblies will have around the same accuracy as the reads.
 
 ## Installation
@@ -102,6 +102,7 @@ These parameters will give reasonable assemblies but far from optimal. We experi
 |Dataset                 | Genome size (hpc)   | Cov  | <div style="width:1090px">Parameters</div> | N50     | Time | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
 |[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>k=35,l=12,d=0.002<br>multi-k | 0.5Mbp<br>3.9Mbp<br>1Mbp<br>  |  1mXXs<br>1m40s<br>22mins                  |   1.8G |
+|[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7 Gbp | 36x | auto<br>k=38,l=14,d=0.003<br>multi-k | 0.5Mbp<br>0.7Mbp<br>1Mbp<br>  |  <br>6m12s<br>5m31s<br>42mins                  |   12G<br>10G<br> |
 |[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>k=21,l=14,d=0.003<br>multi-k | 1.0Mbp<br>13.6Mbp<br>16.7Mbp |  27m<br>24m47s<br>5h            |  16G<br>10.6G<br> |
 
 Time breakdown:<br>
