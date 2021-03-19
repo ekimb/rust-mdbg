@@ -201,15 +201,13 @@ fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
     reader
 }
 
-fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
+fn read_first_n_reads(filename: &PathBuf, fasta_reads: bool, max_reads :usize) -> (usize, usize)
 {
-    let max_reads = 100; // don't look beyong 100 reads
+    let mut mean_length = 0;
+    let mut max_length = 0;
+    let mut nb_reads = 0;
 
     let buf = BufReader::new(get_reader(&filename));
-    println!("Parsing input sequences to estimate mean read length...");
-
-    let mut mean_length = 0;
-    let mut nb_reads = 0;
 
     // todo should factorize
     if fasta_reads {
@@ -217,7 +215,9 @@ fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
         while let Some(record) = reader.next() {
             let record = record.unwrap();
             let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
-            mean_length += seq_str.len();
+            let l =  seq_str.len();
+            mean_length += l;
+            max_length = std::cmp::max(l, max_length);
             nb_reads += 1;
             if nb_reads == max_reads { break;}
         }
@@ -229,7 +229,9 @@ fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
         while let Some(record) = reader.next() {
             let record = record.unwrap();
             let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
-            mean_length += seq_str.len();
+            let l =  seq_str.len();
+            mean_length += l;
+            max_length = std::cmp::max(l, max_length);
             nb_reads += 1;
             if nb_reads == max_reads { break;}
         }
@@ -237,6 +239,15 @@ fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
     }
 
     mean_length /= nb_reads;
+    (mean_length,max_length) 
+}
+
+fn autodetect_k_l_d(filename: &PathBuf, fasta_reads :bool) -> (usize,usize,f64)
+{
+    println!("Parsing input sequences to estimate mean read length...");
+
+    let (mean_length, max_length) = read_first_n_reads(&filename, fasta_reads, 100);
+
     println!("Detected mean read length: {} bp",mean_length);
 
     // a bit crude, but let's try
@@ -502,7 +513,12 @@ fn main() {
         int_to_minimizer = res.1;
     }
     
-    let queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
+    let (mean_length, max_length) = read_first_n_reads(&filename, fasta_reads, 10);
+    
+    let mut queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
+    if (max_length > 200000){ // we're likely dealing with contigs. let's lower the parallelism otherwise will consume all my memory
+        queue_len = threads;
+    }
 
     let mut uhs_kmers = HashMap::<String, u32>::new();
     if params.uhs {
@@ -673,11 +689,11 @@ fn main() {
         // parallel fasta parsing, with a main thread that writes to disk and populates hash tables
         let mut main_thread =  |found: &(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)| { // runs in main thread
             nb_reads += 1;
-            let (vec, read_obj) = found;
             //println!("Received read in main thread, nb kmers: {}", vec.len());
 
             if error_correct || reference
             {
+                let (vec, read_obj) = found;
                 reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
 
                 ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);

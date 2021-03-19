@@ -42,8 +42,8 @@ function assemble {
 	threads=$6
 	DIR=$7
 	echo "assembly with k=$k"
-	cargo run --manifest-path $DIR/../Cargo.toml --release $cur_reads -k $k -l $l --density $d --minabund 2 --threads $threads --prefix $tprefix >/dev/null
-	$DIR/magic_simplify $tprefix >/dev/null 2>/dev/null
+	\time cargo run --manifest-path $DIR/../Cargo.toml --release $cur_reads -k $k -l $l --density $d --minabund 2 --threads $threads --prefix $tprefix --bf >/dev/null
+	\time $DIR/magic_simplify $tprefix >/dev/null #2>/dev/null
 
 }
 
@@ -62,10 +62,10 @@ fi
 
 for k in $(seq $start_k 5 $max_k)
 do
-    zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa $reads |seqtk seq -A > multik_reads.fa
+    zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa |seqtk seq -A -L 100000 > multik_reads.fa
+    zcat -f $reads  |seqtk seq -A >> multik_reads.fa
     tprefix=$prefix-k$k
     assemble $PWD/multik_reads.fa $k $l $density $tprefix $threads $DIR
-    echo "zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa $reads |seqtk seq -A "
     rm -f *.sequences
 done
 
