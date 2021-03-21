@@ -58,12 +58,12 @@ Usage example:
 
 `seqtk seq -A reads.fq.gz | python remove_homopoly.py /dev/stdin | gzip -1 -c > reads.fa.hpc.gz`
 
-## Output data
+## Output data 
 
 The output of the `rust-mdbg` program consists of:
 
 * a `.gfa` file containing the minimizer-space de Bruijn graph, without sequences
-* a `.sequences` file containing the sequences of the nodes of the graph
+* a bunch of `.sequences` files containing the sequences of the nodes of the graph
 
 The `to_basespace` program allows to combine both outputs and produde a `.gfa` file with sequences.
 
@@ -105,7 +105,7 @@ These parameters will give reasonable draft assemblies but far from optimal. We 
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
 |[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>multi-k<br>k=35,l=12,d=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15mins<br>1m40s                  |   2.5G<br>1.8G<br>6.7G |
 |[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7 Gbp | 36x | auto<br>multi-k<br>k=38,l=14,d=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40mins<br>5m31s                  |   12G<br>11G<br>10G |
-|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>multi-k<br>k=21,l=14,d=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h30<br>24m47s           | 16.9G<br>58G<br>10.6G |
+|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>multi-k<br>k=21,l=14,d=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15<br>24m47s           | 16.9G<br>20G<br>10.6G |
 
 Time breakdown:<br>
 D. melanogaster: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
@@ -114,8 +114,6 @@ H. Sapiens: 24m47s = 18m58s `rust-mdbg` + 3m19s `gfatools` + 2m30s `to_basespace
 The runs with custom parameters (from the paper) were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
 Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
 In addition to the parameters shown in the table, the `rust-mdbg` command line also contained: `--bf --no-error-correct --threads 8`.
-
-For H. sapiens multi-k, the high memory usage is due to inefficient parsing of long input sequences. It can be reduced with less threads (e.g. 4h/45G with 5 threads).
 
 ## Running `rust-mdbg` without graph simplifications
 
