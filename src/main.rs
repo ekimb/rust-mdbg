@@ -516,9 +516,8 @@ fn main() {
     let (mean_length, max_length) = read_first_n_reads(&filename, fasta_reads, 10);
     
     let mut queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
-    if (max_length > 200000){ // we're likely dealing with contigs. let's lower the parallelism otherwise will consume all my memory
-        queue_len = threads;
-    }
+                             // also: controls how many reads objects are buffered during fasta/fastq
+                             // parsing
 
     let mut uhs_kmers = HashMap::<String, u32>::new();
     if params.uhs {
@@ -572,6 +571,84 @@ fn main() {
         sequences_file
     };
 
+    let mut add_kminmer =|node: &Kmer, seq: Option<&str>, seq_reversed: &bool, origin: &str, shift: &(usize,usize), sequences_file: &mut SeqFileType, thread_id: usize, read_seq: Option<&str>, read_offsets: Option<(usize,usize,usize)>|
+    {
+        let mut previous_abundance: u16 = 0; // for convenience, is the abundance of the kmer _before_ it was seen now
+        let mut cur_node_index: DbgIndex = 0 as DbgIndex;
+        let mut contains_key = false;
+
+        // this code takes care of kminmers having abundances 1 and 2
+        if use_bf && (!params.reference) && min_kmer_abundance > 1{
+            // this code discards abundances of 1 as we're not doing nested BFs (for now)
+            unsafe {
+                // 1) check if the kminmer is in the BF
+                if ! bloom.get().check_and_add(&node)   { 
+                    // 2) if not, it wasn't seen before so abundance has to be 1, and it gets inserted into BF
+                    // for technical purposes, let's record the abundance before it's inserted (0) and not
+                    // the true abundance (1)
+                    previous_abundance = 0;
+                    return; // actually there is nothing more to do
+                } else {
+                    // 3) it was already in BF. meaning it was also inserted in dbg_nodes. we will get its true abundance later
+                    previous_abundance = 1; 
+                }
+            }
+            contains_key = dbg_nodes.contains_key(node);
+        }
+        else 
+        { // old version without bf, just record abundance=1 kminmers in the hash table too
+            contains_key = dbg_nodes.contains_key(node);
+            if contains_key {
+                previous_abundance = 1; // a sufficient placeholder. all we know is that the kminmer was previously seen so has abundance >= 1
+            }
+            else {
+                cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
+                let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+                previous_abundance = 0;
+                let seqlen = match seq { Some(x) => x.len() as u32, None => read_offsets.unwrap().2 as u32 };
+                // simulate the bf by inserting with abundance 0; will be incremented to 1 in
+                // the code below
+                dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 1, seqlen: seqlen, shift: lowprec_shift}); 
+                contains_key = true;
+            }
+        }
+        //println!("abundance: {}",abundance);
+        if params.reference || min_kmer_abundance == 1 || previous_abundance >= 1 {
+            // now record what we will save
+            // or, record in the hash table anyway to save later
+            let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+            if contains_key {
+                let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
+                cur_node_index = entry_mut.index;
+                previous_abundance = entry_mut.abundance;
+                if previous_abundance  == min_kmer_abundance-1 {
+                    let seqlen = match seq { Some(x) => x.len() as u32, None => read_offsets.unwrap().2 as u32 };
+                    entry_mut.seqlen = seqlen;
+                    entry_mut.shift = lowprec_shift;
+                }
+                entry_mut.abundance += 1;
+            }
+            else{ 
+                cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
+                let seqlen = match seq { Some(x) => x.len() as u32, None => read_offsets.unwrap().2 as u32 };
+                dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seqlen, shift: lowprec_shift}); 
+            }
+
+            if params.error_correct && thread_id != 0 { return; } // in error correct mode, only write sequences during second pass
+            if previous_abundance == (min_kmer_abundance-1)
+            {
+                // only save each kminmer once, exact at the time it passes the abundance filter.
+                // (note that this doesnt enable to control which seq we save based on
+                // median seq length, unfortunately)
+                let seq = match seq { Some(x) => x, None => &read_seq.unwrap()[read_offsets.unwrap().0..read_offsets.unwrap().1] };
+                let seq = if *seq_reversed { utils::revcomp(&seq) } else { seq.to_string() };
+                let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
+                seq_write(sequences_file, format!("{}\n", seq_line));
+            }
+        }
+
+    };
+
     let mut add_kminmers = |vec: &Vec<(Kmer,String,bool,String,(usize,usize))>, thread_id: usize| 
     {
         // determine to which sequence files to write
@@ -580,75 +657,8 @@ fn main() {
         }
 
         for (node, seq, seq_reversed, origin, shift) in vec.iter() {
-            let mut previous_abundance: u16 = 0; // for convenience, is the abundance of the kmer _before_ it was seen now
-            let mut cur_node_index: DbgIndex = 0 as DbgIndex;
-            let mut contains_key = false;
-
-            // this code takes care of kminmers having abundances 1 and 2
-            if use_bf && (!params.reference) && min_kmer_abundance > 1{
-                // this code discards abundances of 1 as we're not doing nested BFs (for now)
-                unsafe {
-                    // 1) check if the kminmer is in the BF
-                    if ! bloom.get().check_and_add(&node)   { 
-                        // 2) if not, it wasn't seen before so abundance has to be 1, and it gets inserted into BF
-                        // for technical purposes, let's record the abundance before it's inserted (0) and not
-                        // the true abundance (1)
-                        previous_abundance = 0;
-                        continue; // actually there is nothing more to do
-                    } else {
-                        // 3) it was already in BF. meaning it was also inserted in dbg_nodes. we will get its true abundance later
-                        previous_abundance = 1; 
-                    }
-                }
-                contains_key = dbg_nodes.contains_key(node);
-            }
-            else 
-            { // old version without bf, just record abundance=1 kminmers in the hash table too
-                contains_key = dbg_nodes.contains_key(node);
-                if contains_key {
-                    previous_abundance = 1; // a sufficient placeholder. all we know is that the kminmer was previously seen so has abundance >= 1
-                }
-                else {
-                    cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
-                    let lowprec_shift = (shift.0 as u16, shift.1 as u16);
-                    previous_abundance = 0;
-                    // simulate the bf by inserting with abundance 0; will be incremented to 1 in
-                    // the code below
-                    dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: 1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
-                    contains_key = true;
-                }
-            }
-            //println!("abundance: {}",abundance);
-            if params.reference || min_kmer_abundance == 1 || previous_abundance >= 1 {
-                // now record what we will save
-                // or, record in the hash table anyway to save later
-                let lowprec_shift = (shift.0 as u16, shift.1 as u16);
-                if contains_key {
-                    let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
-                    cur_node_index = entry_mut.index;
-                    previous_abundance = entry_mut.abundance;
-                    if previous_abundance  == min_kmer_abundance-1 {
-                        entry_mut.seqlen = seq.len() as u32;
-                        entry_mut.shift = lowprec_shift;
-                    }
-                    entry_mut.abundance += 1;
-                }
-                else{ 
-                    cur_node_index = node_index.fetch_add(1,Ordering::Relaxed) as DbgIndex;
-                    dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seq.len() as u32, shift: lowprec_shift}); 
-                }
-
-                if params.error_correct && thread_id != 0 { continue; } // in error correct mode, only write sequences during second pass
-                if previous_abundance == (min_kmer_abundance-1)
-                {
-                    // only save each kminmer once, exact at the time it passes the abundance filter.
-                    // (note that this doesnt enable to control which seq we save based on
-                    // median seq length, unfortunately)
-                    let seq = if *seq_reversed { utils::revcomp(seq) } else { seq.to_string() };
-                    let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index,node.print_as_string(), seq, "*", origin, shift);
-                    seq_write(&mut sequences_files.get_mut(&thread_id).unwrap(), format!("{}\n", seq_line));
-                }
-            }
+            let mut sequences_file =  sequences_files.get_mut(&thread_id).unwrap();
+            add_kminmer(&node, Some(&seq), seq_reversed, &origin, shift, &mut sequences_file, thread_id, None, None);
         }
     };
 
@@ -661,39 +671,88 @@ fn main() {
         }
         
         // worker thread
-        let process_read_aux = |seq_str: &str, seq_id: &str | -> (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) {
+        let process_read_aux = |seq_str: &[u8], seq_id: &str | -> Option<(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)> {
             let thread_id :usize =  thread_id::get();
             let mut output : Vec<(Kmer,String,bool,String,(usize,usize))> = Vec::new();
-            let mut read_obj = Read::extract(&seq_id, &seq_str, &params, &minimizer_to_int, &int_to_minimizer);
+            let seq = std::str::from_utf8(seq_str).unwrap(); // see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html
+            // those two next lines do a string copy of the read sequence, because in the case of a
+            // reference, we'll need to remove newlines. also, that sequence will be moved to the
+            // Read object. could be optimized later
+            let seq_for_ref = if reference  { seq.replace("\n","") // seq_io might return newlines in fasta seq 
+                                            } else {String::new()};
+            let seq = if reference { seq_for_ref } else {seq.to_string()}; 
+            let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer);
             //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
-            if read_obj.transformed.len() > k {
+
+
+            // that's the non-optimized version
+            /*if read_obj.transformed.len() > k {
                 output = read_obj.read_to_kmers(&params);
             }
-
             add_kminmers(&output, thread_id); 
+            */
+            
+            // determine to which sequence files to write
+            if sequences_files.get(&thread_id).is_none() && (!params.error_correct || thread_id == 0) {
+                sequences_files.insert(thread_id, create_sequences_file(thread_id));
+            }
+            let mut sequences_file =  sequences_files.get_mut(&thread_id).unwrap();
+            if read_obj.transformed.len() > k {
+                // a copy of read_to_kmers except that we don't construct sequences until
+                // absolutely necessarry
+                for i in 0..(read_obj.transformed.len()-k+1) {
+                    let mut node : Kmer = Kmer::make_from(&read_obj.transformed[i..i+k]);
+                    let mut seq_reversed = false;
+                    if revcomp_aware { 
+                        let (node_norm, reversed) = node.normalize(); 
+                        node = node_norm;
+                        seq_reversed = reversed;
+                    } 
+                    let origin = "*".to_string(); // uncomment the line below to track where the kmer is coming from (but not needed in production)
+                    let minimizers_pos = &read_obj.minimizers_pos;
+                    let position_of_second_minimizer = match seq_reversed {
+                        true => minimizers_pos[i+k-1]-minimizers_pos[i+k-2],
+                        false => minimizers_pos[i+1]-minimizers_pos[i]
+                    };
+                    let position_of_second_to_last_minimizer = match seq_reversed {
+                        true => minimizers_pos[i+1]-minimizers_pos[i],
+                        false => minimizers_pos[i+k-1]-minimizers_pos[i+k-2]
+                    };
+                    let shift = (position_of_second_minimizer, position_of_second_to_last_minimizer);
+                    let read_offsets = (read_obj.minimizers_pos[i] as usize, (read_obj.minimizers_pos[i+k-1] as usize + l), (read_obj.minimizers_pos[i+k-1] +1-read_obj.minimizers_pos[i]+1));
+                    add_kminmer(&node, None, &seq_reversed, &origin, &shift, &mut sequences_file, thread_id, Some(&read_obj.seq), Some(read_offsets));
+                }
+            }
 
-            (output, read_obj)
+            if (error_correct || reference)
+            {
+                Some((output, read_obj))
+            }
+            else
+            {
+                None
+            }
         };
-        let process_read_fasta = |record: seq_io::fasta::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
-            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+        let process_read_fasta = |record: seq_io::fasta::RefRecord, found : &mut Option<(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)> | {
+            let seq_str = record.seq(); 
             let seq_id = record.id().unwrap().to_string();
             *found = process_read_aux(&seq_str,&seq_id);
         };
-        let process_read_fastq = |record: seq_io::fastq::RefRecord, found : &mut (Vec<(Kmer,String,bool,String,(usize,usize))>,Read) | {
-            let seq_str = String::from_utf8_lossy(record.seq()).to_string(); // might induce a copy? can probably be optimized (see https://docs.rs/seq_io/0.4.0-alpha.0/seq_io/fasta/index.html)
+        let process_read_fastq = |record: seq_io::fastq::RefRecord, found : &mut Option<(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)> | {
+            let seq_str = record.seq(); 
             let seq_id = record.id().unwrap().to_string();
             *found = process_read_aux(&seq_str,&seq_id);
         };
 
 
         // parallel fasta parsing, with a main thread that writes to disk and populates hash tables
-        let mut main_thread =  |found: &(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)| { // runs in main thread
+        let mut main_thread =  |found: &Option<(Vec<(Kmer,String,bool,String,(usize,usize))>,Read)>| { // runs in main thread
             nb_reads += 1;
             //println!("Received read in main thread, nb kmers: {}", vec.len());
 
             if error_correct || reference
             {
-                let (vec, read_obj) = found;
+                let (vec, read_obj) = found.as_ref().unwrap();
                 reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
 
                 ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
@@ -750,7 +809,7 @@ fn main() {
                         let mut corrected_map = HashMap::new();
                         let mut poa_map = HashMap::new();
                         for ec_record in chunk.iter() {
-                            let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false};
+                            let mut read_obj = Read {id: ec_record.seq_id.to_string(), minimizers: ec_record.read_minimizers.to_vec(), minimizers_pos: ec_record.read_minimizers_pos.to_vec(), transformed: ec_record.read_transformed.to_vec(), seq: ec_record.seq_str.to_string(), corrected: false };
                             if !corrected_map.contains_key(&read_obj.id) { 
                                 read_obj.poa_correct(&int_to_minimizer, &mut poa_map, &buckets, &params, &mut corrected_map, &reads_by_id);
                             }

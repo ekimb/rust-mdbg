@@ -23,7 +23,8 @@ pub struct Read {
     pub minimizers : Vec<String>,
     pub minimizers_pos: Vec<usize>,
     pub transformed: Vec<u64>,
-    pub seq: String,
+    pub seq: String, 
+    //pub seq_str: &'a str, // an attempt to avoid copying the string sequence returned by the fasta parser (seems too much effort to implement for now)
     pub corrected: bool,
 }
 #[derive(Clone)]
@@ -34,7 +35,7 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn extract(inp_id: &str, inp_seq: &str, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>) -> Self {
+    pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>) -> Self {
         if params.w != 0 {
             return Read::extract_windowed(inp_id, inp_seq, params, minimizer_to_int, int_to_minimizer)
         }
@@ -43,7 +44,7 @@ impl Read {
         }
     }
 
-    pub fn extract_windowed(inp_id: &str, inp_seq: &str, params: &Params, minimizer_to_int: &HashMap<String, u64>, int_to_minimizer : &HashMap<u64, String>) -> Self {
+    pub fn extract_windowed(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, int_to_minimizer : &HashMap<u64, String>) -> Self {
         let l = params.l;
         let w = params.w;
         let mut read_minimizers = Vec::<String>::new();
@@ -98,14 +99,13 @@ impl Read {
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq.to_string(), corrected: false}
 
     }
-    pub fn extract_density(inp_id: &str, inp_seq: &str, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
+    pub fn extract_density(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
         let mut read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
-        let inp_seq = if params.reference { inp_seq.replace("\n","") } else {inp_seq.to_string()}; // seq_io might return newlines in fasta seq?!
         //println!("parsing new read: {}\n",inp_seq);
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
         let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
