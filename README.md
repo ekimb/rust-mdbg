@@ -34,7 +34,7 @@ utils/magic_simplify example
 
 For better contiguity, try the provided multi-k assembly script.
 It performs assembly iteratively, starting with k=10, up to an automatically-determined largest k. 
-This comes at the expense of ~10x longer running time.
+This comes at the expense of ~7x longer running time.
 Usage:
 
 `utils/multik <reads.fq.gz> <some_output_prefix> <nb_threads>`
@@ -112,7 +112,7 @@ D. melanogaster: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace
 H. Sapiens: 24m47s = 18m58s `rust-mdbg` + 3m19s `gfatools` + 2m30s `to_basespace`
 
 The runs with custom parameters (from the paper) were made with commit `b99d938`, and unlike in the paper we did not use robust minimizers which requires additional l-mer counting beforehand.
-Reads were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
+Reads and assemblies were homopolymer-compressed and the genome size is also the homopolymer-compressed one.
 In addition to the parameters shown in the table, the `rust-mdbg` command line also contained: `--bf --no-error-correct --threads 8`.
 
 ## Running `rust-mdbg` without graph simplifications
@@ -132,7 +132,7 @@ target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequen
 
 In both cases this will create an `example.complete.gfa` file that you can convert to FASTA with
 
-`bash $DIR/gfa2fasta.sh example.complete`
+`bash utils/gfa2fasta.sh example.complete`
 
 ## License
 
