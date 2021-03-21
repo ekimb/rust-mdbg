@@ -5,7 +5,7 @@
 
 ## Rationale
 
-`rust-mdbg` performs mdBG construction of a 52x human genome HiFi data in 26 minutes on 8 threads, with 16 GB of maximum RAM usage.
+`rust-mdbg` performs mdBG construction of a 52x human genome HiFi data in <30 minutes on 8 threads, with 16 GB of maximum RAM usage.
 
 `rust-mdbg` is fast because it operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all represented as ordered lists of minimizers, instead of strings of nucleotides. A conversion step then yields a classical *base-space* representation.
 
@@ -105,7 +105,7 @@ These parameters will give reasonable draft assemblies but far from optimal. We 
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
 |[D. melanogaster HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>multi-k<br>k=35,l=12,d=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15mins<br>1m40s                  |   2.5G<br>1.8G<br>6.7G |
 |[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7 Gbp | 36x | auto<br>multi-k<br>k=38,l=14,d=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40mins<br>5m31s                  |   12G<br>11G<br>10G |
-|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>multi-k<br>k=21,l=14,d=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15<br>24m47s           | 16.9G<br>20G<br>10.6G |
+|[H. Sapiens HG002 HiFi Sequel II chem 2.0](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>multi-k<br>k=21,l=14,d=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15m<br>24m47s           | 16.9G<br>20G<br>10.6G |
 
 Time breakdown:<br>
 D. melanogaster: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
