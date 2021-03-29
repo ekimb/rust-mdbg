@@ -405,7 +405,7 @@ fn main() {
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
     if !opt.presimp.is_none() { presimp = opt.presimp.unwrap(); } else { println!("Warning: Using default no-presimp"); }
     if !opt.threads.is_none() { threads = opt.threads.unwrap(); } else { println!("Warning: Using default num threads (8)"); }
-    if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { println!("Warning: using default correction threshold value ({})",correction_threshold); }
+    if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { if error_correct { println!("Warning: using default correction threshold value ({})",correction_threshold); }}
 
     if !opt.levenshtein_minimizers.is_none() { levenshtein_minimizers = opt.levenshtein_minimizers.unwrap() }
     if !opt.distance.is_none() { distance = opt.distance.unwrap() }
@@ -413,7 +413,7 @@ fn main() {
     let distance_type = match distance { 0 => "jaccard", 1 => "containment", 2 => "mash",_ => "mash" };
     let minimizer_type = match levenshtein_minimizers { 0 => "reg", 1 => "lev1", 2 => "lev2",_ => "levX" };
     if opt.levenshtein_minimizers.is_none() { println!("Warning: using default minimizer type ({})",minimizer_type); }
-    if opt.distance.is_none() { println!("Warning: using default distance metric ({})",distance_type); }
+    if opt.distance.is_none() { if error_correct {println!("Warning: using default distance metric ({})",distance_type); }}
     if opt.restart_from_postcor { restart_from_postcor = true;}
     if opt.bf { use_bf = true;}
 
