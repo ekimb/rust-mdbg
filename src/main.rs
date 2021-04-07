@@ -613,7 +613,7 @@ fn main() {
             }
         }
         //println!("abundance: {}",abundance);
-        if params.reference || min_kmer_abundance == 1 || previous_abundance >= 1 {
+        if params.reference || previous_abundance >= 1 {
             // now record what we will save
             // or, record in the hash table anyway to save later
             let lowprec_shift = (shift.0 as u16, shift.1 as u16);
@@ -633,7 +633,10 @@ fn main() {
                 let seqlen = match seq { Some(x) => x.len() as u32, None => read_offsets.unwrap().2 as u32 };
                 dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seqlen, shift: lowprec_shift}); 
             }
+        }
 
+        if params.reference || previous_abundance >= 1 || min_kmer_abundance == 1 {
+            // now record what we will save
             if params.error_correct && thread_id != 0 { return; } // in error correct mode, only write sequences during second pass
             if previous_abundance == (min_kmer_abundance-1)
             {

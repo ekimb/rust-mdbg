@@ -4,7 +4,7 @@ prev_char= ""
 for line in open(sys.argv[1]):
     res = ""
     for c in line.strip():
-        if c == prev_char: 
+        if c == prev_char and c in "ACTGactgNn": 
             continue
         res += c
         prev_char = c
