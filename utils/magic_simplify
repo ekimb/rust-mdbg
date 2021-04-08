@@ -39,7 +39,11 @@ if (( filesize > 100000000)); then
 else
     mv $base.tmp2.gfa  $base.msimpl.gfa
 fi
-rm -rf $base.tmp*.gfa
+
+if [[ $@ != *'--keep'* ]]
+then
+    rm -rf $base.tmp*.gfa
+fi
 
 
 bash $DIR/gfa2fasta.sh $base.msimpl

@@ -265,6 +265,38 @@ pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> HashMap<
     uhs_kmers
 }
 
+pub fn lcp_preparation(mut params: &mut Params, lcp_filename : &str) -> HashMap<String, u32> {
+
+    let l = params.l;
+    let mut lcp_cores = HashMap::<String, u32>::new();
+    let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
+            .multi_cartesian_product();
+
+//    for lmer in kproduct("ACTG".to_string(), l as u32) {
+    for lmer_vec in multi_prod {
+        let lmer :String = lmer_vec.into_iter().collect();
+        //println!("testing minimizer {}",lmer.to_string());
+        //println!("found minimizer {}",lmer.to_string());
+        lcp_cores.insert(normalize_minimizer(&lmer), 0);
+    }
+    let mut count = 0;
+    if let Ok(lines) = read_lines(lcp_filename) {
+        // Consumes the iterator, returns an (Optional) String
+        for line in lines {
+            if let Ok(mut ip) = line {
+                let vec: Vec<&str> = ip.split_whitespace().collect();
+                let ip_norm = normalize_minimizer(&vec[1]);
+                if ip_norm.len() == l {
+                    *lcp_cores.entry(ip_norm).or_insert(0) = 1;
+                    count += 1;
+                }
+            }
+        }
+    }
+    println!("selected {} LCP cores", count);
+    lcp_cores
+}
+
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
     let file = File::open(filename)?;

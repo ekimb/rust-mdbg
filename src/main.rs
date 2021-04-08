@@ -115,6 +115,7 @@ pub struct Params
     distance: usize ,
     reference: bool,
     uhs: bool,
+    lcp: bool,
     error_correct: bool,
     has_lmer_counts: bool,
     use_bf: bool,
@@ -275,6 +276,9 @@ struct Opt {
     reads: Option<PathBuf>,
     #[structopt(long)]
     uhs: Option<String>,
+    #[structopt(long)]
+    lcp: Option<String>,
+
 
     /// Output graph/sequences prefix 
     #[structopt(parse(from_os_str), short, long)]
@@ -329,9 +333,11 @@ fn main() {
     let start = Instant::now();
     let opt = Opt::from_args();      
     let mut uhs : bool = false;
+    let mut lcp : bool = false;
     let mut filename = PathBuf::new();
     let mut lmer_counts_filename = PathBuf::new();
     let mut uhs_filename = String::new();
+    let mut lcp_filename = String::new();
     let mut output_prefix;
     let mut k: usize = 10;
     let mut l: usize = 12;
@@ -430,6 +436,10 @@ fn main() {
     if !opt.uhs.is_none() { 
         uhs = true;
         uhs_filename = opt.uhs.unwrap(); 
+    }
+    if !opt.lcp.is_none() { 
+        lcp = true;
+        lcp_filename = opt.lcp.unwrap(); 
     } 
     if !opt.prefix.is_none() { output_prefix = opt.prefix.unwrap(); } else { println!("Warning: using default prefix ({})",output_prefix.to_str().unwrap()); }
     
@@ -458,6 +468,7 @@ fn main() {
         correction_threshold,
         reference,
         uhs,
+        lcp,
         error_correct,
         has_lmer_counts,
         use_bf,
@@ -520,8 +531,13 @@ fn main() {
                              // parsing
 
     let mut uhs_kmers = HashMap::<String, u32>::new();
+    let mut lcp_cores = HashMap::<String, u32>::new();
+
     if params.uhs {
         uhs_kmers = minimizers::uhs_preparation(&mut params, &uhs_filename)
+    }
+    if params.lcp {
+        lcp_cores = minimizers::lcp_preparation(&mut params, &lcp_filename)
     }
 
     // dbg_nodes is a hash table containing (kmers -> (index,count))
@@ -613,7 +629,7 @@ fn main() {
             }
         }
         //println!("abundance: {}",abundance);
-        if params.reference || min_kmer_abundance == 1 || previous_abundance >= 1 {
+        if params.reference || previous_abundance >= 1 {
             // now record what we will save
             // or, record in the hash table anyway to save later
             let lowprec_shift = (shift.0 as u16, shift.1 as u16);
@@ -633,7 +649,10 @@ fn main() {
                 let seqlen = match seq { Some(x) => x.len() as u32, None => read_offsets.unwrap().2 as u32 };
                 dbg_nodes.insert(node.clone(),DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen: seqlen, shift: lowprec_shift}); 
             }
+        }
 
+        if params.reference || previous_abundance >= 1 || min_kmer_abundance == 1 {
+            // now record what we will save
             if params.error_correct && thread_id != 0 { return; } // in error correct mode, only write sequences during second pass
             if previous_abundance == (min_kmer_abundance-1)
             {
@@ -681,7 +700,7 @@ fn main() {
             let seq_for_ref = if reference  { seq.replace("\n","") // seq_io might return newlines in fasta seq 
                                             } else {String::new()};
             let seq = if reference { seq_for_ref } else {seq.to_string()}; 
-            let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer);
+            let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer, &uhs_kmers, &lcp_cores);
             //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
 
 
