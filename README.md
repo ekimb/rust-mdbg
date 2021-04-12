@@ -1,7 +1,7 @@
-`rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly
+`rust-mdbg`: Minimizer-space *de Bruijn* graphs (mdBG) for whole-genome assembly
 =========
 
-`rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
+`rust-mdbg` is an ultra-fast minimizer-space *de Bruijn* graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as PacBio HiFi.
 
 ## Rationale
 
@@ -30,9 +30,9 @@ target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund
 utils/magic_simplify example
 ```
 
-## Multi-k assembly
+## Multi-`k` assembly
 
-For better contiguity, try the provided multi-k assembly script.
+For better contiguity, try the provided multi-`k` assembly script.
 It performs assembly iteratively, starting with `k`= 10, up to an automatically-determined largest `k`. 
 This comes at the expense of ~7x longer running time.
 Usage:
@@ -63,7 +63,7 @@ Usage example:
 
 The output of `rust-mdbg` consists of:
 
-* A `.gfa` file containing the minimizer-space de Bruijn graph, without sequences,
+* A `.gfa` file containing the minimizer-space *de Bruijn* graph, without sequences,
 * Several `.sequences` files containing the sequences of the nodes of the graph.
 
 The executable `to_basespace` allows to combine both outputs and produce a `.gfa` file, with sequences.
@@ -89,7 +89,7 @@ The main parameters of `rust-mdbg` are the `k`-min-mer value `k`, the minimizer 
 For better results, and also without the need to set any parameter, try the multi-`k` strategy (see Multi-`k` assembly section). 
 This section explains how parameters are set in single-`k` assembly.
 
-All three parameters `k`, `l`, and `d` significantly impact the quality of results. One can think of them as a generalization of the `k` parameter in classical de Bruijn graphs. When you run `rust-mdbg` without specifying parameters, it sets them to:
+All three parameters `k`, `l`, and `d` significantly impact the quality of results. One can think of them as a generalization of the `k` parameter in classical *de Bruijn* graphs. When you run `rust-mdbg` without specifying parameters, it sets them to:
 
    `d` = 0.003
 
