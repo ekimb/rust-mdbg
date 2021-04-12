@@ -57,7 +57,7 @@ For better results, please use the provided script [`utils/remove_homopoly.py`](
 
 Usage example:
 
-`seqtk seq -A reads.fq.gz | python remove_homopoly.py /dev/stdin | gzip -1 -c > reads.fa.hpc.gz`
+`seqtk seq -A reads.fq.gz | python utils/remove_homopoly.py /dev/stdin | gzip -1 -c > reads.hpc.fa.gz`
 
 ## Output data 
 
