@@ -5,7 +5,7 @@
 
 ## Rationale
 
-`rust-mdbg` performs mdBG construction of a 52x human genome HiFi data in under 30 minutes on 8 threads, with 16 GB of maximum RAM usage.
+`rust-mdbg` performs mdBG construction of a 52x human genome HiFi data in under 30 minutes on 8 threads, with 16GB of maximum RAM usage.
 
 `rust-mdbg` is fast because it operates in *minimizer-space*, meaning that the reads, the assembly graph, and the final assembly, are all represented as ordered lists of minimizers, instead of strings of nucleotides. A conversion step then yields a classical *base-space* representation.
 
@@ -47,7 +47,7 @@ Usage:
  2) `gfatools` (external component), to perform graph simplifications
  3) `to_basespace`, to convert a minimizer-space assembly to base-space
 
-For convenience, components 2) and 3) are wrapped into a script called `magic_simplify`.
+For convenience, components 2 and 3 are wrapped into a script called `magic_simplify`.
 
 ## Input
 
@@ -104,9 +104,9 @@ These parameters will give reasonable, but far from optimal, draft assemblies. W
 
 |Dataset                 | Genome size (HPC)   | Coverage  | <div style="width:1090px">Parameters</div> | N50     | Runtime | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
-|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98 Mbp | 100x | auto<br>multi-k<br>k=35,l=12,d=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15mins<br>1m40s                  |   2.5G<br>1.8G<br>6.7G |
-|[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7 Gbp | 36x | auto<br>multi-k<br>k=38,l=14,d=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40mins<br>5m31s                  |   12G<br>11G<br>10G |
-|[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2 Gbp | 52x  | auto<br>multi-`k`<br>k=21,l=14,d=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15m<br>24m47s           | 16.9G<br>20G<br>10.6G |
+|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98Mbp | 100x | auto<br>multi-`k`<br>`k`=35, `l`=12, `d`=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15m<br>1m40s                  |   2.5GB<br>1.8GB<br>6.7GB |
+|[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7Gbp | 36x | auto<br>multi-`k`<br>`k`=38, `l`=14,`d`=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40m<br>5m31s                  |   12GB<br>11GB<br>10GB |
+|[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2Gbp | 52x  | auto<br>multi-`k`<br>`k`=21, `l`=14, `d`=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15m<br>24m47s           | 16.9GB<br>20GB<br>10.6GB |
 
 Runtime breakdown:<br>
 *D. melanogaster*: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
@@ -141,7 +141,7 @@ In both cases, this will create an `example.complete.gfa` file that you can conv
 
 ## Developers
 
-* [Barış Ekim](http://people.csail.mit.edu/ekim/), supervised by [Bonnie Berger](http://people.csail.mit.edu/bab/) at the Computer Science and Artificial Intelligence Laboratory (CSAIL) at Massachusetts Institute of Technology (MIT), and
+* [Barış Ekim](http://people.csail.mit.edu/ekim/), supervised by [Bonnie Berger](http://people.csail.mit.edu/bab/) at the Computer Science and Artificial Intelligence Laboratory (CSAIL) at Massachusetts Institute of Technology (MIT)
 * [Rayan Chikhi](http://rayan.chikhi.name) at the Department of Computational Biology at Institut Pasteur.
 
 ## Citation
