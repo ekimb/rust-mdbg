@@ -102,11 +102,11 @@ These parameters will give reasonable, but far from optimal, draft assemblies. W
 
 ## Performance
 
-|Dataset                 | Genome size (HPC)   | Coverage  | <div style="width:1090px">Parameters</div> | N50     | Runtime | Memory |
+|Dataset                 | Genome size (HPC)   | Coverage  | <div style="width:1200px">Parameters</div> | N50     | Runtime | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
-|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98Mbp | 100x | auto<br>multi-`k`<br>`k`=35, `l`=12, `d`=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15m<br>1m40s                  |   2.5GB<br>1.8GB<br>6.7GB |
-|[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7Gbp | 36x | auto<br>multi-`k`<br>`k`=38, `l`=14,`d`=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40m<br>5m31s                  |   12GB<br>11GB<br>10GB |
-|[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2Gbp | 52x  | auto<br>multi-`k`<br>`k`=21, `l`=14, `d`=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15m<br>24m47s           | 16.9GB<br>20GB<br>10.6GB |
+|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98Mbp | 100x | auto<br>multi-`k`<br>`k`=35,`l`=12,`d`=0.002 | 2.5Mbp<br>2.5Mbp<br>3.9Mbp  |  2m15s<br>15m<br>1m40s                  |   2.5GB<br>1.8GB<br>6.7GB |
+|[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7Gbp | 36x | auto<br>multi-`k`<br>`k`=38,`l`=14,`d`=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40m<br>5m31s                  |   12GB<br>11GB<br>10GB |
+|[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2Gbp | 52x  | auto<br>multi-`k`<br>`k`=21,`l`=14, `d`=0.003 | 1.0Mbp<br>16.9Mbp<br>13.6Mbp |  27m30s<br>3h15m<br>24m47s           | 16.9GB<br>20GB<br>10.6GB |
 
 Runtime breakdown:<br>
 *D. melanogaster*: 1m40s = 1m18s  `rust-mdbg` + 8s `gfatools` + 14s  `to_basespace`<br>
