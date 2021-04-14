@@ -23,6 +23,7 @@ reads=$1
 prefix=$2
 threads=$3
 restart_from=$4
+max_k=$5
 
 # determine max read length
 # (in order to fix max k)
@@ -30,7 +31,11 @@ restart_from=$4
 # # this is the needed format in REINDEER query files 
 avg_readlen=$(zcat -f $reads |head -n 10000 | awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' | awk '!/^>/ {print length}'  | awk '{sum+=$1} END {print int(sum/NR)}')
 
-max_k=$(printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
+if [ -z "$max_k" ]
+then
+    max_k=$(printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
+fi
+
 echo "avg readlen: $avg_readlen, max k: $max_k"
 
 function assemble {

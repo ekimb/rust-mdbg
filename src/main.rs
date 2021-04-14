@@ -13,7 +13,6 @@ use closure::closure;
 use std::iter::FromIterator;
 use crate::kmer_vec::get;
 use crate::read::Read;
-use std::io::Read as OtherRead;
 use std::fs::{File,remove_file};
 use std::collections::HashSet;
 extern crate array_tool;
@@ -30,7 +29,7 @@ use seq_io::fasta;
 use seq_io::core::BufReader as OtherBufReader;
 use seq_io::BaseRecord;
 use seq_io::parallel::{read_process_fasta_records, read_process_fastq_records};
-use lzzzz::lz4f::{WriteCompressor, ReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
+use lzzzz::lz4f::{WriteCompressor, BufReadDecompressor, Preferences, PreferencesBuilder, CLEVEL_HIGH};
 use xx_bloomfilter::Bloom;
 use flate2::read::GzDecoder;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -186,17 +185,20 @@ pub fn thread_update_vec<U>(vec_all: &Arc<Mutex<HashMap<usize,Vec<U>>>>, vec: Ve
     *entry = vec;
 }
 
-fn get_reader(path: &PathBuf) -> Box<OtherRead + Send> {
+fn get_reader(path: &PathBuf) -> Box<BufRead + Send>
+{
     let mut filetype = "unzip";
     let filename_str = path.to_str().unwrap();
     let file = match File::open(path) {
             Ok(file) => file,
             Err(error) => panic!("There was a problem opening the file: {:?}", error),
         };
-    if filename_str.ends_with(".gz") {filetype = "zip";}
-    let reader: Box<OtherRead + Send> = match filetype { 
-        "zip" => Box::new(GzDecoder::new(file)) as Box<dyn OtherRead + Send>, 
-        _ => Box::new(file) as Box<dyn OtherRead + Send>, 
+    if filename_str.ends_with(".gz")  {filetype = "zip";}
+    if filename_str.ends_with(".lz4") {filetype = "lz4";}
+    let reader :Box<BufRead + Send> = match filetype { 
+        "zip" => Box::new(BufReader::new(GzDecoder::new(file))), 
+        "lz4" => Box::new(BufReadDecompressor::new(BufReader::new(file)).unwrap()),
+        _ =>     Box::new(BufReader::new(file)), 
         
     }; 
     reader
@@ -208,7 +210,7 @@ fn read_first_n_reads(filename: &PathBuf, fasta_reads: bool, max_reads :usize) -
     let mut max_length = 0;
     let mut nb_reads = 0;
 
-    let buf = BufReader::new(get_reader(&filename));
+    let buf = get_reader(&filename);
 
     // todo should factorize
     if fasta_reads {
@@ -789,7 +791,7 @@ fn main() {
             None::<()>
         };
 
-        let buf = BufReader::new(get_reader(&filename));
+        let buf = get_reader(&filename);
         println!("Parsing input sequences...");
 
         if fasta_reads {

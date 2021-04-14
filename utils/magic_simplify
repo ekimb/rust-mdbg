@@ -30,14 +30,15 @@ then
     mv $base.tmp2.gfa.complete.gfa $base.tmp2.gfa
 fi
 
+/usr/bin/time gfatools asm $base.tmp2.gfa  -t 10,50000 -b 100000 -t 10,100000  -b 1000000 -t 10,150000 -b 1000000 -u > $base.tmp3.gfa
+
 filesize=$(stat -c%s "$base.tmp2.gfa")
 # for large genomes: more aggressive tip clipping
 if (( filesize > 100000000)); then
-    /usr/bin/time gfatools asm $base.tmp2.gfa  -t 10,50000 -b 100000 -t 10,100000  -b 1000000 -t 10,150000 -b 1000000 -u > $base.tmp3.gfa
     python $DIR/gfa_break_loops.py $base.tmp3.gfa > $base.tmp4.gfa
     /usr/bin/time gfatools asm $base.tmp4.gfa  -t 10,50000 -b 100000 -t 10,100000  -b 1000000 -t 10,200000 -b 1000000 -u > $base.msimpl.gfa
 else
-    mv $base.tmp2.gfa  $base.msimpl.gfa
+    mv $base.tmp3.gfa  $base.msimpl.gfa
 fi
 
 if [[ $@ != *'--keep'* ]]
