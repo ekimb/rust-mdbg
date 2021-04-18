@@ -153,17 +153,25 @@ impl Read {
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }
-    pub fn hpc(inp_seq: &str) -> String {
+    pub fn encode_rle(inp_seq: &str) -> (String, Vec<usize>) {
         let mut prev_char = '#';
         let mut hpc_seq = String::new();
-        for c in inp_seq.chars() {
+        let mut pos_vec = Vec::<usize>::new();
+        let mut prev_i = 0;
+        for (i, c) in inp_seq.chars().enumerate() {
             if c == prev_char && "ACTGactgNn".contains(c) {
                 continue;
             }
-            hpc_seq = format!("{}{}", hpc_seq, c);
+            if prev_char != '#' {
+                hpc_seq = format!("{}{}", hpc_seq, prev_char);
+                pos_vec.push(prev_i);
+                prev_i = i;
+            }
             prev_char = c;
         }
-        hpc_seq
+        hpc_seq = format!("{}{}", hpc_seq, prev_char);
+        pos_vec.push(prev_i);
+        (hpc_seq, pos_vec)
     }
     
     pub fn extract_density(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
@@ -175,7 +183,7 @@ impl Read {
         let mut read_transformed = Vec::<u64>::new();
         //println!("parsing new read: {}\n",inp_seq);
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
-        let hpc_seq = Read::hpc(&inp_seq);
+        let (hpc_seq, pos_vec) = Read::encode_rle(&inp_seq);
         let iter = NtHashIterator::new(hpc_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
         for (i,hash) in iter {
         /*for i in 0..inp_seq.len()-l+1 {
@@ -199,7 +207,7 @@ impl Read {
                 hash = *res.unwrap();
             }
             //read_minimizers.push(lmer.to_string()); // actually only needed for debugging
-            read_minimizers_pos.push(i);
+            read_minimizers_pos.push(pos_vec[i]);
             read_transformed.push(hash);
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
