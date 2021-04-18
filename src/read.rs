@@ -153,7 +153,19 @@ impl Read {
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }
-
+    pub fn hpc(inp_seq: &str) -> String {
+        let mut prev_char = '#';
+        let mut hpc_seq = String::new();
+        for c in inp_seq.chars() {
+            if c == prev_char && "ACTGactgNn".contains(c) {
+                continue;
+            }
+            hpc_seq = format!("{}{}", hpc_seq, c);
+            prev_char = c;
+        }
+        hpc_seq
+    }
+    
     pub fn extract_density(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
@@ -163,7 +175,8 @@ impl Read {
         let mut read_transformed = Vec::<u64>::new();
         //println!("parsing new read: {}\n",inp_seq);
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
+        let hpc_seq = Read::hpc(&inp_seq);
+        let iter = NtHashIterator::new(hpc_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
         for (i,hash) in iter {
         /*for i in 0..inp_seq.len()-l+1 {
             let lmer = &inp_seq[i..i+l];

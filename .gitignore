@@ -3,6 +3,7 @@
 *.ec_data
 *.sequences
 *.gfa
+*.fa
 small-example/*
 *.fasta
 src/trash.rs
