@@ -118,6 +118,7 @@ pub struct Params
     error_correct: bool,
     has_lmer_counts: bool,
     use_bf: bool,
+    use_hpc: bool,
     debug: bool,
 }
 
@@ -318,6 +319,8 @@ struct Opt {
     reference: bool,
     #[structopt(long)]
     bf: bool,
+    #[structopt(long)]
+    hpc: bool,
     #[structopt(parse(from_os_str), long)]
     lmer_counts: Option<PathBuf>,
     #[structopt(long)]
@@ -360,13 +363,14 @@ fn main() {
     let mut lmer_counts_max: u32 = 100000;
     let mut presimp :f32 = 0.0;
     let mut use_bf :bool = false;
+    let mut use_hpc :bool = false;
     let mut threads : usize = 8;
     if opt.error_correct {
         error_correct = true;
     }
     if opt.reference {
         reference = true;
-        error_correct = false; // rayan->baris: remove this comment once you see it. added this line to make sure we don't do POA on reference
+        error_correct = false;
     }
     if opt.test1 {
         filename = PathBuf::from("../read50x_ref10K_e001.fa"); 
@@ -424,6 +428,8 @@ fn main() {
     if opt.distance.is_none() { if error_correct {println!("Warning: using default distance metric ({})",distance_type); }}
     if opt.restart_from_postcor { restart_from_postcor = true;}
     if opt.bf { use_bf = true;}
+    if opt.hpc { use_hpc = true;}
+
 
 
     output_prefix = PathBuf::from(format!("{}graph-k{}-p{}-l{}",minimizer_type,k,density,l));
@@ -474,6 +480,7 @@ fn main() {
         error_correct,
         has_lmer_counts,
         use_bf,
+        use_hpc,
         debug,
     };
     // init some useful objects

@@ -171,10 +171,11 @@ impl Read {
         }
         hpc_seq = format!("{}{}", hpc_seq, prev_char);
         pos_vec.push(prev_i);
+        //println!("{}\n{}\n{:?}", inp_seq, hpc_seq, pos_vec);
         (hpc_seq, pos_vec)
     }
     
-    pub fn extract_density(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
+    pub fn extract_density(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int : &HashMap<String, u64>) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -183,8 +184,16 @@ impl Read {
         let mut read_transformed = Vec::<u64>::new();
         //println!("parsing new read: {}\n",inp_seq);
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
-        let (hpc_seq, pos_vec) = Read::encode_rle(&inp_seq);
-        let iter = NtHashIterator::new(hpc_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
+        let mut tup = (String::new(), Vec::<usize>::new());
+        let mut inp_seq = String::new();
+        if !params.use_hpc {
+            tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
+            inp_seq = tup.0; //assign new HPCd sequence as input
+        }
+        else {
+            inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
+        }
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
         for (i,hash) in iter {
         /*for i in 0..inp_seq.len()-l+1 {
             let lmer = &inp_seq[i..i+l];
@@ -207,10 +216,11 @@ impl Read {
                 hash = *res.unwrap();
             }
             //read_minimizers.push(lmer.to_string()); // actually only needed for debugging
-            read_minimizers_pos.push(pos_vec[i]);
+            if !params.use_hpc {read_minimizers_pos.push(tup.1[i]);} //if not HPCd need raw sequence positions
+            else {read_minimizers_pos.push(i);} //already HPCd so positions are the same
             read_transformed.push(hash);
         }
-        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
 
     pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>) {
