@@ -163,13 +163,13 @@ impl Read {
                 continue;
             }
             if prev_char != '#' {
-                hpc_seq = format!("{}{}", hpc_seq, prev_char);
+                hpc_seq.push(prev_char);
                 pos_vec.push(prev_i);
                 prev_i = i;
             }
             prev_char = c;
         }
-        hpc_seq = format!("{}{}", hpc_seq, prev_char);
+        hpc_seq.push(prev_char);
         pos_vec.push(prev_i);
         //println!("{}\n{}\n{:?}", inp_seq, hpc_seq, pos_vec);
         (hpc_seq, pos_vec)
