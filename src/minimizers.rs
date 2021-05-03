@@ -239,8 +239,7 @@ pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> RacyBloo
 
     let l = params.l;
     let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if params.use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
-    let mut decyc_path = format!("example/decyc{}.uhs", l);
-    let ufile = match File::open(decyc_path) {
+    let ufile = match File::open(uhs_filename) {
         Ok(ufile) => ufile,
         Err(error) => panic!("There was a problem opening the file: {:?}", error),
     };
@@ -290,8 +289,7 @@ pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> RacyBloo
 pub fn lcp_preparation(mut params: &mut Params, lcp_filename : &str) -> RacyBloom {
     let l = params.l;
     let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if params.use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
-    let mut lcp_path = format!("example/patterns.lcp");
-    let lcpfile = match File::open(lcp_path) {
+    let lcpfile = match File::open(lcp_filename) {
         Ok(lcpfile) => lcpfile,
         Err(error) => panic!("There was a problem opening the file: {:?}", error),
     };
