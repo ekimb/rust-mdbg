@@ -13,9 +13,11 @@ use strsim::levenshtein;
 use fasthash::city;
 use itertools::Itertools;
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::iter::FromIterator;
+use xx_bloomfilter::Bloom;
+use super::RacyBloom;
 use super::read::Read;
 use nthash::{ntc64, NtHashIterator};
 
@@ -233,10 +235,29 @@ pub fn minimizers_preparation(mut params: &mut Params, filename :&PathBuf, file_
     (minimizer_to_int, int_to_minimizer)
 }
 
-pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> HashMap<String, u32> {
+pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> RacyBloom {
 
     let l = params.l;
-    let mut uhs_kmers = HashMap::<String, u32>::new();
+    let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if params.use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
+    let mut decyc_path = format!("example/decyc{}.uhs", l);
+    let ufile = match File::open(decyc_path) {
+        Ok(ufile) => ufile,
+        Err(error) => panic!("There was a problem opening the file: {:?}", error),
+    };
+    let mut ureader = BufReader::new(ufile);
+    let mut umer = String::new();
+    loop {
+        match ureader.read_line(&mut umer) {
+            Err(_) | Ok(0) => break,
+            Ok(_) => {
+                let hash = ntc64(umer.as_bytes(), 0, l);
+                uhs_bloom.get().check_and_add(&hash);
+                umer.clear();
+            }
+        }
+    }
+    println!("All universal k-mers read.");
+    /*let mut uhs_kmers = HashMap::<String, u32>::new();
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
             .multi_cartesian_product();
 
@@ -262,13 +283,34 @@ pub fn uhs_preparation(mut params: &mut Params, uhs_filename : &str) -> HashMap<
         }
     }
     println!("selected {} umers", count);
-    uhs_kmers
+    uhs_kmers*/
+    uhs_bloom
 }
 
-pub fn lcp_preparation(mut params: &mut Params, lcp_filename : &str) -> HashMap<String, u32> {
-
+pub fn lcp_preparation(mut params: &mut Params, lcp_filename : &str) -> RacyBloom {
     let l = params.l;
-    let mut lcp_cores = HashMap::<String, u32>::new();
+    let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if params.use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
+    let mut lcp_path = format!("example/patterns.lcp");
+    let lcpfile = match File::open(lcp_path) {
+        Ok(lcpfile) => lcpfile,
+        Err(error) => panic!("There was a problem opening the file: {:?}", error),
+    };
+    let mut lcp_reader = BufReader::new(lcpfile);
+    let mut core = String::new();
+    loop {
+        match lcp_reader.read_line(&mut core) {
+            Err(_) | Ok(0) => break,
+            Ok(_) => {
+                if core.len() == l {
+                    let hash = ntc64(core.as_bytes(), 0, l);
+                    lcp_bloom.get().check_and_add(&core);
+                    core.clear();
+                }
+            }
+        }
+    }
+    println!("All LCP core substrings read.");
+    /*let mut lcp_cores = HashMap::<String, u32>::new();
     let multi_prod = (0..l).map(|i| vec!('A','C','T','G'))
             .multi_cartesian_product();
 
@@ -294,7 +336,8 @@ pub fn lcp_preparation(mut params: &mut Params, lcp_filename : &str) -> HashMap<
         }
     }
     println!("selected {} LCP cores", count);
-    lcp_cores
+    lcp_cores*/
+    lcp_bloom
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>

@@ -78,7 +78,7 @@ impl Write for SeqFileType {
 }
 
 
-struct RacyBloom(UnsafeCell<Bloom>); // intentionnally allowing data races as a tradeoff for bloom speed
+pub struct RacyBloom(UnsafeCell<Bloom>); // intentionnally allowing data races as a tradeoff for bloom speed
 unsafe impl Sync for RacyBloom {}
 
 // follows https://sodocumentation.net/rust/topic/6018/unsafe-guidelines
@@ -539,14 +539,14 @@ fn main() {
                              // also: controls how many reads objects are buffered during fasta/fastq
                              // parsing
 
-    let mut uhs_kmers = HashMap::<String, u32>::new();
-    let mut lcp_cores = HashMap::<String, u32>::new();
+    let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
+    let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
 
     if params.uhs {
-        uhs_kmers = minimizers::uhs_preparation(&mut params, &uhs_filename)
+        uhs_bloom = minimizers::uhs_preparation(&mut params, &uhs_filename)
     }
     if params.lcp {
-        lcp_cores = minimizers::lcp_preparation(&mut params, &lcp_filename)
+        lcp_bloom = minimizers::lcp_preparation(&mut params, &lcp_filename)
     }
 
     // dbg_nodes is a hash table containing (kmers -> (index,count))
@@ -709,7 +709,7 @@ fn main() {
             let seq_for_ref = if reference  { seq.replace("\n","") // seq_io might return newlines in fasta seq 
                                             } else {String::new()};
             let seq = if reference { seq_for_ref } else {seq.to_string()}; 
-            let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer, &uhs_kmers, &lcp_cores);
+            let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer, &uhs_bloom, &lcp_bloom);
             //println!("Received read in worker thread, transformed len {}", read_obj.transformed.len());
 
 

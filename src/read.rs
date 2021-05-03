@@ -6,6 +6,7 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::VecDeque;
 use std::fs::File;
 use super::Kmer;
+use super::RacyBloom;
 use super::revcomp_aware;
 use super::ec_reads;
 use super::utils;
@@ -35,15 +36,15 @@ pub struct Lmer {
 
 impl Read {
 
-    pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>, uhs_kmers: &HashMap<String, u32>, lcp_cores: &HashMap<String, u32>) -> Self {
+    pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String,u64>, int_to_minimizer: &HashMap<u64, String>, uhs_bloom: &RacyBloom, lcp_bloom: &RacyBloom) -> Self {
         if params.w != 0 {
             return Read::extract_windowed(inp_id, inp_seq, params, minimizer_to_int, int_to_minimizer)
         }
         else if params.uhs {
-            return Read::extract_uhs(inp_id, inp_seq, params, minimizer_to_int, uhs_kmers)
+            return Read::extract_uhs(inp_id, inp_seq, params, minimizer_to_int, uhs_bloom)
         }
         else if params.lcp {
-            return Read::extract_lcp(inp_id, inp_seq, params, minimizer_to_int, lcp_cores)
+            return Read::extract_lcp(inp_id, inp_seq, params, minimizer_to_int, lcp_bloom)
         }
         else {
             return Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)
@@ -105,7 +106,7 @@ impl Read {
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq.to_string(), corrected: false}
 
     }
-    pub fn extract_lcp(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, lcp_cores: &HashMap<String, u32>) -> Self {
+    pub fn extract_lcp(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, lcp_bloom: &RacyBloom) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -122,14 +123,14 @@ impl Read {
                 if ! res.is_some() { continue ; } // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
-            if lcp_cores[&minimizers::normalize_minimizer(lmer)] == 1 {
+            if lcp_bloom.get().check_and_add(&hash) {
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
             }
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
     }
-    pub fn extract_uhs(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, uhs_kmers: &HashMap<String, u32>) -> Self {
+    pub fn extract_uhs(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, uhs_bloom: &RacyBloom) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -146,7 +147,7 @@ impl Read {
                 if ! res.is_some() { continue ; } // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
-            if uhs_kmers[lmer] == 1 {
+            if uhs_bloom.get().check_and_add(&hash) {
                 read_minimizers_pos.push(i);
                 read_transformed.push(hash);
             }
