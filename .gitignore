@@ -4,6 +4,9 @@
 *.sequences
 *.gfa
 *.fa
+*.uhs
+*.lcp
+*.lcp.gz
 small-example/*
 *.fasta
 src/trash.rs

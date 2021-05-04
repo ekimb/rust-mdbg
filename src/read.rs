@@ -106,7 +106,7 @@ impl Read {
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq.to_string(), corrected: false}
 
     }
-    pub fn extract_lcp(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, lcp_bloom: &RacyBloom) -> Self {
+    pub fn extract_lcp(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, lcp_bloom: &RacyBloom) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -114,6 +114,15 @@ impl Read {
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
+        let mut tup = (String::new(), Vec::<usize>::new());
+        let mut inp_seq = String::new();
+        if !params.use_hpc {
+            tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
+            inp_seq = tup.0; //assign new HPCd sequence as input
+        }
+        else {
+            inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
+        }
         let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
         for (i,mut hash) in iter {
             let lmer = &inp_seq[i..i+l];
@@ -128,9 +137,9 @@ impl Read {
                 read_transformed.push(hash);
             }
         }
-        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
-    pub fn extract_uhs(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, uhs_bloom: &RacyBloom) -> Self {
+    pub fn extract_uhs(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int : &HashMap<String, u64>, uhs_bloom: &RacyBloom) -> Self {
         let size_miniverse = params.size_miniverse as u64;
         let density = params.density;
         let l = params.l;
@@ -138,6 +147,15 @@ impl Read {
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
+        let mut tup = (String::new(), Vec::<usize>::new());
+        let mut inp_seq = String::new();
+        if !params.use_hpc {
+            tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
+            inp_seq = tup.0; //assign new HPCd sequence as input
+        }
+        else {
+            inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
+        }
         let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
         for (i,hash) in iter {
             let lmer = &inp_seq[i..i+l];
@@ -152,7 +170,7 @@ impl Read {
                 read_transformed.push(hash);
             }
         }
-        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq, corrected: false}
+        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
     pub fn encode_rle(inp_seq: &str) -> (String, Vec<usize>) {
         let mut prev_char = '#';
