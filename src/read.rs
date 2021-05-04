@@ -123,7 +123,8 @@ impl Read {
         else {
             inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
         }
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
+        //let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
         for (i,mut hash) in iter {
             let lmer = &inp_seq[i..i+l];
             if lmer.contains('N') {continue;}
@@ -156,7 +157,8 @@ impl Read {
         else {
             inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
         }
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
+        //let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate();
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i,x)| *x <= hash_bound);
         for (i,hash) in iter {
             let lmer = &inp_seq[i..i+l];
             let mut hash :u64 = hash;
