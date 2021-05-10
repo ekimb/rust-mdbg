@@ -1,0 +1,17 @@
+#\time cargo run --release --manifest-path ~/rust-mdbg/Cargo.toml -- -k 10 -l 12 --density 0.01 --minabund 1 amr_NG_047949.fa
+## don't forget to activate a debug mode in main.rs to output min-space repr of all input sequences to stdout 
+## processing was: amr_targets.fa was removed any iupac character using the .sh scripts here
+\time cargo run --release --manifest-path ~/rust-mdbg/Cargo.toml -- -k 10 -l 12 --density 0.01 --minabund 1 amr_targets.fa --prefix amr_targets --reference > amr_targets.minspace.txt
+
+\time lz4 -d -c ../ref2minspace/refs_and_minimizers.density0.01.txt.lz4 | python scan_genomes_minmers.py  amr_targets.minspace.txt > hits.txt
+
+\time python parse_hits.py amr_targets.minspace.txt hits.txt > amr_targets.covered.txt
+
+# count average number of kminmers per gene
+ awk '{print $2}' amr_targets.covered.txt  | awk '{ total += $1; count++ } END { print total/count }'
+# 9.99609
+
+#counting histogram covered
+awk '{print $3}' amr_targets.covered.txt  | awk '{ if ($1 > 90) count++ } END { print count }'
+awk '{print $3}' amr_targets.covered.txt  | awk '{ if ($1 < 10) count++ } END { print count }'
+

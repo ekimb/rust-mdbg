@@ -1,0 +1,15 @@
+# the graphmls are from reggraph-k10-p0.001-l12, see separate_components.sh
+# get unitig names
+cat *.graphml | grep -v target | grep -o -E "\"utg[^']*\""  | tr -d \" |sort|uniq > all_unitigs.txt
+# get all nodes identifiers in original graph
+zgrep -f all_unitigs.txt  ../reggraph-k10-p0.001-l12.u.gfa.gz |grep "^A" | awk '{print $5}' |sort|uniq > all_kminmers_ids.txt
+zgrep -f all_unitigs.txt  ../reggraph-k10-p0.001-l12.u.gfa.gz |grep "^A" |awk '{print $2" "$5}' > all_kminmers.unitig_assoc.txt 
+# match list of words
+lz4 -m -d -c ../reggraph-k10-p0.001-l12*.sequences | stdbuf -i0 -o0 -e0  awk 'NR==FNR {a[$1]++; next} $1 in a' all_kminmers_ids.txt -  | awk '{for(i=1;i<=11;++i)printf $i""FS ; print ""}' > all_kminmers.txt
+# convert to greppable patterns
+cat all_kminmers.txt | awk '{for(i=2;i<=11;++i)printf $i""FS ; print ""}' |tr -d [], > all_kminmers.togrep.txt
+# attempt at getting the info from the 661k minspace genomes
+# lz4 -d -c ../ref2minspace/refs_and_minimizers.density0.001.txt.lz4 | grep -f all_kminmers.togrep.txt /dev/stdin
+\time lz4 -d -c ../ref2minspace/refs_and_minimizers.density0.001.txt.lz4 | python scan_genomes_minmers.py all_kminmers.txt  > hits.txt
+
+python parse_graph_hits.py  unitigs_genome_assoc.txt
