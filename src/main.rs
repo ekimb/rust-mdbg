@@ -778,7 +778,7 @@ fn main() {
             nb_reads += 1;
             //println!("Received read in main thread, nb kmers: {}", vec.len());
 
-            let debug_only_display_read_and_minimizers = true;
+            let debug_only_display_read_and_minimizers = false;
             if  debug_only_display_read_and_minimizers
             {
                 // debug: just displays the read id and the list of minimizers
