@@ -5,6 +5,9 @@
 
 \time lz4 -d -c ../ref2minspace/refs_and_minimizers.density0.01.txt.lz4 | python scan_genomes_minmers.py  amr_targets.minspace.txt > hits.txt
 
+# the alternative query using the .sequences files, where origin isn't recorded, but it's faster and was used for timing in our paper
+# ls -1 ../reggraph-k10-p0.01-l12.*.sequences | \time parallel -j 8 ./scan_genomes_minmers.sh > hits.graph.txt
+
 \time python parse_hits.py amr_targets.minspace.txt hits.txt > amr_targets.covered.txt
 
 # count average number of kminmers per gene

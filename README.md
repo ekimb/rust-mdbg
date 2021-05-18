@@ -53,12 +53,6 @@ For convenience, components 2 and 3 are wrapped into a script called `magic_simp
 
 `rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not). Multi-line sequences are not supported.
 
-For better results, please use the provided script [`utils/remove_homopoly.py`](https://raw.githubusercontent.com/ekimb/rust-mdbg/master/utils/remove_homopoly.py) to homopolymer-compress your reads. 
-
-Usage example:
-
-`seqtk seq -A reads.fq.gz | python utils/remove_homopoly.py /dev/stdin | gzip -1 -c > reads.hpc.fa.gz`
-
 ## Output data 
 
 The output of `rust-mdbg` consists of:
@@ -113,7 +107,7 @@ Runtime breakdown:<br>
 *H. sapiens*: 24m47s = 18m58s `rust-mdbg` + 3m19s `gfatools` + 2m30s `to_basespace`
 
 The runs with custom parameters (from the paper) were made with commit `b99d938`, and unlike in the paper, we did not use robust minimizers which requires additional `l`-mer counting beforehand.
-Reads and assemblies were homopolymer-compressed and the homopolymer-compressed genome size is reported.
+For historical reasons, reads and assemblies were homopolymer-compressed in those experiments and the homopolymer-compressed genome size is reported. So beware that these numbers are not directly comparable to the output of other assemblers.
 In addition to the parameters shown in the table, the `rust-mdbg` command line also contained `--bf --no-error-correct --threads 8`.
 
 ## Running `rust-mdbg` without graph simplifications
