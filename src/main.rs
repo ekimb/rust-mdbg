@@ -361,7 +361,7 @@ fn main() {
     let mut has_lmer_counts : bool = false;
     let mut lmer_counts_min: u32 = 2;
     let mut lmer_counts_max: u32 = 100000;
-    let mut presimp :f32 = 0.0;
+    let mut presimp :f32 = 0.01;
     let mut use_bf :bool = false;
     let mut use_hpc :bool = false;
     let mut threads : usize = 8;
@@ -415,7 +415,7 @@ fn main() {
 
     if !opt.minabund.is_none() { min_kmer_abundance = opt.minabund.unwrap() as DbgAbundance } else { println!("Warning: using default min kmer abundance value ({})",min_kmer_abundance); }
     if !opt.w.is_none() { windowed = true; w = opt.w.unwrap(); } else { println!("Warning: Using default density-based"); }
-    if !opt.presimp.is_none() { presimp = opt.presimp.unwrap(); } else { println!("Warning: Using default no-presimp"); }
+    if !opt.presimp.is_none() { presimp = opt.presimp.unwrap(); } else { println!("Warning: Using default presimp=0.01"); }
     if !opt.threads.is_none() { threads = opt.threads.unwrap(); } else { println!("Warning: Using default num threads (8)"); }
     if !opt.correction_threshold.is_none() { correction_threshold = opt.correction_threshold.unwrap() } else { if error_correct { println!("Warning: using default correction threshold value ({})",correction_threshold); }}
 

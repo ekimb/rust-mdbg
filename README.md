@@ -79,7 +79,7 @@ which will create `example.msimpl.gfa` and `example.msimpl.fa` files.
 
 ## Parameters
 
-The main parameters of `rust-mdbg` are the `k`-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper). 
+The main parameters of `rust-mdbg` are the `k`-min-mer value `k`, the minimizer length `l`, and the minimizer density `d` (delta in the paper).  Another parameter is `--presimp` set by default to 0.01 which performs a graph simplification: a neighbor node is deleted if its abundance is below 1% that of `min(max(abundance of other neighbors), abundance of current node)`.
 For better results, and also without the need to set any parameter, try the multi-`k` strategy (see Multi-`k` assembly section). 
 This section explains how parameters are set in single-`k` assembly.
 
