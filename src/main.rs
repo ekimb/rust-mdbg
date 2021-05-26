@@ -877,9 +877,9 @@ fn main() {
     for mut sequences_file in sequences_files.iter_mut() {sequences_file.flush().unwrap();}
 
     // now DBG creation can start
-    println!("Number of nodes before aboundance filter:\t{}", dbg_nodes.len());
+    println!("Number of nodes before abundance filter:\t{}", dbg_nodes.len());
     dbg_nodes.retain(|x, c| c.abundance >= (min_kmer_abundance as DbgAbundance));
-    println!("Number of nodes after aboundance filter:\t{}", dbg_nodes.len());
+    println!("Number of nodes after abundance filter:\t{}", dbg_nodes.len());
     let mut dbg_edges : Vec<(&Kmer, &Kmer)> = Vec::new();
     let path = format!("{}{}", output_prefix.to_str().unwrap(),".gfa");
     let mut gfa_file = match File::create(&path) {
@@ -1036,6 +1036,6 @@ fn main() {
 
     let duration = start.elapsed();
     println!("Total execution time: {:?}", duration);
-    println!("Maximum RSS: {:?} GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
+    println!("Maximum RSS: {:?}GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
 }
 
