@@ -800,7 +800,7 @@ fn main() {
         }
 
         pb.finish_print("Converted reads to k-min-mers.");
-        println!("Number of reads:\t{}", nb_reads);
+        println!("Number of reads: {}", nb_reads);
 
 
         // this part will correct the reads, and dump them to disk
@@ -877,9 +877,9 @@ fn main() {
     for mut sequences_file in sequences_files.iter_mut() {sequences_file.flush().unwrap();}
 
     // now DBG creation can start
-    println!("Number of nodes before abundance filter:\t{}", dbg_nodes.len());
+    println!("Number of nodes before abundance filter: {}", dbg_nodes.len());
     dbg_nodes.retain(|x, c| c.abundance >= (min_kmer_abundance as DbgAbundance));
-    println!("Number of nodes after abundance filter:\t{}", dbg_nodes.len());
+    println!("Number of nodes after abundance filter: {}", dbg_nodes.len());
     let mut dbg_edges : Vec<(&Kmer, &Kmer)> = Vec::new();
     let path = format!("{}{}", output_prefix.to_str().unwrap(),".gfa");
     let mut gfa_file = match File::create(&path) {
@@ -994,9 +994,9 @@ fn main() {
             nb_edges += 1;
         }
     }
-    println!("Number of edges:\t{}", nb_edges);
+    println!("Number of edges: {}", nb_edges);
     if presimp > 0.0 {
-        println!("Pre-simp = {}:\t{} edges removed.",presimp,presimp_removed);
+        println!("Pre-simp = {}: {} edges removed.",presimp,presimp_removed);
     }
 
     // create a real bidirected dbg object using petgraph
@@ -1035,7 +1035,7 @@ fn main() {
     //remove_file(seq_path);
 
     let duration = start.elapsed();
-    println!("Total execution time:\t{:?}", duration);
-    println!("Maximum RSS:\t{:?}GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
+    println!("Total execution time: {:?}", duration);
+    println!("Maximum RSS: {:?}GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
 }
 
