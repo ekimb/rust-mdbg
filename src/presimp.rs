@@ -8,15 +8,16 @@ use super::thread_update_vec;
 use std::sync::{Arc, Mutex, MutexGuard};
 use crossbeam_utils::{thread};
 use closure::closure;
-/// for each node v, examines its out neighbors
-/// find the neighbor with maximum abundance M
-/// consider also the abundance m of v
-/// delete all edges to nodes having abundance less than
-/// min(M,m)*some_factor where some_factor can be 0.1
-pub fn find_removed_edges(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u32>, factor: f32, threads: usize) -> Vec<EdgeIndex> {
+
+/// For each node v, examine outgoing neighbors;
+/// Find the neighbor with maximum abundance M;
+/// Consider also the abundance m of v;
+/// Delete all edges to nodes having abundance less than min(M,m)*f, e.g., f = 0.1.
+
+pub fn find_removed_edges(gr: &DiGraph::<Kmer, Kmer>, dbg_nodes: &HashMap<Kmer, u32>, factor: f32, threads: usize) -> Vec<EdgeIndex> {
     let mut chunks = gr.node_indices().collect::<Vec<_>>();
     let mut chunk_length = 1;
-    let mut removed_edges_all      = Arc::new(Mutex::new(HashMap::<usize, Vec<EdgeIndex>>::new()));
+    let mut removed_edges_all = Arc::new(Mutex::new(HashMap::<usize, Vec<EdgeIndex>>::new()));
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     if chunks.len() > threads {chunk_length = chunks.len()/threads+1;}
     thread::scope(|s| {
@@ -36,18 +37,17 @@ pub fn find_removed_edges(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u3
                         let abundance2 = dbg_nodes[kmer2];
                         abundances.push(abundance2);
                     }
-                    if abundances.len() < 2 { continue; } // preserves connectivity
+                    if abundances.len() < 2 {continue;} // preserves connectivity
                     let abundance_ref = std::cmp::min(*abundances.iter().max().unwrap(),abundance);
                     let mut neighbors = gr.neighbors_directed(*node, *dir).detach();
                     while let Some(neigh) = neighbors.next_node(&gr) {
                         let kmer2 = &nodes_vect[neigh.index()];
                         let abundance2 = dbg_nodes[kmer2];
-                        if (abundance2 as f32) < factor*(abundance_ref as f32)
-                        {
-                            let edge = if *dir == Direction::Incoming { gr.find_edge(neigh,*node).unwrap() } else { gr.find_edge(*node, neigh).unwrap() }; 
+                        if (abundance2 as f32) < factor * (abundance_ref as f32) {
+                            let edge = if *dir == Direction::Incoming {gr.find_edge(neigh, *node).unwrap()} else {gr.find_edge(*node, neigh).unwrap()}; 
                             removed_edges.push(edge);
-                            let other_edge = gr.find_edge(gr.raw_edges()[edge.index()].target(),gr.raw_edges()[edge.index()].source());
-                            if other_edge.is_some() { removed_edges.push(other_edge.unwrap()) }
+                            let other_edge = gr.find_edge(gr.raw_edges()[edge.index()].target(), gr.raw_edges()[edge.index()].source());
+                            if other_edge.is_some() {removed_edges.push(other_edge.unwrap())}
                         }
                     }            
                 
@@ -68,8 +68,8 @@ pub fn find_removed_edges(gr: &DiGraph::<Kmer,Kmer>, dbg_nodes: &HashMap<Kmer,u3
     edges
 }
 
-pub fn presimp(gr: &mut DiGraph::<Kmer,Kmer>, edges: &Vec<EdgeIndex>)  {
-        for edge in edges.iter() {
-            gr.remove_edge(*edge);
-        }
+pub fn presimp(gr: &mut DiGraph::<Kmer, Kmer>, edges: &Vec<EdgeIndex>) {
+    for edge in edges.iter() {
+        gr.remove_edge(*edge);
+    }
 }

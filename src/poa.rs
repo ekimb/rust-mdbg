@@ -14,131 +14,10 @@
 //! For a modern reference implementation, see poapy:
 //! https://github.com/ljdursi/poapy
 //!
-//! # Example
-//!
-//! ```
-//! use bio::alignment::poa::*;
-//! use bio::alignment::pairwise::Scoring;
-//!
-//! let x = b"AAAAAAA";
-//! let y = b"AABBBAA";
-//! let z = b"AABCBAA";
-//!
-//! let scoring = Scoring::new(-1, 0, |a: u8, b: u8| if a == b { 1i32 } else { -1i32 });
-//! let mut aligner = Aligner::new(scoring, x);
-//! // z differs from x in 3 locations
-//! assert_eq!(aligner.global(z).alignment().score, 1);
-//! aligner.global(y).add_to_graph();
-//! // z differs from x and y's partial order alignment by 1 base
-//! assert_eq!(aligner.global(z).alignment().score, 5);
-//! ```
-//!
-// Copyright 2014-2015 Johannes Köster, Vadim Nazarov, Patrick Marks
-// Licensed under the MIT license (http://opensource.org/licenses/MIT)
-// This file may not be copied, modified, or distributed
-// except according to those terms.
-
-//! Calculate alignments with a generalized variant of the Smith Waterman algorithm.
-//! Complexity: O(n * m) for strings of length m and n.
-//!
-//! For quick computation of alignments and alignment scores there are 6 simple functions.
-//!
-//! # Example
-//!
-//! ```
-//! use bio::alignment::pairwise::*;
-//! use bio::alignment::AlignmentOperation::*;
-//!
-//! let x = b"ACCGTGGAT";
-//! let y = b"AAAAACCGTTGAT";
-//! let score = |a: u8, b: u8| if a == b {1i32} else {-1i32};
-//! let mut aligner = Aligner::with_capacity(x.len(), y.len(), -5, -1, &score);
-//! let alignment = aligner.semiglobal(x, y);
-//! // x is global (target sequence) and y is local (reference sequence)
-//! assert_eq!(alignment.ystart, 4);
-//! assert_eq!(alignment.xstart, 0);
-//! assert_eq!(alignment.operations,
-//!     [Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
-//!
-//! // If you don't known sizes of future sequences, you could
-//! // use Aligner::new().
-//! // Global alignment:
-//! let mut aligner = Aligner::new(-5, -1, &score);
-//! let x = b"ACCGTGGAT";
-//! let y = b"AAAAACCGTTGAT";
-//! let alignment = aligner.global(x, y);
-//! assert_eq!(alignment.ystart, 0);
-//! assert_eq!(alignment.xstart, 0);
-//! assert_eq!(aligner.local(x, y).score, 7);
-//!
-//! // In addition to the standard modes (Global, Semiglobal and Local), a custom alignment
-//! // mode is supported which supports a user-specified clipping penalty. Clipping is a
-//! // special boundary condition where you are allowed to clip off the beginning/end of
-//! // the sequence for a fixed penalty. As a starting example, we can use the custom mode
-//! // for achieving the three standard modes as follows.
-//!
-//! // scoring for semiglobal mode
-//! let scoring = Scoring::new( -5, -1, &score) // Gap open, gap extend and match score function
-//!    .xclip(MIN_SCORE) // Clipping penalty for x set to 'negative infinity', hence global in x
-//!    .yclip(0); // Clipping penalty for y set to 0, hence local in y
-//! let mut aligner = Aligner::with_scoring(scoring);
-//! let alignment = aligner.custom(x,y); // The custom aligner invocation
-//! assert_eq!(alignment.ystart, 4);
-//! assert_eq!(alignment.xstart, 0);
-//! // Note that in the custom mode, the clips are explicitly mentioned in the operations
-//! assert_eq!(alignment.operations,
-//!     [Yclip(4), Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
-//!
-//! // scoring for global mode
-//! // scoring can also be created usinf from_scores if the match and mismatch scores are constants
-//! let scoring = Scoring::from_scores( -5, -1, 1, -1) // Gap open, extend, match, mismatch score
-//!     .xclip(MIN_SCORE)  // Clipping penalty for x set to 'negative infinity', hence global in x
-//!     .yclip(MIN_SCORE); // Clipping penalty for y set to 'negative infinity', hence global in y
-//! let mut aligner = Aligner::with_scoring(scoring);
-//! let alignment = aligner.custom(x,y); // The custom aligner invocation
-//! assert_eq!(alignment.ystart, 0);
-//! assert_eq!(alignment.xstart, 0);
-//! // Note that in the custom mode, the clips are explicitly mentioned in the operations
-//! assert_eq!(alignment.operations,
-//!     [Del, Del, Del, Del, Match, Match, Match, Match, Match, Subst, Match, Match, Match]);
-//!
-//! // Similarly if the clip penalties are both set to 0, we have local alignment mode. The scoring
-//! // struct also lets users set different penalties for prefix/suffix clipping, therby letting
-//! // users have the flexibility to create a wide variety of boundary conditions. The xclip() and
-//! // yclip() methods sets the prefix and suffix penalties to be equal. The scoring stuct can be
-//! // explicitly constructed fo full flexibility.
-//!
-//! // The following example considers a modification of the semiglobal mode where you are allowed
-//! // to skip a prefix of the target sequence x, for a penalty of -10, but you have to consume
-//! // the rest of the string in the alignment
-//!
-//! let scoring = Scoring {
-//!     gap_open: -5,
-//!     gap_extend: -1,
-//!     match_fn: |a: u8, b: u8| if a == b {1i32} else {-3i32},
-//!     match_scores: Some((1, -3)),
-//!     xclip_prefix: -10,
-//!     xclip_suffix: MIN_SCORE,
-//!     yclip_prefix: 0,
-//!     yclip_suffix: 0
-//! };
-//! let x = b"GGGGGGACGTACGTACGT";
-//! let y = b"AAAAACGTACGTACGTAAAA";
-//! let mut aligner = Aligner::with_capacity_and_scoring(x.len(), y.len(), scoring);
-//! let alignment = aligner.custom(x, y);
-//! println!("{}", alignment.pretty(x,y));
-//! assert_eq!(alignment.score, 2);
-//! assert_eq!(alignment.operations, [Yclip(4), Xclip(6), Match, Match, Match, Match,
-//!    Match, Match, Match, Match, Match, Match, Match, Match, Yclip(4)]);
-//! ```
-
 
 use std::cmp::{max, Ordering};
-
-
 use std::collections::HashMap;
 use super::Params;
-
 use petgraph::graph::NodeIndex;
 use petgraph::graph::EdgeIndex;
 use petgraph::visit::EdgeRef;
@@ -146,20 +25,17 @@ use petgraph::algo::toposort;
 use petgraph::visit::Topo;
 use petgraph::visit::Dfs;
 use petgraph::dot::{Dot, Config};
-
 use petgraph::{Directed, Graph, Incoming, Outgoing};
-
 // for Smith-Waterman
 use super::pairwise;
-
 use super::utils::pretty_minvec;
-
 pub type POAGraph = Graph<u64, (i32, String), Directed, usize>;
 
 // Unlike with a total order we may have arbitrary successors in the
 // traceback matrix. I have not yet figured out what the best level of
 // detail to store is, so Match and Del operations remember In and Out
 // nodes on the reference graph.
+
 pub const MIN_SCORE: i32 = -858_993_459;
 
 /// Trait required to instantiate a Scoring instance
