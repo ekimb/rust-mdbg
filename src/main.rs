@@ -800,7 +800,7 @@ fn main() {
         }
 
         pb.finish_print("Converted reads to k-min-mers.");
-        println!("Number of reads: {}", nb_reads);
+        println!("Number of reads:\t{}", nb_reads);
 
 
         // this part will correct the reads, and dump them to disk
@@ -994,9 +994,9 @@ fn main() {
             nb_edges += 1;
         }
     }
-    println!("Number of edges: {}", nb_edges);
+    println!("Number of edges:\t{}", nb_edges);
     if presimp > 0.0 {
-        println!("Pre-simp = {}, {} edges removed.",presimp,presimp_removed);
+        println!("Pre-simp = {}:\t{} edges removed.",presimp,presimp_removed);
     }
 
     // create a real bidirected dbg object using petgraph
@@ -1035,7 +1035,7 @@ fn main() {
     //remove_file(seq_path);
 
     let duration = start.elapsed();
-    println!("Total execution time: {:?}", duration);
-    println!("Maximum RSS: {:?}GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
+    println!("Total execution time:\t{:?}", duration);
+    println!("Maximum RSS:\t{:?}GB", (get_memory_rusage() as f32) / 1024.0 / 1024.0 / 1024.0);
 }
 
