@@ -98,14 +98,23 @@ All three parameters `k`, `l`, and `d` significantly impact the quality of resul
 
    `k` = 0.75 * `average_readlen` * `d`
    
-These parameters will give reasonable, but far from optimal, draft assemblies. We experimentally found that the best results are often obtained with `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005. Setting `k` and `d` such that the ratio `k`/`d` is slightly below the read length appears to be an effective strategy. 
+These parameters will give reasonable, but far from optimal, draft assemblies. We experimentally found that the best results are often obtained with `k` values within 20-40, `l` within 10-14, and `d` within 0.001-0.005. Setting `k` and `d` such that the ratio `k`/`d` is slightly below the read length appears to be an effective strategy.
 
+For further information on usage and parameters, run
+
+`target/release/rust-mdbg -h`
+
+for a one-line summary of each flag, or run
+
+`target/release/rust-mdbg --help`
+
+for a lengthy explanation of each flag.
 
 ## Performance
 
 |Dataset                 | Genome size (HPC)   | Coverage  | <div style="width:1200px">Parameters</div> | N50     | Runtime | Memory |
 |:-----------------------|:-------------:|:----:|------------------------------------:|--------:|:------------------------------------------|-------:|
-|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98Mbp | 100x | auto<br>multi-`k`<br>`k`=35,`l`=12,`d`=0.002 | 2.5Mbp<br>2.5Mbp<br>5.5Mbp  |  2m15s<br>15m<br>45s                  |   2.5GB<br>1.8GB<br>1.27GB |
+|[*D. melanogaster* HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR10238607)    | 98Mbp | 100x | auto<br>multi-`k`<br>`k`=35,`l`=12,`d`=0.002 | 2.5Mbp<br>2.5Mbp<br>6.0Mbp  |  2m15s<br>15m<br>1m9s                  |   2.5GB<br>1.8GB<br>1.5GB |
 |[Strawberry HiFi](http://www.ncbi.nlm.nih.gov/bioproject/?term=SRR11606867)    | 0.7Gbp | 36x | auto<br>multi-`k`<br>`k`=38,`l`=14,`d`=0.003| 0.5Mbp<br>1Mbp<br>0.7Mbp  |  6m12s<br>40m<br>5m31s                  |   12GB<br>11GB<br>10GB |
 |[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2Gbp | 52x  | auto<br>multi-`k`<br>`k`=21,`l`=14,`d`=0.003 | 1.0Mbp<br>16.9Mbp<br>13.9Mbp |  27m30s<br>3h15m<br>10m23s           | 16.9GB<br>20GB<br>10.1GB |
 
