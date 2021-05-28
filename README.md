@@ -119,7 +119,6 @@ for a lengthy explanation of each flag.
 |[*H. sapiens* (HG002) HiFi](https://github.com/human-pangenomics/HG002_Data_Freeze_v1.0#pacbio-hifi-1)  | 2.2Gbp | 52x  | auto<br>multi-`k`<br>`k`=21,`l`=14,`d`=0.003 | 1.0Mbp<br>16.9Mbp<br>13.9Mbp |  27m30s<br>3h15m<br>10m23s           | 16.9GB<br>20GB<br>10.1GB |
 
 Runtime breakdown:<br>
-*D. melanogaster*: 45s = 30s  `rust-mdbg` + 5s `gfatools` + 10s  `to_basespace`<br>
 *H. sapiens*: 10m23s = 6m51s `rust-mdbg` + 1m48s `gfatools` + 1m44s `to_basespace`
 
 The runs with custom parameters (from the paper) were made with commit `b99d938`, and unlike in the paper, we did not use robust minimizers which requires additional `l`-mer counting beforehand.
