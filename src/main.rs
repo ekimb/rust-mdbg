@@ -340,9 +340,9 @@ struct Opt {
     restart_from_postcor: bool,
     /// Reference genome input
     ///
-    /// In order to skip error correction and graph
-    /// simplification steps, reference genomes need to
-    /// be indicated.
+    /// Indicates that the input is a (single or a set of) 
+    /// genome(s), not reads. Allows multi-line FASTA and
+    /// doesn't filter any kminmers
     #[structopt(long)]
     reference: bool,
     /// Enable Bloom filters
