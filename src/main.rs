@@ -697,7 +697,7 @@ fn main() {
             // those two next lines do a string copy of the read sequence, because in the case of a
             // reference, we'll need to remove newlines. also, that sequence will be moved to the
             // Read object. could be optimized later
-            let seq_for_ref = if reference  {seq.replace("\n", "") // seq_io might return newlines in fasta seq 
+            let seq_for_ref = if reference  {seq.replace("\n", "").replace("\r", "") // seq_io might return newlines in fasta seq 
                                             } else {String::new()};
             let seq = if reference {seq_for_ref} else {seq.to_string()}; 
             let mut read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &int_to_minimizer, &uhs_bloom, &lcp_bloom);
