@@ -241,7 +241,7 @@ struct Opt {
     ///
     /// Debug mode shows the base-space sequence and 
     /// the minimizer-space representation obtained from each read.
-    #[structopt(short, long)]
+    #[structopt(long)]
     debug: bool,
     /// Input file (raw or gzip-/lz4-compressed FASTX)
     ///
@@ -304,7 +304,7 @@ struct Opt {
     /// The density threshold is analogous to the
     /// fraction of l-mers that will be selected as
     /// minimizers from a read.
-    #[structopt(long)]
+    #[structopt(short, long)]
     density: Option<f64>,
     /// Minimum k-min-mer abundance
     ///
