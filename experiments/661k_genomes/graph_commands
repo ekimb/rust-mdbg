@@ -13,3 +13,5 @@ cat all_kminmers.txt | awk '{for(i=2;i<=11;++i)printf $i""FS ; print ""}' |tr -d
 \time lz4 -d -c ../ref2minspace/refs_and_minimizers.density0.001.txt.lz4 | python scan_genomes_minmers.py all_kminmers.txt  > hits.txt
 
 python parse_graph_hits.py  unitigs_genome_assoc.txt
+
+bash retrieve_wcc_genomes.sh wcc_utg0373824l.graphml
