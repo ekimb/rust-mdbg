@@ -155,7 +155,18 @@ In both cases, this will create an `example.complete.gfa` file that you can conv
 
 ## Citation
 
-A pre-print will be posted at a later date.
+[Minimizer-space de Bruijn graphs](https://www.biorxiv.org/content/10.1101/2021.06.09.447586v1) (2021) BiorXiv
+```
+@article {mdbg,
+	author = {Ekim, Bar{\i}{\c s} and Berger, Bonnie and Chikhi, Rayan},
+	title = {Minimizer-space de Bruijn graphs},
+	year = {2021},
+	doi = {10.1101/2021.06.09.447586},
+	publisher = {Cold Spring Harbor Laboratory},
+	journal = {bioRxiv}
+}
+```
+
 
 ## Contact
 
