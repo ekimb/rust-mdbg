@@ -673,7 +673,7 @@ fn main() {
 
     let mut add_kminmers = |vec: &Vec<(Kmer, String, bool, String, (usize, usize))>, thread_id: usize| {
         // determine to which sequence files to write
-        if sequences_files.get(&thread_id).is_none() && (!params.error_correct || thread_id == 0) {
+        if sequences_files.get(&thread_id).is_none() {
             sequences_files.insert(thread_id, create_sequences_file(thread_id));
         }
 
@@ -712,7 +712,7 @@ fn main() {
             */
             
             // determine to which sequence files to write
-            if sequences_files.get(&thread_id).is_none() && (!params.error_correct || thread_id == 0) {
+            if sequences_files.get(&thread_id).is_none() {
                 sequences_files.insert(thread_id, create_sequences_file(thread_id));
             }
             let mut sequences_file = sequences_files.get_mut(&thread_id).unwrap();
