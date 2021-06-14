@@ -772,8 +772,8 @@ fn main() {
                 if error_correct || reference {
                     let (vec, read_obj) = found.as_ref().unwrap();
                     reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
-                    ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
                     if read_obj.transformed.len() >= n {
+                        ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
                         for i in 0..read_obj.transformed.len()-n+1 {
                             let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
                             let mut entry = buckets.entry(n_mer).or_insert(Vec::<String>::new());

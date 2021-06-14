@@ -145,6 +145,9 @@ impl Read {
         else {
             inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
         }
+        if inp_seq.len() < l {
+            return Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false};
+        }
         let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i, x)| *x <= hash_bound);
         for (i,hash) in iter {
             let lmer = &inp_seq[i..i+l];
