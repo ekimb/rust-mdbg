@@ -15,7 +15,7 @@ However, this high speed comes at a cost! :)
 * `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as [HiCanu](https://github.com/marbl/canu) and [hifiasm](https://github.com/chhylp123/hifiasm). 
 * `rust-mdbg` performs best with at least 40x to 50x of coverage.
 * No polishing step is implemented; so, assemblies will have around the same accuracy as the reads.
-* Cannot assemble Nanopore data due to its higher error rate (see https://github.com/ekimb/rust-mdbg/issues/4#issuecomment-860817828)
+* Cannot assemble Nanopore data due to its higher error rate (see [this comment](https://github.com/ekimb/rust-mdbg/issues/4#issuecomment-860817828))
 
 ## Installation
 
