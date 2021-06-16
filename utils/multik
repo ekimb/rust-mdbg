@@ -72,7 +72,7 @@ do
     zcat -f $reads  |seqtk seq -A >> multik_reads.fa
     tprefix=$prefix-k$k
     assemble $PWD/multik_reads.fa $k $l $density $tprefix $threads $DIR
-    last_k=k
+    last_k=$k
     rm -f *.sequences
 done
 
