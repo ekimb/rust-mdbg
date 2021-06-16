@@ -56,7 +56,7 @@ For convenience, components 2 and 3 are wrapped into a script called `magic_simp
 
 If you have [seqtk](https://github.com/lh3/seqtk) installed, you can use
 
-`seqtk seq -A reads.unformatted.fq > reads.fa`
+`seqtk seq -AU reads.unformatted.fq > reads.fa`
 
 to format reads accordingly.
 
