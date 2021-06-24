@@ -76,5 +76,7 @@ do
     rm -f *.sequences
 done
 
-mv $tprefix-k$last_k.msimpl.fa $prefix-final.msimpl.fa
-echo "assembly done, results are in: $prefix-final.msimpl.fa"
+mv $tprefix.msimpl.fa $prefix-final.msimpl.fa
+mv $tprefix.msimpl.gfa $prefix-final.msimpl.gfa
+mv $tprefix.gfa $prefix-final.gfa
+echo "assembly done, final results (k=$last_k) are in: $prefix-final.msimpl.fa"
