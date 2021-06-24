@@ -1,5 +1,6 @@
 #!/bin/bash
 # multi-k rust-mdbg 
+# requirements: seqtk
 #arguments: [reads.fq] [prefix] [threads]
 
 
@@ -11,7 +12,7 @@ fi
 
 if [ "$#" -lt 3 ]
 then
-	echo "usage: multik <reads.fq.gz> <prefix> <nb_threads> [restart_from]"
+	echo "usage: multik <reads.[fa|fq][.gz]> <prefix> <nb_threads> [restart_from]"
 fi
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -27,9 +28,7 @@ max_k=$5
 
 # determine max read length
 # (in order to fix max k)
-# converts a multiFASTA file into one where all sequences are one one line
-# # this is the needed format in REINDEER query files 
-avg_readlen=$(zcat -f $reads |head -n 10000 | awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' | awk '!/^>/ {print length}'  | awk '{sum+=$1} END {print int(sum/NR)}')
+avg_readlen=$(seqtk seq -A $reads |head -n 10000 | awk '!/^>/ {print length}'  | awk '{sum+=$1} END {print int(sum/NR)}')
 
 if [ -z "$max_k" ]
 then
