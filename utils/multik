@@ -13,6 +13,7 @@ fi
 if [ "$#" -lt 3 ]
 then
 	echo "usage: multik <reads.[fa|fq][.gz]> <prefix> <nb_threads> [restart_from]"
+    exit
 fi
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
