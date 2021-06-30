@@ -33,7 +33,7 @@ avg_readlen=$(seqtk seq -A $reads |head -n 10000 | awk '!/^>/ {print length}'  |
 
 if [ -z "$max_k" ]
 then
-    max_k=$(printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
+    max_k=$(LC_NUMERIC="en_US.UTF-8" printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
 fi
 
 echo "avg readlen: $avg_readlen, max k: $max_k"
