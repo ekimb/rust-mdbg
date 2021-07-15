@@ -1,0 +1,14 @@
+description of the files:
+
+- 999_connected_components.graphml.tar.gz
+
+ graphml file of each connected component, represented as a graph of unitigs (compacted minimizer-space de bruijn graph)
+
+- unitigs_genome_assoc.txt.gz
+
+ for each unitig, which genome(s) contain it
+
+- 999_connected_components.organisms.tar.gz
+
+ text file describing all organisms present in each connected component (one line per distinct assembly found in the component -- the same organism might be present in multiple assemblies)
+
