@@ -19,12 +19,12 @@ use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 use super::Params;
 use petgraph::graph::NodeIndex;
-use petgraph::graph::EdgeIndex;
+//use petgraph::graph::EdgeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::algo::toposort;
 use petgraph::visit::Topo;
-use petgraph::visit::Dfs;
-use petgraph::dot::{Dot, Config};
+//use petgraph::visit::Dfs;
+use petgraph::dot::{Dot};//, Config};
 use petgraph::{Directed, Graph, Incoming, Outgoing};
 // for Smith-Waterman
 use super::pairwise;
@@ -52,7 +52,7 @@ pub struct MatchParams {
 }
 
 impl MatchParams {
-    /// Create new MatchParams instance with given match and mismatch scores
+    /*/// Create new MatchParams instance with given match and mismatch scores
     ///
     /// # Arguments
     ///
@@ -65,7 +65,7 @@ impl MatchParams {
             match_score,
             mismatch_score,
         }
-    }
+    }*/
 }
 
 impl MatchFunc for MatchParams {
@@ -106,7 +106,7 @@ pub struct Scoring<F: MatchFunc> {
 }
 
 impl Scoring<MatchParams> {
-    /// Create new Scoring instance with given gap open, gap extend penalties
+    /*/// Create new Scoring instance with given gap open, gap extend penalties
     /// match and mismatch scores. The clip penalties are set to MIN_SCORE by default
     ///
     /// # Arguments
@@ -115,12 +115,7 @@ impl Scoring<MatchParams> {
     /// * `gap_extend` - the score for extending a gap (should not be positive)
     /// * `match_score` - the score for a match
     /// * `mismatch_score` - the score for a mismatch
-    pub fn from_scores(
-        gap_open: i32,
-        gap_extend: i32,
-        match_score: i32,
-        mismatch_score: i32,
-    ) -> Self {
+    pub fn from_scores(gap_open: i32, gap_extend: i32, match_score: i32, mismatch_score: i32) -> Self {
         assert!(gap_open <= 0, "gap_open can't be positive");
         assert!(gap_extend <= 0, "gap_extend can't be positive");
 
@@ -134,7 +129,7 @@ impl Scoring<MatchParams> {
             yclip_prefix: MIN_SCORE,
             yclip_suffix: MIN_SCORE,
         }
-    }
+    }*/
 }
 
 impl<F: MatchFunc> Scoring<F> {
@@ -162,7 +157,7 @@ impl<F: MatchFunc> Scoring<F> {
         }
     }
 
-    /// Sets the prefix and suffix clipping penalties for x to the input value
+    /*/// Sets the prefix and suffix clipping penalties for x to the input value
     ///
     /// # Arguments
     ///
@@ -283,7 +278,7 @@ impl<F: MatchFunc> Scoring<F> {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.yclip_suffix = penalty;
         self
-    }
+    }*/
 }
 
 #[derive(Debug, Clone)]
@@ -365,7 +360,7 @@ impl Traceback {
         }
     }
 
-    /// Populate the edges of the traceback matrix
+    /*/// Populate the edges of the traceback matrix
     fn initialize_scores(&mut self, gap_open: i32, gap_extend: i32) {
         for (i, row) in self
             .matrix
@@ -386,7 +381,7 @@ impl Traceback {
                 op: AlignmentOperation::Ins(None),
             };
         }
-    }
+    }*/
 
     fn new() -> Self {
         Traceback {
@@ -405,7 +400,7 @@ impl Traceback {
         &self.matrix[i][j]
     }
 
-    pub fn print(&self, g: &POAGraph, query: Vec<u64>) {
+    /*pub fn print(&self, g: &POAGraph, query: Vec<u64>) {
         let (m, n) = (g.node_count(), query.len());
         print!(".\t");
         for base in query.iter().take(n) {
@@ -418,7 +413,7 @@ impl Traceback {
             }
         }
         println!();
-    }
+    }*/
 }
 
 /// A partially ordered aligner builder
@@ -434,7 +429,7 @@ pub struct Aligner<F: MatchFunc> {
 
 impl<F: MatchFunc> Aligner<F> {
     /// Create new instance.
-    pub fn new(scoring: Scoring<F>, reference: &Vec<u64>, ref_str: Option<&String>, ref_minim_pos: Option<&Vec<usize>>) -> Self {
+    pub fn new(scoring: Scoring<F>, reference: &[u64], ref_str: Option<&String>, ref_minim_pos: Option<&Vec<usize>>) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
@@ -458,15 +453,15 @@ impl<F: MatchFunc> Aligner<F> {
         let mut ops: Vec<AlignmentOperation> = vec![];
     
         // Now backtrack through the matrix to construct an optimal path
-        let mut i = self.traceback.last.index() + 1;
-        let mut j = self.traceback.cols;
+        let mut i;
+        let mut j;
 
         // semiglobal
-        let mut cands: Vec<NodeIndex<usize>> = self.poa.graph.node_indices().filter(|x| self.poa.graph.neighbors_directed(*x, Outgoing).collect::<Vec<NodeIndex<usize>>>().len() == 0).collect();
+        let cands: Vec<NodeIndex<usize>> = self.poa.graph.node_indices().filter(|x| self.poa.graph.neighbors_directed(*x, Outgoing).count() == 0).collect();
         //println!("Cands {:?}, len {}", cands, cands.len());
-        let mut max_cand = cands.iter().map(|cand| ((cand.index() + 1, self.traceback.cols), self.traceback.matrix[cand.index()+1][self.traceback.cols].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap();
-        let mut i_0 = (max_cand.0).0;
-        let mut j_0 = (max_cand.0).1;
+        let max_cand = cands.iter().map(|cand| ((cand.index() + 1, self.traceback.cols), self.traceback.matrix[cand.index()+1][self.traceback.cols].score)).max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap();
+        let i_0 = (max_cand.0).0;
+        let j_0 = (max_cand.0).1;
 
         i = i_0;
         j = j_0;
@@ -507,7 +502,7 @@ impl<F: MatchFunc> Aligner<F> {
                 }
             }
         }
-        if debug{println!("");}
+        if debug{println!();}
 
         ops.reverse();
 
@@ -519,15 +514,15 @@ impl<F: MatchFunc> Aligner<F> {
         }
     }
 
-    /// Globally align a given query against the graph.
+    /*/// Globally align a given query against the graph.
     pub fn global(&mut self, query: &Vec<u64>) -> &mut Self {
         self.query = query.to_vec();
         self.traceback = self.poa.global(&query);
         self
-    }
+    }*/
 
     /// Semiglobally align a given query against the graph.
-    pub fn semiglobal(&mut self, query: &Vec<u64>, query_str: Option<&String>, query_minim_pos: Option<&Vec<usize>>) -> &mut Self {
+    pub fn semiglobal(&mut self, query: &[u64], query_str: Option<&String>, query_minim_pos: Option<&Vec<usize>>) -> &mut Self {
         self.query = query.to_vec();
         self.query_str = query_str.unwrap().clone();
         self.query_minim_pos = query_minim_pos.unwrap().clone();
@@ -535,10 +530,10 @@ impl<F: MatchFunc> Aligner<F> {
         self
     }
 
-    /// Return alignment graph.
+    /*/// Return alignment graph.
     pub fn graph(&self) -> &POAGraph {
         &self.poa.graph
-    }
+    }*/
 
     /// print a pretty alignment of last query to the graph
     pub fn print_aln(&mut self) ->String {
@@ -549,7 +544,7 @@ impl<F: MatchFunc> Aligner<F> {
     /// gets template boundary in consensus
     /// Perform Smith-Waterman on the consensus with the original template
     /// to determine the boundary of the template on the consensus
-    pub fn consensus_boundary(&mut self, cns : &Vec<u64>, cns_es: &Vec<String>, orig: &Vec<u64>, debug: bool)
+    pub fn consensus_boundary(&mut self, cns : &[u64], cns_es: &[String], orig: &[u64], debug: bool)
         -> (Vec<u64>, Vec<String>)
     {
         let x = &orig[..];
@@ -558,8 +553,8 @@ impl<F: MatchFunc> Aligner<F> {
         let mut regular_aligner = pairwise::Aligner::with_capacity(x.len(), y.len(), -1, -1, &score);
         let alignment = regular_aligner.semiglobal(x, y);
         if alignment.yend - alignment.ystart < 2 { return (Vec::new(), Vec::new()); }
-        let adjusted_cns = cns   [alignment.ystart..alignment.yend].to_vec().clone();
-        let adjusted_es  = cns_es[alignment.ystart..(alignment.yend-1)].to_vec().clone();
+        let adjusted_cns = cns   [alignment.ystart..alignment.yend].to_vec();
+        let adjusted_es  = cns_es[alignment.ystart..(alignment.yend-1)].to_vec();
         if debug
         {
             println!("alignment: {:?} (score: {})",alignment.operations, alignment.score);
@@ -570,7 +565,7 @@ impl<F: MatchFunc> Aligner<F> {
 
         // TODO comment that part if the warning below is never printed
 
-        let mut y_rev = cns.clone();
+        let mut y_rev = cns.to_owned();
         y_rev.reverse();
         let rev_alignment = regular_aligner.semiglobal(x, &y_rev);
         if false // debug
@@ -599,7 +594,7 @@ pub struct Poa<F: MatchFunc> {
 }
 
 impl<F: MatchFunc> Poa<F> {
-    /// Create a new aligner instance from the directed acyclic graph of another.
+    /*/// Create a new aligner instance from the directed acyclic graph of another.
     ///
     /// # Arguments
     ///
@@ -608,7 +603,7 @@ impl<F: MatchFunc> Poa<F> {
     ///
     pub fn new(scoring: Scoring<F>, graph: POAGraph) -> Self {
         Poa { scoring, graph}
-    }
+    }*/
 
     /// Create a new POA graph from an initial reference sequence and alignment penalties.
     ///
@@ -617,7 +612,7 @@ impl<F: MatchFunc> Poa<F> {
     /// * `scoring` - the score struct
     /// * `reference` - a reference TextSlice to populate the initial reference graph
     ///
-    pub fn from_string(scoring: Scoring<F>, seq: &Vec<u64>, seq_str: Option<&String>, seq_minim_pos: Option<&Vec<usize>>) -> Self {
+    pub fn from_string(scoring: Scoring<F>, seq: &[u64], seq_str: Option<&String>, seq_minim_pos: Option<&Vec<usize>>) -> Self {
         let mut graph: POAGraph =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
@@ -631,9 +626,9 @@ impl<F: MatchFunc> Poa<F> {
             let between_minims = &seq_str.unwrap()[seq_minim_pos[i-1] as usize..seq_minim_pos[i] as usize];
 
             graph.add_edge(prev, node, (1,String::from(between_minims)));
-            let edge = graph.find_edge(prev, node).unwrap();
+            //let edge = graph.find_edge(prev, node).unwrap();
             prev = node;
-            i = i + 1;
+            i += 1;
         }
 
         Poa { scoring, graph }
@@ -646,7 +641,7 @@ impl<F: MatchFunc> Poa<F> {
             AlignmentOperation::Match(None) => {
                 self.scoring.gap_open
             }
-            AlignmentOperation::Match(Some((_, p))) => {
+            AlignmentOperation::Match(Some((_, _p))) => {
                 self.scoring.gap_open
             }
             AlignmentOperation::Ins(None) => {
@@ -691,7 +686,7 @@ impl<F: MatchFunc> Poa<F> {
         }
     }
 
-    /// A global Needleman-Wunsch aligner on partially ordered graphs.
+    /*/// A global Needleman-Wunsch aligner on partially ordered graphs.
     ///
     /// # Arguments
     /// * `query` - the query TextSlice to align against the internal graph member
@@ -772,7 +767,7 @@ impl<F: MatchFunc> Poa<F> {
         }
 
         traceback
-    }
+    }*/
 
     // code not ready yet. initialization is okay, but the score update + the traceback stopping condition (not in this function) aren't changed
      
@@ -782,14 +777,14 @@ impl<F: MatchFunc> Poa<F> {
     /// * `query` - the query TextSlice to align against the internal graph member
     ///
 
-    pub fn semiglobal(&mut self, query: &Vec<u64>) -> Traceback {
+    pub fn semiglobal(&mut self, query: &[u64]) -> Traceback {
         assert!(self.graph.node_count() != 0);
 
         // dimensions of the traceback matrix
-        let (m, n) = (self.graph.node_count(), query.len());
-        let mut traceback = Traceback::with_capacity(m, n);
+        let (length, width) = (self.graph.node_count(), query.len());
+        let mut traceback = Traceback::with_capacity(length, width);
         //traceback.initialize_scores(self.scoring.gap_open);
-        for (i, row) in traceback 
+        for (_i, row) in traceback 
             .matrix
             .iter_mut()
             .enumerate()
@@ -879,7 +874,7 @@ impl<F: MatchFunc> Poa<F> {
        
 
 
-    /// Experimental: return sequence of traversed edges
+    /*/// Experimental: return sequence of traversed edges
     ///
     /// Only supports alignments for sequences that have already been added,
     /// so all operations must be Match.
@@ -905,7 +900,7 @@ impl<F: MatchFunc> Poa<F> {
             }
         }
         path
-    }
+    }*/
 
     /// return the consensus of the POA
     /// and also
@@ -939,7 +934,7 @@ impl<F: MatchFunc> Poa<F> {
 
     pub fn consensus_path(&mut self, params : &Params) -> Vec<NodeIndex<usize>> {
         // If we've added no new nodes or edges since the last call, sort first
-        let mut node_idx = toposort(&self.graph, None).unwrap();
+        let node_idx = toposort(&self.graph, None).unwrap();
         // For each node find the best predecessor by edge-weight, breaking ties with path-weight
         let mut scores = HashMap::<NodeIndex<usize>, i32>::new();
         let mut next_in_path: HashMap<NodeIndex<usize>, Option<NodeIndex<usize>>> = HashMap::new();
@@ -1012,7 +1007,7 @@ impl<F: MatchFunc> Poa<F> {
                         println!("Weight : {}", self.graph.raw_nodes()[*p].weight);
                         println!("Node : {:?}", seq[i]);
                     }
-                    if (seq[i] != self.graph.raw_nodes()[*p].weight) {
+                    if seq[i] != self.graph.raw_nodes()[*p].weight {
                         if debug {println!("node added");}
                         let node = self.graph.add_node(seq[i]);
                         self.graph.add_edge(prev, node, (1, between_minims));
@@ -1062,7 +1057,7 @@ impl<F: MatchFunc> Poa<F> {
     /// interpretation:
     /// M = match, X mismatch
     /// D = deletion, I = insertion, i = some other strange kind of insertion
-    pub fn pretty(&self, aln: &Alignment, seq: &Vec<u64>) -> String{
+    pub fn pretty(&self, aln: &Alignment, seq: &[u64]) -> String{
         let mut x_pretty = String::new();
         let mut y_pretty = String::new();
         let mut inb_pretty = String::new();
@@ -1081,13 +1076,12 @@ impl<F: MatchFunc> Poa<F> {
                         i += 1;
                     },
                     AlignmentOperation::Match(Some((_, p))) => {
-                        if (seq[i] != self.graph.raw_nodes()[*p].weight) {
+                        if seq[i] != self.graph.raw_nodes()[*p].weight {
                             x_add   = String::from("X");//x[i];
                             inb_add = String::from("_");
                             y_add   = String::from("X");//seq[i].to_string().clone();
                         }
-                        else
-                        {
+                        else {
                             x_add   = String::from("M");//x[i];
                             inb_add = String::from("_");
                             y_add   = String::from("M");//seq[i].to_string().clone();
@@ -1105,12 +1099,12 @@ impl<F: MatchFunc> Poa<F> {
                         y_add   = String::from("-");
                         i += 1;
                     },
-                    AlignmentOperation::Ins(Some(_)) => {
+                    /*AlignmentOperation::Ins(Some(_)) => {
                         x_add   = String::from("i");//x[i];
                         inb_add = String::from("_");
                         y_add   = String::from("-");
                         i += 1;
-                    }
+                    }*/
 
                 }
 
@@ -1121,135 +1115,5 @@ impl<F: MatchFunc> Poa<F> {
         }
         format!("{}\n{}\n{}", x_pretty, inb_pretty, y_pretty)
 
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use petgraph::graph::NodeIndex;
-
-    #[test]
-    fn test_init_graph() {
-        // sanity check for String -> Graph
-
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let seq = vec![1,2,3,4,5,6,7,8,9]; 
-        let mut poa = Poa::from_string(scoring, &seq);
-        assert!(poa.graph.is_directed());
-        assert_eq!(poa.graph.node_count(), 9);
-        assert_eq!(poa.graph.edge_count(), 8);
-    }
-
-    #[test]
-    fn test_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        // examples from the POA paper
-        //let _seq1 = b"PKMIVRPQKNETV";
-        //let _seq2 = b"THKMLVRNETIM";
-        let gattaca = vec![3,1,4,4,1,2,1];
-        
-        let mut poa = Poa::from_string(scoring, &gattaca);
-        let GCATGCU = vec![3,2,1,4,3,2,5];
-        let alignment = poa.global(&GCATGCU).alignment();
-        assert_eq!(alignment.score, 0);
-
-        let GCATGCUx = vec![3,2,1,4,3,2,5,6];
-        let alignment = poa.global(&GCATGCUx).alignment();
-        assert_eq!(alignment.score, -1);
-
-
-        let xCATGCU= vec![6,2,1,4,3,2,5];
-        let alignment = poa.global(&xCATGCU).alignment();
-        assert_eq!(alignment.score, -2);
-    }
-
-    fn seq_to_vec(seq: &[u8]) -> Vec<u64>
-    {
-        let mut res = Vec::new();
-        for c in seq.iter()
-        {
-            res.push(match *c as char { 'A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 5, 'x' => 6,_ => 0});
-        }
-        res
-    }
-
-    #[test]
-    fn test_branched_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let seq1 = b"TTTTT";
-        let seq2 = b"TTATT";
-        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
-        let head: NodeIndex<usize> = NodeIndex::new(1);
-        let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(1);
-        let node2 = poa.graph.add_node(1);
-        poa.graph.add_edge(head, node1, 1);
-        poa.graph.add_edge(node1, node2, 1);
-        poa.graph.add_edge(node2, tail, 1);
-        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
-        assert_eq!(alignment.score, 3);
-    }
-
-    #[test]
-    fn test_alt_branched_alignment() {
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-
-        let seq1 = b"TTCCTTAA";
-        let seq2 = b"TTTTGGAA";
-        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
-        let head: NodeIndex<usize> = NodeIndex::new(1);
-        let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(1);
-        let node2 = poa.graph.add_node(1);
-        poa.graph.add_edge(head, node1, 1);
-        poa.graph.add_edge(node1, node2, 1);
-        poa.graph.add_edge(node2, tail, 1);
-        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
-        poa.add_alignment(&alignment, seq_to_vec(seq2));
-        assert_eq!(poa.graph.edge_count(), 14);
-        assert!(poa
-            .graph
-            .contains_edge(NodeIndex::new(5), NodeIndex::new(10)));
-        assert!(poa
-            .graph
-            .contains_edge(NodeIndex::new(11), NodeIndex::new(6)));
-    }
-
-    #[test]
-    fn test_insertion_on_branch() {
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-
-        let seq1 = b"TTCCGGTTTAA";
-        let seq2 = b"TTGGTATGGGAA";
-        let seq3 = b"TTGGTTTGCGAA";
-        let mut poa = Poa::from_string(scoring, &seq_to_vec(seq1));
-        let head: NodeIndex<usize> = NodeIndex::new(1);
-        let tail: NodeIndex<usize> = NodeIndex::new(2);
-        let node1 = poa.graph.add_node(2);
-        let node2 = poa.graph.add_node(2);
-        let node3 = poa.graph.add_node(2);
-        poa.graph.add_edge(head, node1, 1);
-        poa.graph.add_edge(node1, node2, 1);
-        poa.graph.add_edge(node2, node3, 1);
-        poa.graph.add_edge(node3, tail, 1);
-        let alignment = poa.global(&seq_to_vec(seq2)).alignment();
-        assert_eq!(alignment.score, 2);
-        poa.add_alignment(&alignment, seq_to_vec(seq2));
-        let alignment2 = poa.global(&seq_to_vec(seq3)).alignment();
-
-        assert_eq!(alignment2.score, 10);
-    }
-
-    #[test]
-    fn test_poa_method_chaining() {
-        let scoring = Scoring::new(-1, 0, |a: u64, b: u64| if a == b { 1i32 } else { -1i32 });
-        let mut aligner = Aligner::new(scoring, &seq_to_vec(b"TTCCGGTTTAA"));
-        aligner
-            .global(&seq_to_vec(b"TTGGTATGGGAA"))
-            .add_to_graph()
-            .global(&seq_to_vec(b"TTGGTTTGCGAA"))
-            .add_to_graph();
-        assert_eq!(aligner.alignment().score, 10);
     }
 }

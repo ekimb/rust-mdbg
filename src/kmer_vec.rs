@@ -1,4 +1,4 @@
-use super::revcomp_aware;
+use super::REVCOMP_AWARE;
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 use std::cmp::Ordering;
@@ -8,9 +8,9 @@ pub struct KmerVec {
     data: Vec<u64>
 }
 
-pub fn get(a: &KmerVec) -> Vec<u64> {
+/*pub fn get(a: &KmerVec) -> Vec<u64> {
     a.data.to_vec()
-}
+}*/
 
 impl KmerVec {
     pub fn suffix(&self) -> KmerVec {
@@ -32,7 +32,7 @@ impl KmerVec {
     }
 
     pub fn normalize(&self) -> (KmerVec,bool) {
-        if !revcomp_aware {return (self.clone(), false)}
+        if !REVCOMP_AWARE {return (self.clone(), false)}
         let rev = self.reverse();
         if *self < rev {(self.clone(), false)}
         else {(rev, true)}
@@ -46,9 +46,9 @@ impl KmerVec {
         format!("{:?}", &self.data)
     }
 
-    pub fn minimizers(&self) -> &Vec<u64> {
+    /*pub fn minimizers(&self) -> &Vec<u64> {
         &self.data
-    }
+    }*/
 }
 
 impl PartialEq for KmerVec {

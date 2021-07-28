@@ -1,12 +1,13 @@
-use std::path::PathBuf;
+//use std::path::PathBuf;
 use std::fs::File;
-use std::error::Error;
+/*use std::error::Error;
 use std::io::Write;
 use itertools::Itertools;
-use std::io::{BufWriter, BufRead, BufReader};
-use super::Kmer;
+use std::io::{BufWriter, BufRead, BufReader};*/
+use std::io::{BufRead};
+/*use super::Kmer;
 use std::collections::HashMap;
-use petgraph::graph::NodeIndex;
+use petgraph::graph::NodeIndex;*/
 use std::io::{self};
 use std::path::Path;
 
@@ -14,7 +15,7 @@ use std::path::Path;
 // for reconstructing sequences in assemblies. Otherwise having just 
 // the graph would be a bit useless.
 
-pub fn write_minimizers_and_seq_of_kmers(output_prefix: &PathBuf, node_indices: &mut HashMap<Kmer, usize>, kmer_origin: &HashMap<Kmer, String>, dbg_nodes: &HashMap<Kmer, u32> , k: usize, l: usize) {
+/*pub fn write_minimizers_and_seq_of_kmers(output_prefix: &PathBuf, node_indices: &mut HashMap<Kmer, usize>, kmer_origin: &HashMap<Kmer, String>, dbg_nodes: &HashMap<Kmer, u32> , k: usize, l: usize) {
     let output_filename = format!("{}{}", output_prefix.to_string_lossy(), ".sequences");
     let path = PathBuf::from(&output_filename);
         let mut out_file = match File::create(path) {
@@ -36,7 +37,7 @@ pub fn write_minimizers_and_seq_of_kmers(output_prefix: &PathBuf, node_indices: 
                 let kmer_seq = str_vec[1].to_string();  
                 let kmer_origin = str_vec[2].to_string(); 
                 let node_shift : Vec<usize> = str_vec[3].trim().split(|c| c == '(' || c == ')' || c == ' ' || c == ',').filter(|&c| c != "").map(|s| s.parse().unwrap()).collect::<Vec<usize>>();
-                let mut node : Kmer = Kmer::make_from(&node_raw);
+                let node : Kmer = Kmer::make_from(&node_raw);
                 let max_node = usize::max_value();
                 let index = node_indices.get(&node).unwrap_or(&max_node);
                 if index != &max_node {
@@ -49,7 +50,7 @@ pub fn write_minimizers_and_seq_of_kmers(output_prefix: &PathBuf, node_indices: 
             }
         }
     }
-}
+}*/
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
     let file = File::open(filename)?;

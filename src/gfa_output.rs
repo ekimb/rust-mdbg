@@ -1,4 +1,4 @@
-use petgraph::graph::DiGraph;
+/*use petgraph::graph::DiGraph;
 use petgraph::visit::EdgeRef;
 use std::path::PathBuf;
 use std::fs::File;
@@ -9,9 +9,9 @@ use crate::kmer_vec::get;
 use std::collections::HashMap;
 use strsim::levenshtein;
 use petgraph::graph::NodeIndex;
-use crate::utils::revcomp;
+use crate::utils::revcomp;*/
 
-fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer>) -> (&'static str, &'static str) {
+/*fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer>) -> (&'static str, &'static str) {
     let n1 = nodes_vect[id1];
     let n2 = nodes_vect[id2];
     let rev_n1 = n1.reverse();
@@ -22,16 +22,16 @@ fn determine_orientation(id1: usize, id2: usize, nodes_vect: &Vec<&Kmer>) -> (&'
     if rev_n1.suffix() == n2.prefix() {return ("-", "+");}
     if rev_n1.suffix() == rev_n2.prefix() {return ("-","-");}
     panic!("Unknown orientation.");
-}   
+} */ 
 
-fn matches(seq1 :&str, seq2 :&str, levenshtein_minimizers: usize) -> bool {
+/*fn matches(seq1 :&str, seq2 :&str, levenshtein_minimizers: usize) -> bool {
     if levenshtein_minimizers == 0 {return seq1.contains(seq2);}
     else {return levenshtein(seq1, seq2) <= levenshtein_minimizers + 1 as usize;} // +1 to take into account that some minimizers in the ball have length +- 1
-}
+}*/
 
 // should be fairly easy to find, as both sequences should share exactly k-1 minimizers exactly in
 // common, and we even know which ones
-fn find_overlap(seq1: &str, seq2: &str, ori1: &str, ori2: &str, kmer1: &Kmer, kmer2: &Kmer, int_to_minimizer: &HashMap<u64, String>, minim_shift: &HashMap<Kmer, (usize, usize)>, levenshtein_minimizers: usize) -> u32 {
+/*fn find_overlap(seq1: &str, seq2: &str, ori1: &str, ori2: &str, kmer1: &Kmer, kmer2: &Kmer, int_to_minimizer: &HashMap<u64, String>, minim_shift: &HashMap<Kmer, (usize, usize)>, levenshtein_minimizers: usize) -> u32 {
     // strategy: find the second minimizer at position 0 of seq2, by construction of the dbg
     /*
     let minim = kmer1.minimizers()[1];
@@ -91,9 +91,9 @@ fn find_overlap(seq1: &str, seq2: &str, ori1: &str, ori2: &str, kmer1: &Kmer, km
     assert!(shift != -1);
     assert!((shift as usize) < seq1.len());
     shift as u32
-}
+}*/
 
-pub fn output_gfa(gr: &DiGraph::<Kmer, Kmer>, dbg_nodes: &HashMap<Kmer, u32>, output_prefix: &PathBuf, kmer_seqs: &HashMap<Kmer, String>, int_to_minimizer: &HashMap<u64, String>, levenshtein_minimizers: usize, node_indices: &HashMap<Kmer, NodeIndex>) -> HashMap<Kmer, usize> {
+/*pub fn output_gfa(gr: &DiGraph::<Kmer, Kmer>, dbg_nodes: &HashMap<Kmer, u32>, output_prefix: &PathBuf, kmer_seqs: &HashMap<Kmer, String>, int_to_minimizer: &HashMap<u64, String>, levenshtein_minimizers: usize, node_indices: &HashMap<Kmer, NodeIndex>) -> HashMap<Kmer, usize> {
     // create a index->kmer index
     let nodes_vect : Vec<&Kmer> = dbg_nodes.keys().collect();
     let mut node_indices = HashMap::<Kmer, usize>::new();
@@ -130,10 +130,9 @@ pub fn output_gfa(gr: &DiGraph::<Kmer, Kmer>, dbg_nodes: &HashMap<Kmer, u32>, ou
             seq2 = revcomp(&seq2);
             kmer2 = kmer2.reverse();
         }
-        let mut shift = 0;
         // this is no longer done as sequences are output in a separate file and not in the gfa
         //shift = find_overlap(&seq1, &seq2, ori1, ori2, &kmer1, &kmer2, int_to_minimizer, minim_shift, levenshtein_minimizers);
-        let mut overlap_length = seq1.len() as u32 - shift;
+        let mut overlap_length = seq1.len() as u32;
         //println!("seq1 len {} seq2 len {} overlap length {}", seq1.len(), seq2.len(), overlap_length);
         //if (overlap_length as usize) > seq2.len()
         //{
@@ -148,19 +147,8 @@ pub fn output_gfa(gr: &DiGraph::<Kmer, Kmer>, dbg_nodes: &HashMap<Kmer, u32>, ou
         // since anyway the importance of overlap length field in GFA is quite relative in this
         // pipeline
         overlap_length = std::cmp::min(overlap_length, (std::cmp::max(1, seq2.len()) - 1) as u32);
-        let id1_beg = shift;
-        let id1_end = shift + overlap_length;
-        let id2_beg = 0;
-        let id2_end = overlap_length;
-        let mut id1_str = String::new();
-        let mut id2_str = String::new();
-        let mut ori_fin = "+";
-        if ori1 != ori2 {ori_fin = "-";}
-        if ori1 == "+" {id1_str = id1.to_string() + "+";}
-        else {id1_str = id1.to_string() + "-";}
-        //gfa2 : s1+ s2- b1 e1 b2 e2
         let l_line = format!("L\t{}\t{}\t{}\t{}\t{}M\n", id1, ori1, id2, ori2, overlap_length);
         write!(file, "{}", l_line).expect("Error writing L line.");
     }
     node_indices
-}
+}*/

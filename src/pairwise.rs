@@ -41,7 +41,7 @@ pub enum AlignmentOperation {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]//, Serialize, Deserialize)]
 pub enum AlignmentMode {
-    Local,
+    //Local,
     Semiglobal,
     Global,
     Custom,
@@ -102,7 +102,7 @@ impl Alignment {
     /// };
     /// assert_eq!(alignment.cigar(false), "3S3=1X2I2D1S");
     /// ```
-    pub fn cigar(&self, hard_clip: bool) -> String {
+    /*pub fn cigar(&self, hard_clip: bool) -> String {
         match self.mode {
             AlignmentMode::Global => panic!("CIGAR function not supported for Global Alignment mode."),
             AlignmentMode::Local => panic!("CIGAR function not supported for Local Alignment mode."),
@@ -185,7 +185,7 @@ impl Alignment {
         }
         path.reverse();
         path
-    }
+    }*/
 
     /// Filter out Xclip and Yclip operations from the list of operations. Useful
     /// when invoking the standard modes.
@@ -195,7 +195,7 @@ impl Alignment {
             .retain(|x| (*x == Match || *x == Subst || *x == Ins || *x == Del));
     }
 
-    /// Number of bases in reference sequence that are aligned
+    /*/// Number of bases in reference sequence that are aligned
     pub fn y_aln_len(&self) -> usize {
         self.yend - self.ystart
     }
@@ -203,7 +203,7 @@ impl Alignment {
     /// Number of bases in query sequence that are aigned
     pub fn x_aln_len(&self) -> usize {
         self.xend - self.xstart
-    }
+    }*/
 }
 
 
@@ -229,7 +229,7 @@ pub struct MatchParams {
 }
 
 impl MatchParams {
-    /// Create new MatchParams instance with given match and mismatch scores
+    /*/// Create new MatchParams instance with given match and mismatch scores
     ///
     /// # Arguments
     ///
@@ -242,7 +242,7 @@ impl MatchParams {
             match_score,
             mismatch_score,
         }
-    }
+    }*/
 }
 
 impl MatchFunc for MatchParams {
@@ -285,7 +285,7 @@ pub struct Scoring<F: MatchFunc> {
 }
 
 impl Scoring<MatchParams> {
-    /// Create new Scoring instance with given gap open, gap extend penalties
+    /*/// Create new Scoring instance with given gap open, gap extend penalties
     /// match and mismatch scores. The clip penalties are set to `MIN_SCORE` by default
     ///
     /// # Arguments
@@ -294,12 +294,7 @@ impl Scoring<MatchParams> {
     /// * `gap_extend` - the score for extending a gap (should not be positive)
     /// * `match_score` - the score for a match
     /// * `mismatch_score` - the score for a mismatch
-    pub fn from_scores(
-        gap_open: i32,
-        gap_extend: i32,
-        match_score: i32,
-        mismatch_score: i32,
-    ) -> Self {
+    pub fn from_scores(gap_open: i32, gap_extend: i32, match_score: i32, mismatch_score: i32) -> Self {
         assert!(gap_open <= 0, "gap_open can't be positive");
         assert!(gap_extend <= 0, "gap_extend can't be positive");
 
@@ -313,7 +308,7 @@ impl Scoring<MatchParams> {
             yclip_prefix: MIN_SCORE,
             yclip_suffix: MIN_SCORE,
         }
-    }
+    }*/
 }
 
 impl<F: MatchFunc> Scoring<F> {
@@ -342,7 +337,7 @@ impl<F: MatchFunc> Scoring<F> {
         }
     }
 
-    /// Sets the prefix and suffix clipping penalties for x to the input value
+    /*/// Sets the prefix and suffix clipping penalties for x to the input value
     ///
     /// # Arguments
     ///
@@ -361,9 +356,9 @@ impl<F: MatchFunc> Scoring<F> {
         self.xclip_prefix = penalty;
         self.xclip_suffix = penalty;
         self
-    }
+    }*/
 
-    /// Sets the prefix clipping penalty for x to the input value
+    /*/// Sets the prefix clipping penalty for x to the input value
     ///
     /// # Arguments
     ///
@@ -382,9 +377,9 @@ impl<F: MatchFunc> Scoring<F> {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.xclip_prefix = penalty;
         self
-    }
+    }*/
 
-    /// Sets the suffix clipping penalty for x to the input value
+    /*/// Sets the suffix clipping penalty for x to the input value
     ///
     /// # Arguments
     ///
@@ -402,9 +397,9 @@ impl<F: MatchFunc> Scoring<F> {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.xclip_suffix = penalty;
         self
-    }
+    }*/
 
-    /// Sets the prefix and suffix clipping penalties for y to the input value
+    /*/// Sets the prefix and suffix clipping penalties for y to the input value
     ///
     /// # Arguments
     ///
@@ -417,15 +412,15 @@ impl<F: MatchFunc> Scoring<F> {
     /// assert!(scoring.yclip_prefix == -5);
     /// assert!(scoring.xclip_suffix == MIN_SCORE);
     /// assert!(scoring.yclip_suffix == -5);
-    /// ```
-    pub fn yclip(mut self, penalty: i32) -> Self {
+    /// ```*/
+    /*pub fn yclip(mut self, penalty: i32) -> Self {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.yclip_prefix = penalty;
         self.yclip_suffix = penalty;
         self
-    }
+    }*/
 
-    /// Sets the prefix clipping penalty for y to the input value
+    /*/// Sets the prefix clipping penalty for y to the input value
     ///
     /// # Arguments
     ///
@@ -438,14 +433,14 @@ impl<F: MatchFunc> Scoring<F> {
     /// assert!(scoring.yclip_prefix == -5);
     /// assert!(scoring.xclip_suffix == MIN_SCORE);
     /// assert!(scoring.yclip_suffix == MIN_SCORE);
-    /// ```
-    pub fn yclip_prefix(mut self, penalty: i32) -> Self {
+    /// ```*/
+    /*pub fn yclip_prefix(mut self, penalty: i32) -> Self {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.yclip_prefix = penalty;
         self
-    }
+    }*/
 
-    /// Sets the suffix clipping penalty for y to the input value
+    /*/// Sets the suffix clipping penalty for y to the input value
     ///
     /// # Arguments
     ///
@@ -463,7 +458,7 @@ impl<F: MatchFunc> Scoring<F> {
         assert!(penalty <= 0, "Clipping penalty can't be positive");
         self.yclip_suffix = penalty;
         self
-    }
+    }*/
 }
 
 /// A generalized Smith-Waterman aligner.
@@ -517,18 +512,16 @@ pub struct Aligner<F: MatchFunc> {
     scoring: Scoring<F>,
 }
 
-fn seq_to_vec(seq: &[u8]) -> Vec<u64>
-{
+/*fn seq_to_vec(seq: &[u8]) -> Vec<u64> {
     let mut res = Vec::new();
     for c in seq.iter()
     {
         res.push(match *c as char { 'A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 5, 'x' => 6,_ => 0});
     }
     res
-}
+}*/
 
-
-const DEFAULT_ALIGNER_CAPACITY: usize = 200;
+//const DEFAULT_ALIGNER_CAPACITY: usize = 200;
 
 impl<F: MatchFunc> Aligner<F> {
     /// Create new aligner instance with given gap open and gap extend penalties
@@ -540,7 +533,7 @@ impl<F: MatchFunc> Aligner<F> {
     /// * `gap_extend` - the score for extending a gap (should be negative)
     /// * `match_fn` - function that returns the score for substitutions
     ///    (see also [`bio::alignment::pairwise::Scoring`](struct.Scoring.html))
-    pub fn new(gap_open: i32, gap_extend: i32, match_fn: F) -> Self {
+    /*pub fn new(gap_open: i32, gap_extend: i32, match_fn: F) -> Self {
         Aligner::with_capacity(
             DEFAULT_ALIGNER_CAPACITY,
             DEFAULT_ALIGNER_CAPACITY,
@@ -548,7 +541,7 @@ impl<F: MatchFunc> Aligner<F> {
             gap_extend,
             match_fn,
         )
-    }
+    }*/
 
     /// Create new aligner instance. The size hints help to
     /// avoid unnecessary memory allocations.
@@ -582,23 +575,23 @@ impl<F: MatchFunc> Aligner<F> {
     /// # Arguments
     ///
     /// * `scoring` - the scoring struct (see bio::alignment::pairwise::Scoring)
-    pub fn with_scoring(scoring: Scoring<F>) -> Self {
+    /*pub fn with_scoring(scoring: Scoring<F>) -> Self {
         Aligner::with_capacity_and_scoring(
             DEFAULT_ALIGNER_CAPACITY,
             DEFAULT_ALIGNER_CAPACITY,
             scoring,
         )
-    }
+    }*/
 
     /// Create new aligner instance with scoring and size hint. The size hints help to
     /// avoid unnecessary memory allocations.
     ///
     /// # Arguments
     ///
-    /// * `m` - the expected size of x
-    /// * `n` - the expected size of y
+    /// * `x_exp` - the expected size of x
+    /// * `y_exp` - the expected size of y
     /// * `scoring` - the scoring struct
-    pub fn with_capacity_and_scoring(m: usize, n: usize, scoring: Scoring<F>) -> Self {
+    /*pub fn with_capacity_and_scoring(m: usize, n: usize, scoring: Scoring<F>) -> Self {
         assert!(scoring.gap_open <= 0, "gap_open can't be positive");
         assert!(scoring.gap_extend <= 0, "gap_extend can't be positive");
         assert!(
@@ -628,7 +621,7 @@ impl<F: MatchFunc> Aligner<F> {
             traceback: Traceback::with_capacity(m, n),
             scoring,
         }
-    }
+    }*/
 
     /// The core function to compute the alignment
     ///
@@ -637,8 +630,8 @@ impl<F: MatchFunc> Aligner<F> {
     /// * `x` - Textslice
     /// * `y` - Textslice
     pub fn custom(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
-        let (m, n) = (x.len(), y.len());
-        self.traceback.init(m, n);
+        let (x_exp, y_exp) = (x.len(), y.len());
+        self.traceback.init(x_exp, y_exp);
 
         // Set the initial conditions
         // We are repeating some work, but that's okay!
@@ -647,9 +640,9 @@ impl<F: MatchFunc> Aligner<F> {
             self.D[k].clear();
             self.S[k].clear();
 
-            self.D[k].extend(repeat(MIN_SCORE).take(m + 1));
-            self.I[k].extend(repeat(MIN_SCORE).take(m + 1));
-            self.S[k].extend(repeat(MIN_SCORE).take(m + 1));
+            self.D[k].extend(repeat(MIN_SCORE).take(x_exp + 1));
+            self.I[k].extend(repeat(MIN_SCORE).take(x_exp + 1));
+            self.S[k].extend(repeat(MIN_SCORE).take(x_exp + 1));
 
             self.S[k][0] = 0;
 
@@ -658,16 +651,16 @@ impl<F: MatchFunc> Aligner<F> {
                 tb.set_all(TB_START);
                 self.traceback.set(0, 0, tb);
                 self.Lx.clear();
-                self.Lx.extend(repeat(0usize).take(n + 1));
+                self.Lx.extend(repeat(0usize).take(y_exp + 1));
                 self.Ly.clear();
-                self.Ly.extend(repeat(0usize).take(m + 1));
+                self.Ly.extend(repeat(0usize).take(x_exp + 1));
                 self.Sn.clear();
-                self.Sn.extend(repeat(MIN_SCORE).take(m + 1));
+                self.Sn.extend(repeat(MIN_SCORE).take(x_exp + 1));
                 self.Sn[0] = self.scoring.yclip_suffix;
-                self.Ly[0] = n;
+                self.Ly[0] = y_exp;
             }
 
-            for i in 1..=m {
+            for i in 1..=x_exp {
                 let mut tb = TracebackCell::new();
                 tb.set_all(TB_START);
                 if i == 1 {
@@ -687,7 +680,7 @@ impl<F: MatchFunc> Aligner<F> {
                     }
                 }
 
-                if i == m {
+                if i == x_exp {
                     tb.set_s_bits(TB_XCLIP_SUFFIX);
                 } else {
                     self.S[k][i] = MIN_SCORE;
@@ -704,9 +697,9 @@ impl<F: MatchFunc> Aligner<F> {
                 }
 
                 // Track the score if we do a suffix clip (x) after this character
-                if i != m && self.S[k][i] + self.scoring.xclip_suffix > self.S[k][m] {
-                    self.S[k][m] = self.S[k][i] + self.scoring.xclip_suffix;
-                    self.Lx[0] = m - i;
+                if i != x_exp && self.S[k][i] + self.scoring.xclip_suffix > self.S[k][x_exp] {
+                    self.S[k][x_exp] = self.S[k][i] + self.scoring.xclip_suffix;
+                    self.Lx[0] = x_exp - i;
                 }
 
                 if k == 0 {
@@ -715,12 +708,12 @@ impl<F: MatchFunc> Aligner<F> {
                 // Track the score if we do suffix clip (y) from here
                 if self.S[k][i] + self.scoring.yclip_suffix > self.Sn[i] {
                     self.Sn[i] = self.S[k][i] + self.scoring.yclip_suffix;
-                    self.Ly[i] = n;
+                    self.Ly[i] = y_exp;
                 }
             }
         }
 
-        for j in 1..=n {
+        for j in 1..=y_exp {
             let curr = j % 2;
             let prev = 1 - curr;
 
@@ -753,20 +746,20 @@ impl<F: MatchFunc> Aligner<F> {
                     tb.set_s_bits(TB_YCLIP_PREFIX);
                 }
 
-                if j == n && self.Sn[0] > self.S[curr][0] {
+                if j == y_exp && self.Sn[0] > self.S[curr][0] {
                     // Check if the suffix clip score is better
                     self.S[curr][0] = self.Sn[0];
                     tb.set_s_bits(TB_YCLIP_SUFFIX);
                 // Track the score if we do suffix clip (y) from here
                 } else if self.S[curr][0] + self.scoring.yclip_suffix > self.Sn[0] {
                     self.Sn[0] = self.S[curr][0] + self.scoring.yclip_suffix;
-                    self.Ly[0] = n - j;
+                    self.Ly[0] = y_exp - j;
                 }
 
                 self.traceback.set(0, j, tb);
             }
 
-            for i in 1..=m {
+            for i in 1..=x_exp {
                 self.S[curr][i] = MIN_SCORE;
             }
 
@@ -776,7 +769,7 @@ impl<F: MatchFunc> Aligner<F> {
                     self.scoring.yclip_prefix,
                     self.scoring.gap_open + self.scoring.gap_extend * (j as i32),
                 );
-            for i in 1..m + 1 {
+            for i in 1..x_exp + 1 {
                 let p = x[i - 1];
                 let mut tb = TracebackCell::new();
 
@@ -840,15 +833,15 @@ impl<F: MatchFunc> Aligner<F> {
                 self.D[curr][i] = best_d_score;
 
                 // Track the score if we do suffix clip (x) from here
-                if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][m] {
-                    self.S[curr][m] = self.S[curr][i] + self.scoring.xclip_suffix;
-                    self.Lx[j] = m - i;
+                if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][x_exp] {
+                    self.S[curr][x_exp] = self.S[curr][i] + self.scoring.xclip_suffix;
+                    self.Lx[j] = x_exp - i;
                 }
 
                 // Track the score if we do suffix clip (y) from here
                 if self.S[curr][i] + self.scoring.yclip_suffix > self.Sn[i] {
                     self.Sn[i] = self.S[curr][i] + self.scoring.yclip_suffix;
-                    self.Ly[i] = n - j;
+                    self.Ly[i] = y_exp - j;
                 }
 
                 self.traceback.set(i, j, tb);
@@ -856,24 +849,24 @@ impl<F: MatchFunc> Aligner<F> {
         }
 
         // Handle suffix clipping in the j=n case
-        for i in 0..=m {
-            let j = n;
+        for i in 0..=x_exp {
+            let j = y_exp;
             let curr = j % 2;
             if self.Sn[i] > self.S[curr][i] {
                 self.S[curr][i] = self.Sn[i];
                 self.traceback.get_mut(i, j).set_s_bits(TB_YCLIP_SUFFIX);
             }
-            if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][m] {
-                self.S[curr][m] = self.S[curr][i] + self.scoring.xclip_suffix;
-                self.Lx[j] = m - i;
-                self.traceback.get_mut(m, j).set_s_bits(TB_XCLIP_SUFFIX);
+            if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][x_exp] {
+                self.S[curr][x_exp] = self.S[curr][i] + self.scoring.xclip_suffix;
+                self.Lx[j] = x_exp - i;
+                self.traceback.get_mut(x_exp, j).set_s_bits(TB_XCLIP_SUFFIX);
             }
         }
 
         // Since there could be a change in the last column of S,
         // recompute the last column of I as this could also change
-        for i in 1..=m {
-            let j = n;
+        for i in 1..=x_exp {
+            let j = y_exp;
             let curr = j % 2;
             let s_score = self.S[curr][i - 1] + self.scoring.gap_open + self.scoring.gap_extend;
             if s_score > self.I[curr][i] {
@@ -884,21 +877,21 @@ impl<F: MatchFunc> Aligner<F> {
             if s_score > self.S[curr][i] {
                 self.S[curr][i] = s_score;
                 self.traceback.get_mut(i, j).set_s_bits(TB_INS);
-                if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][m] {
-                    self.S[curr][m] = self.S[curr][i] + self.scoring.xclip_suffix;
-                    self.Lx[j] = m - i;
-                    self.traceback.get_mut(m, j).set_s_bits(TB_XCLIP_SUFFIX);
+                if self.S[curr][i] + self.scoring.xclip_suffix > self.S[curr][x_exp] {
+                    self.S[curr][x_exp] = self.S[curr][i] + self.scoring.xclip_suffix;
+                    self.Lx[j] = x_exp - i;
+                    self.traceback.get_mut(x_exp, j).set_s_bits(TB_XCLIP_SUFFIX);
                 }
             }
         }
 
-        let mut i = m;
-        let mut j = n;
+        let mut i = x_exp;
+        let mut j = y_exp;
         let mut operations = Vec::with_capacity(x.len());
         let mut xstart: usize = 0usize;
         let mut ystart: usize = 0usize;
-        let mut xend = m;
-        let mut yend = n;
+        let mut xend = x_exp;
+        let mut yend = y_exp;
 
         let mut last_layer = self.traceback.get(i, j).get_s_bits();
 
@@ -959,26 +952,23 @@ impl<F: MatchFunc> Aligner<F> {
 
         operations.reverse();
         Alignment {
-            score: self.S[n % 2][m],
+            score: self.S[y_exp % 2][x_exp],
             ystart,
             xstart,
             yend,
             xend,
-            ylen: n,
-            xlen: m,
+            ylen: y_exp,
+            xlen: x_exp,
             operations,
             mode: AlignmentMode::Custom,
         }
     }
 
-    pub fn global_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
+    /*pub fn global_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
         self.global(&seq_to_vec(x),&seq_to_vec(y))
-    }
-
-
-
+    }*/
     /// Calculate global alignment of x against y.
-    pub fn global(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
+    /*pub fn global(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
         // Store the current clip penalties
         let clip_penalties = [
             self.scoring.xclip_prefix,
@@ -1004,11 +994,11 @@ impl<F: MatchFunc> Aligner<F> {
         self.scoring.yclip_suffix = clip_penalties[3];
 
         alignment
-    }
+    }*/
 
-    pub fn semiglobal_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
+    /*pub fn semiglobal_str(&mut self, x: &[u8], y: &[u8]) -> Alignment {
         self.semiglobal(&seq_to_vec(x),&seq_to_vec(y))
-    }
+    }*/
 
     /// Calculate semiglobal alignment of x against y (x is global, y is local).
     pub fn semiglobal(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
@@ -1042,8 +1032,8 @@ impl<F: MatchFunc> Aligner<F> {
         alignment
     }
 
-    /// Calculate local alignment of x against y.
-    pub fn local(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
+    // Calculate local alignment of x against y.
+    /*pub fn local(&mut self, x: TextSlice<'_>, y: TextSlice<'_>) -> Alignment {
         // Store the current clip penalties
         let clip_penalties = [
             self.scoring.xclip_prefix,
@@ -1072,7 +1062,7 @@ impl<F: MatchFunc> Aligner<F> {
         self.scoring.yclip_suffix = clip_penalties[3];
 
         alignment
-    }
+    }*/
 }
 
 /// Packed representation of one cell of a Smith-Waterman traceback matrix.

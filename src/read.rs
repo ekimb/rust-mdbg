@@ -1,22 +1,9 @@
-use super::Params;
-use super::minimizers;
-use nthash::{ntc64,NtHashIterator};
+use super::{Kmer, Repr, CorrMap, Params, minimizers, RacyBloom, REVCOMP_AWARE, utils, poa};
+use nthash::{NtHashIterator};
 use std::collections::{HashMap,HashSet};
-use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::collections::VecDeque;
-use std::fs::File;
-use super::Kmer;
-use super::RacyBloom;
-use super::revcomp_aware;
-use super::ec_reads;
-use super::utils;
-use super::poa;
-use std::io::BufWriter;
-use std::path::PathBuf;
-use std::error::Error;
-use std::io::Write;
+//use std::collections::hash_map::Entry::{Occupied, Vacant};
+//use std::collections::VecDeque;
 use super::utils::pretty_minvec;
-use super::utils::median;
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
 #[derive(Clone, Default)]
 pub struct Read {
@@ -35,23 +22,22 @@ pub struct Lmer {
 }
 
 impl Read {
-    pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, int_to_minimizer: &HashMap<u64, String>, uhs_bloom: &RacyBloom, lcp_bloom: &RacyBloom) -> Self {
-        if params.uhs {return Read::extract_uhs(inp_id, inp_seq, params, minimizer_to_int, uhs_bloom)}
-        else if params.lcp {return Read::extract_lcp(inp_id, inp_seq, params, minimizer_to_int, lcp_bloom)}
-        else {return Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)}
+    pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, uhs_bloom: &RacyBloom, lcp_bloom: &RacyBloom) -> Self {
+        if params.uhs {Read::extract_uhs(inp_id, inp_seq, params, minimizer_to_int, uhs_bloom)}
+        else if params.lcp {Read::extract_lcp(inp_id, inp_seq, params, minimizer_to_int, lcp_bloom)}
+        else {Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)}
     }
 
     //delete
-    pub fn extract_lcp(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, lcp_bloom: &RacyBloom) -> Self {
-        let size_miniverse = params.size_miniverse as u64;
+    pub fn extract_lcp(inp_id: &str, inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, lcp_bloom: &RacyBloom) -> Self {
         let density = params.density;
         let l = params.l;
-        let mut read_minimizers = Vec::<String>::new();
+        let read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
-        let mut tup = (String::new(), Vec::<usize>::new());
-        let mut inp_seq = String::new();
+        let tup;
+        let inp_seq;
         if !params.use_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
@@ -59,13 +45,13 @@ impl Read {
         else {
             inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
         }
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i, x)| *x <= hash_bound);
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(_i, x)| *x <= hash_bound);
         for (i, mut hash) in iter {
             let lmer = &inp_seq[i..i+l];
             if lmer.contains('N') {continue;}
             if params.error_correct || params.has_lmer_counts {
                 let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
-                if !res.is_some() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
+                if res.is_none() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
             if lcp_bloom.get().check_and_add(&hash) {
@@ -75,16 +61,15 @@ impl Read {
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
-    pub fn extract_uhs(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, uhs_bloom: &RacyBloom) -> Self {
-        let size_miniverse = params.size_miniverse as u64;
+    pub fn extract_uhs(inp_id: &str, inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, uhs_bloom: &RacyBloom) -> Self {
         let density = params.density;
         let l = params.l;
-        let mut read_minimizers = Vec::<String>::new();
+        let read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
-        let mut tup = (String::new(), Vec::<usize>::new());
-        let mut inp_seq = String::new();
+        let tup;
+        let inp_seq;
         if !params.use_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
@@ -92,13 +77,13 @@ impl Read {
         else {
             inp_seq = inp_seq_raw.clone(); //already HPCd before so get the raw sequence
         }
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i, x)| *x <= hash_bound);
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(_i, x)| *x <= hash_bound);
         for (i, hash) in iter {
             let lmer = &inp_seq[i..i+l];
             let mut hash : u64 = hash;
             if params.error_correct || params.has_lmer_counts {
                 let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
-                if ! res.is_some() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
+                if res.is_none() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
             if uhs_bloom.get().check_and_add(&hash) {
@@ -127,17 +112,16 @@ impl Read {
         (hpc_seq, pos_vec)
     }
     
-    pub fn extract_density(inp_id: &str, mut inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>) -> Self {
-        let size_miniverse = params.size_miniverse as u64;
+    pub fn extract_density(inp_id: &str, inp_seq_raw: String, params: &Params, minimizer_to_int: &HashMap<String, u64>) -> Self {
         let density = params.density;
         let l = params.l;
-        let mut read_minimizers = Vec::<String>::new();
+        let read_minimizers = Vec::<String>::new();
         let mut read_minimizers_pos = Vec::<usize>::new();
         let mut read_transformed = Vec::<u64>::new();
         //println!("parsing new read: {}\n",inp_seq);
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
         let mut tup = (String::new(), Vec::<usize>::new());
-        let mut inp_seq = String::new();
+        let inp_seq;
         if !params.use_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
@@ -148,13 +132,13 @@ impl Read {
         if inp_seq.len() < l {
             return Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false};
         }
-        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(i, x)| *x <= hash_bound);
+        let iter = NtHashIterator::new(inp_seq.as_bytes(), l).unwrap().enumerate().filter(|(_i, x)| *x <= hash_bound);
         for (i,hash) in iter {
             let lmer = &inp_seq[i..i+l];
             let mut hash :u64 = hash;
             if params.error_correct || params.has_lmer_counts {
                 let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
-                if !res.is_some() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
+                if res.is_none() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
             if !params.use_hpc {read_minimizers_pos.push(tup.1[i]);} //if not HPCd need raw sequence positions
@@ -164,25 +148,23 @@ impl Read {
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
 
-    pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>) {
+    pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut CorrMap) {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));
     }
 
-    pub fn read_to_kmers(&mut self, params: &Params) -> Vec<(Kmer, String, bool, String, (usize, usize))> {
+    pub fn read_to_kmers(&mut self, params: &Params) -> Repr {
         let k = params.k;
         let l = params.l;
-        let n = params.n;
-        let min_kmer_abundance = params.min_kmer_abundance;
-        let mut output : Vec<(Kmer, String, bool, String, (usize, usize))> = Vec::new();
+        let mut output : Repr = Vec::new();
         for i in 0..(self.transformed.len()- k + 1) {
             let mut node : Kmer = Kmer::make_from(&self.transformed[i..i+k]);
             let mut seq_reversed = false;
-            if revcomp_aware { 
+            if REVCOMP_AWARE { 
                 let (node_norm, reversed) = node.normalize(); 
                 node = node_norm;
                 seq_reversed = reversed;
             } 
-            let mut seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
+            let seq = self.seq[self.minimizers_pos[i] as usize..(self.minimizers_pos[i+k-1] as usize + l)].to_string();
             //if seq_reversed {
             //    seq = utils::revcomp(&seq);
             //}
@@ -226,7 +208,7 @@ impl Read {
         }
         output
     }
-    pub fn poa_correct(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut HashMap<String, (String, Vec<String>, Vec<usize>, Vec<u64>)>, reads_by_id: &HashMap<String, Read>) {
+    pub fn poa_correct(&mut self, int_to_minimizer: &HashMap<u64, String>, poa_map: &mut HashMap<String, Vec<String>>, buckets: &Buckets, params : &Params, mut corrected_map: &mut CorrMap, reads_by_id: &HashMap<String, Read>) {
 
 	// poa alignment scoring parameters
 	let score = |a: u64, b: u64| if a == b {1i32} else {-1i32};
@@ -234,18 +216,16 @@ impl Read {
         //let scoring = poa::Scoring::new(-1, 0, score); // the hope is that a 0 gap extend penalty somehow approximates semiglobal, but that's not quite true
         // other alignment parameters
         let dist_threshold = 0.15; // mash distance cut-off for read recruitment
-        let top_X_aligned_reads = 0; // get the 10 best read alignments per template
-        let mut poa_global_min_score = std::i32::MIN; // discard all alignments below that score (discarded when top_X_aligned_read > 0)
+        //let top_x_aligned_reads = 0; // get the 10 best read alignments per template
+        let poa_global_min_score = std::i32::MIN; // discard all alignments below that score (discarded when top_X_aligned_read > 0)
         //let mut poa_global_min_score = -10; 
         let debug = params.debug;
         let n = params.n;
-        let k = params.k;
         let l = params.l;
-        let mut read_minimizers = &self.minimizers;
-        let mut read_minimizers_pos = &self.minimizers_pos;
-        let mut read_transformed = &self.transformed;
-        let mut seq_id = &self.id;
-        let mut seq_str = &self.seq;
+        let read_minimizers_pos = &self.minimizers_pos;
+        let read_transformed = &self.transformed;
+        let seq_id = &self.id;
+        let seq_str = &self.seq;
         let mut added_reads : HashSet<String> = HashSet::new();
         let mut bucket_reads = Vec::<&Read>::new();
         let mut poa_ids = Vec::<String>::new();
@@ -264,7 +244,7 @@ impl Read {
             }   
         }
         // filter bucket_reads so that it only contains reads below a mash distance of template
-        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(seq, dist)| *dist < dist_threshold).collect();
+        let mut bucket_reads : Vec<(&Read, f64)> = bucket_reads.iter().map(|seq| (*seq, minimizers::dist(self, seq, &params))).filter(|(_seq, dist)| *dist < dist_threshold).collect();
         // sort reads by their distance
         bucket_reads.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         let max_poa_reads = 80;
@@ -299,12 +279,12 @@ impl Read {
         */
         let mut nb_aln_forward = 0;
         let mut nb_aln_backward = 0;
-        for i in 0..bucket_reads.len() {
-            poa_ids.push(bucket_reads[i].0.id.to_string());
+        for bucket_read in &bucket_reads {
+            poa_ids.push(bucket_read.0.id.to_string());
             // don't know how to save alignments so i'll just waste time and recompute the best
             // scoring alignment.
             // it's a TODO optimization
-            let read = &bucket_reads[i].0;
+            let read = &bucket_read.0;
             let seq = &read.seq;
             let pos = &read.minimizers_pos;
             aligner.semiglobal(&read.transformed, Some(seq), Some(pos));
@@ -312,24 +292,24 @@ impl Read {
             if debug {println!("--- Forward alignment score: {} (ID: {})\nMinimizer-space: {}\n{}\n---", aligner.alignment().score, read.id.to_string(), pretty_minvec(&read.transformed), aligner.print_aln());}
             let mut rev_read = read.transformed.clone();
             rev_read.reverse();
-            let mut rev_seq = utils::revcomp(&seq);
+            let rev_seq = utils::revcomp(&seq);
             let mut rev_minim_pos = pos.clone();
             rev_minim_pos.reverse();
-            for i in 0..rev_minim_pos.len() {
-                rev_minim_pos[i] = seq.len() - l - rev_minim_pos[i];
+            for pos in &mut rev_minim_pos {
+                *pos = seq.len() - l - *pos;
             }
             aligner.semiglobal(&rev_read, Some(&rev_seq), Some(&rev_minim_pos));
             if debug { println!("--- Backward alignment score: {} (ID: {})\nMinimizer-space: {}\n{}\n---", aligner.alignment().score, read.id.to_string(), pretty_minvec(&rev_read), aligner.print_aln());}
             let bwd_score = aligner.alignment().score;
-            let mut aln_ori = "";
+            //let mut aln_ori = "";
             if std::cmp::max(fwd_score, bwd_score) >= poa_global_min_score { 
                if fwd_score > bwd_score { 
                     aligner.semiglobal(&read.transformed, Some(seq), Some(pos));
-                    aln_ori = "fwd";
+                    //aln_ori = "fwd";
                     nb_aln_forward += 1;
                 } else { 
                     aligner.semiglobal(&rev_read, Some(&rev_seq), Some(&rev_minim_pos));
-                    aln_ori = "bwd";
+                    //aln_ori = "bwd";
                     nb_aln_backward += 1;
                 }
                 aligner.add_to_graph(); 
@@ -347,10 +327,9 @@ impl Read {
         let mut consensus_str = String::new();
         let mut pos_idx = 0;
         let mut consensus_pos = Vec::<usize>::new();
-        if consensus.len() == 0 {return}
-        for i in 0..consensus_edge_seqs.len() {
+        if consensus.is_empty() {return}
+        for insert in consensus_edge_seqs.iter() {
             consensus_pos.push(pos_idx);
-            let insert = &consensus_edge_seqs[i];
             consensus_str.push_str(insert);
             pos_idx += insert.len();
         }
@@ -359,7 +338,7 @@ impl Read {
         let mut corrected_count = 0;
         let mut threshold = params.correction_threshold;
         if params.correction_threshold == 0 {threshold = 0 as i32;}
-        for (read, dist) in bucket_reads.iter_mut() {
+        for (read, _dist) in bucket_reads.iter_mut() {
             if corrected_count >= threshold {break;}
             if !read.corrected {
                 read.label(consensus_str.to_string(), consensus_read.to_vec(), consensus_pos.to_vec(), consensus.to_vec(), &mut corrected_map);
