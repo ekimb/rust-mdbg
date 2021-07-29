@@ -1,4 +1,8 @@
-`rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly
+`rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly <br>
+[![DOI](https://zenodo.org/badge/310619686.svg)](https://zenodo.org/badge/latestdoi/310619686)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ekimb/rust-mdbg)
+![GitHub last commit](https://img.shields.io/github/last-commit/ekimb/rust-mdbg)
+![GitHub](https://img.shields.io/github/license/ekimb/rust-mdbg)
 =========
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as [PacBio HiFi](https://www.pacb.com/smrt-science/smrt-sequencing/hifi-reads-for-highly-accurate-long-read-sequencing/).
