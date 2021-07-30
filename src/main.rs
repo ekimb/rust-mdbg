@@ -610,7 +610,7 @@ fn main() {
                 let seqlen = match seq {Some(read) => read.len() as u32, None => read_offsets.unwrap().2 as u32};
                 // simulate the bf by inserting with abundance 0; will be incremented to 1 in
                 // the code below
-                dbg_nodes.insert(node.clone(), DbgEntry{index: cur_node_index, abundance: 1, seqlen, shift: lowprec_shift}); 
+                dbg_nodes.insert(node.clone(), DbgEntry{index: cur_node_index, abundance: 0, seqlen, shift: lowprec_shift}); 
                 contains_key = true;
             }
         }
