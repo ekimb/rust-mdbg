@@ -159,16 +159,16 @@ In both cases, this will create an `example.complete.gfa` file that you can conv
 * [Rayan Chikhi](http://rayan.chikhi.name) at the Department of Computational Biology at Institut Pasteur
 
 ## Citation
-
-[Minimizer-space de Bruijn graphs](https://www.biorxiv.org/content/10.1101/2021.06.09.447586v1) (2021) BiorXiv
+* Barış Ekim, Bonnie Berger, and Rayan Chikhi, [Minimizer-space de Bruijn graphs: Whole-genome assembly of long reads in minutes on a personal computer](https://www.sciencedirect.com/science/article/pii/S240547122100332X), Cell Systems (2021).
+* Barış Ekim, Bonnie Berger, and Rayan Chikhi, [Minimizer-space de Bruijn graphs](https://www.biorxiv.org/content/10.1101/2021.06.09.447586v1), biorXiv preprint (2021).
 ```
 @article {mdbg,
 	author = {Ekim, Bar{\i}{\c s} and Berger, Bonnie and Chikhi, Rayan},
-	title = {Minimizer-space de Bruijn graphs},
+	title = {Minimizer-space de Bruijn graphs: Whole-genome assembly of long reads in minutes on a personal computer},
+	journal = {Cell Systems},
 	year = {2021},
-	doi = {10.1101/2021.06.09.447586},
-	publisher = {Cold Spring Harbor Laboratory},
-	journal = {bioRxiv}
+	issn = {2405-4712},
+	doi = {https://doi.org/10.1016/j.cels.2021.08.009}
 }
 ```
 
