@@ -221,7 +221,8 @@ fn autodetect_k_l_d(filename: &PathBuf, fasta_reads: bool) -> (usize, usize, f64
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "rust-mdbg")]
+#[structopt(name = "rust-mdbg",
+    global_settings = &[structopt::clap::AppSettings::ColoredHelp, structopt::clap::AppSettings::ArgRequiredElseHelp])]
 /// Original implementation of minimizer-space de Bruijn graphs (mdBG) for genome assembly.
 ///
 /// rust-mdbg is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, 
@@ -242,7 +243,7 @@ struct Opt {
     /// lz4-compressed (.lz4). Lowercase bases are currently not supported;
     /// see documentation for formatting.
     #[structopt(parse(from_os_str))]
-    reads: Option<PathBuf>,
+    reads: PathBuf,
     #[structopt(long)]
     /// Universal k-mer file (enables universal hitting sets (UHS))
     ///
@@ -391,7 +392,6 @@ fn main() {
     let opt = Opt::from_args();      
     let mut uhs : bool = false;
     let mut lcp : bool = false;
-    let mut filename = PathBuf::new();
     let mut lmer_counts_filename = PathBuf::new();
     let mut uhs_filename = String::new();
     let mut lcp_filename = String::new();
@@ -416,7 +416,7 @@ fn main() {
     let mut threads : usize = 8;
     if opt.error_correct {error_correct = true;}
     if opt.reference {reference = true; error_correct = false;}
-    if opt.reads.is_some() {filename = opt.reads.unwrap();} 
+    let filename = opt.reads;
     if filename.as_os_str().is_empty() {panic!("Please specify an input file.");}
 
     let mut fasta_reads : bool = false;
