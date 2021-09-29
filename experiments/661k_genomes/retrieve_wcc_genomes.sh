@@ -5,5 +5,5 @@ echo "type in a internet-friendly machine:"
 echo "pysradb metadata --saveto unitigs.$1.ena.txt  \$(< unitigs.$1.genomes.txt)"
 read -p "press any key"
 cut -f 6 unitigs.$1.ena.txt
-echo "distinct taxids: $(cut -f 5 unitigs.$1.ena.txt |sort|uniq|wc -l)"
+echo "distinct taxids: $(cut -f 5 unitigs.$1.ena.txt |grep -v organism_taxid |sort|uniq|wc -l)"
 

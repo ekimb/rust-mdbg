@@ -19,6 +19,13 @@ base="$1"
 
 set -x
 
+if ! command -v gfatools &> /dev/null
+then
+echo "please install gfatools"
+    exit
+fi
+
+
 /usr/bin/time gfatools asm $base.gfa       -t 10,50000 -t 10,50000 -b 100000 -b 100000 -t 10,50000 -b 100000 -b 100000 -b 100000 -t 10,50000 -b 100000 -t 10,50000 -b 1000000 -t 10,150000 -b 1000000 -u > $base.tmp1.gfa
 python $DIR/gfa_break_loops.py $base.tmp1.gfa > $base.tmp2.gfa
 
