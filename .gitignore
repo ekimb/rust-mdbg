@@ -22,3 +22,6 @@ runs
 Cargo.lock
 src/graph.py
 compute_err.py
+example/.DS_Store
+.gitignore
+.DS_Store

@@ -797,7 +797,7 @@ fn main() {
                 for (thread_num, chunk) in chunks.chunks(chunk_length).enumerate() {
                     let ec_entries = ec_entries.clone();
                     let poa_entries = poa_entries.clone();
-                    let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref output_prefix, ref mut pb, ref buckets, ref reads_by_id, |_| {
+                    let guard = s.spawn(closure!(move chunk, ref params, ref int_to_minimizer, ref buckets, ref reads_by_id, |_| {
                         let mut ec_entry = Vec::<(String, String, Vec<u64>, Vec<String>, Vec<usize>)>::new();
                         let mut corrected_map = HashMap::new();
                         let mut poa_map = HashMap::new();
