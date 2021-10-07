@@ -1,9 +1,9 @@
-`rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly <br>
+# `rust-mdbg`: Minimizer-space de Bruijn graphs (mdBG) for whole-genome assembly <br>
 [![DOI](https://zenodo.org/badge/310619686.svg)](https://zenodo.org/badge/latestdoi/310619686)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ekimb/rust-mdbg)
 ![GitHub last commit](https://img.shields.io/github/last-commit/ekimb/rust-mdbg)
 ![GitHub](https://img.shields.io/github/license/ekimb/rust-mdbg)
-=========
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/rust-mdbg/README.html)
 
 `rust-mdbg` is an ultra-fast minimizer-space de Bruijn graph (mdBG) implementation, geared towards the assembly of long and accurate reads such as [PacBio HiFi](https://www.pacb.com/smrt-science/smrt-sequencing/hifi-reads-for-highly-accurate-long-read-sequencing/).
 
@@ -16,7 +16,7 @@
 ## Limitations
 
 However, this high speed comes at a cost! :) 
-* `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as [HiCanu](https://github.com/marbl/canu) and [hifiasm](https://github.com/chhylp123/hifiasm). 
+* `rust-mdbg` gives good-quality results but still of lower contiguity and completeness than state-of-the-art assemblers such as [`HiCanu`](https://github.com/marbl/canu) and [`hifiasm`](https://github.com/chhylp123/hifiasm). 
 * `rust-mdbg` performs best with at least 40x to 50x of coverage.
 * No polishing step is implemented; so, assemblies will have around the same accuracy as the reads.
 * Cannot assemble Nanopore data due to its higher error rate (see [this comment](https://github.com/ekimb/rust-mdbg/issues/4#issuecomment-860817828))
@@ -27,7 +27,11 @@ Clone the repository (make sure you have a working Rust environment), and run
 
 `cargo build --release`
 
-For performing graph simplifications, [gfatools](https://github.com/lh3/gfatools/) is required.
+Alternatively, you can install from [`bioconda`](https://bioconda.github.io/index.html):
+
+`conda install -c bioconda rust-mdbg`
+
+which has the Rust binaries, but not the additional scripts. For performing graph simplifications, [`gfatools`](https://github.com/lh3/gfatools/) is required.
 
 ## Quick start
 
@@ -59,7 +63,7 @@ For convenience, components 2 and 3 are wrapped into a script called `magic_simp
 
 `rust-mdbg` takes a single FASTA/FASTQ input (gzip-compressed or not). Multi-line sequences, and sequences with lowercase characters, are not supported. 
 
-If you have [seqtk](https://github.com/lh3/seqtk) installed, you can use
+If you have [`seqtk`](https://github.com/lh3/seqtk) installed, you can use
 
 `seqtk seq -AU reads.unformatted.fq > reads.fa`
 
