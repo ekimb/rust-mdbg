@@ -1,6 +1,6 @@
 [package]
 name = "rust-mdbg"
-version = "0.1.0"
+version = "1.0.1"
 authors = ["ekimb, rayan"]
 edition = "2018"
 default-run = "rust-mdbg"
