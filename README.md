@@ -37,7 +37,7 @@ which has the Rust binaries, but not the additional scripts. For performing grap
 
 ```
 cargo build --release
-target/release/rust-mdbg reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
+target/release/rust-mdbg example/reads-0.00.fa.gz -k 7 --density 0.0008 -l 10 --minabund 2 --prefix example
 utils/magic_simplify example
 ```
 
