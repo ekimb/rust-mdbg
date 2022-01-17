@@ -215,6 +215,7 @@ impl Read {
     }
 
     // copied from hifimap's code
+    // except that we use down-sampled syncmers here, otherwise we'd get too many minimizers
     pub fn extract_syncmers(inp_id: &str, inp_seq_raw: String, params: &Params) -> Self {
         let l = params.l;
 	let hash_bound = ((params.density as f64) * 4_usize.pow(l as u32) as f64) as u64;
@@ -295,10 +296,12 @@ impl Read {
                                     false => xl[1]
                                 };
                                 let hash_l = hash(yl, lmask);
-                                seq_hashes.push(hash_l);
-                                //pos_to_seq_coord.push(i - l + 1);
-                                if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
-                                else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                                if hash_l <= hash_bound {
+                                    seq_hashes.push(hash_l);
+                                    //pos_to_seq_coord.push(i - l + 1);
+                                    if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                    else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                                }
                             }
                         }
                         else {
@@ -312,10 +315,12 @@ impl Read {
                                     false => xl[1]
                                 };
                                 let hash_l = hash(yl, lmask);
-                                seq_hashes.push(hash_l);
-                                //pos_to_seq_coord.push(i - l + 1);
-                                if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
-                                else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                                if hash_l <= hash_bound {
+                                    seq_hashes.push(hash_l);
+                                    //pos_to_seq_coord.push(i - l + 1);
+                                    if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                    else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                                }
                             }
                         }
                     }
