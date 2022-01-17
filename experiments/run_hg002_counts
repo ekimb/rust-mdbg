@@ -9,6 +9,7 @@ threshold=$7
 distance=$8
 TH=$9
 echo "Running reads..."
+start=`date +%s`
 command time -v cargo run --manifest-path ../rust-mdbg/Cargo.toml --release -- /scratch1/ekim/HG002_hifi/HG002_hifi_hpc.fa -k $K -l $L --presimp $P --density $DENSITY --threads $TH --minabund $abund --correction-threshold $threshold --distance $distance --no-error-correct --prefix hg002_hifi
 end=`date +%s`
 echo "Completing GFA..."

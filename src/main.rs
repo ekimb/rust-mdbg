@@ -106,6 +106,8 @@ pub struct Params {
     has_lmer_counts: bool,
     use_bf: bool,
     use_hpc: bool,
+    use_syncmers: bool,
+    s: usize,
     debug: bool,
 }
 
@@ -353,10 +355,17 @@ struct Opt {
     /// for transformation into base-space.
     #[structopt(long)]
     hpc: bool,
+    /// use syncmers instead of universe minimizers
+    #[structopt(long)]
+    syncmers: bool,
+    /// syncmer substring length
+    #[structopt(short, long)]
+    s: Option<usize>,
     /// l-mer counts (enables downweighting of frequent l-mers)
+    /// use syncmers instead of universe minimizers
     ///
     /// Frequencies of l-mers in the reads (obtained using k-mer counters)
-    /// can be provided in order to downweight frequently-occurring l-mers 
+    /// can be provided in order to downweight frequently-occurring l-mers
     /// and increase contiguity.
     #[structopt(parse(from_os_str), long)]
     lmer_counts: Option<PathBuf>,
@@ -400,6 +409,7 @@ fn main() {
     let mut l : usize = 12;
     let mut n : usize = 2;
     let mut t : usize = 0;
+    let mut s : usize = 4; // syncmer mini-kmer size
     let mut density : f64 = 0.10;
     let mut min_kmer_abundance : DbgAbundance = 2;
     let mut distance : usize = 0;
@@ -413,6 +423,7 @@ fn main() {
     let mut presimp : f32 = 0.01;
     let mut use_bf : bool = false;
     let mut use_hpc : bool = false;
+    let mut use_syncmers : bool = false;
     let mut threads : usize = 8;
     if opt.error_correct {error_correct = true;}
     if opt.reference {reference = true; error_correct = false;}
@@ -449,6 +460,11 @@ fn main() {
     if opt.restart_from_postcor {restart_from_postcor = true;}
     if opt.bf {use_bf = true;}
     if opt.hpc {use_hpc = true;}
+    if opt.syncmers {use_syncmers = true;}
+    if use_syncmers
+    {
+        if opt.s.is_some() {s = opt.s.unwrap()} else {println!("Warning: Using default s value ({}).", s);}
+    }
     output_prefix = PathBuf::from(format!("graph-k{}-d{}-l{}", k, density, l));
     if opt.lmer_counts.is_some() { 
         has_lmer_counts = true;
@@ -484,6 +500,8 @@ fn main() {
         has_lmer_counts,
         use_bf,
         use_hpc,
+        use_syncmers,
+        s,
         debug,
     };
     // init some useful objects

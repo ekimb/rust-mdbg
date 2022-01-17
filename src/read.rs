@@ -4,7 +4,10 @@ use std::collections::{HashMap,HashSet};
 //use std::collections::hash_map::Entry::{Occupied, Vacant};
 //use std::collections::VecDeque;
 use super::utils::pretty_minvec;
+use std::collections::VecDeque;
+
 type Buckets<'a> = HashMap<Vec<u64>, Vec<String>>;
+
 #[derive(Clone, Default)]
 pub struct Read {
     pub id: String,
@@ -21,11 +24,74 @@ pub struct Lmer {
     pub hash: u64
 }
 
+
+const SEQ_NT4_TABLE: [u8; 256] =
+   [0, 1, 2, 3,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+        4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4];
+
+// copy from http://www.cse.yorku.ca/~oz/hash.html:
+
+pub fn hash(mut key: u64, mask: u64) -> u64 {
+        key = (!key + (key << 21)) & mask;
+        key = key ^ key >> 24;
+        key = ((key + (key << 3)) + (key << 8)) & mask;
+        key = key ^ key >> 14;
+        key = ((key + (key << 2)) + (key << 4)) & mask;
+        key = key ^ key >> 28;
+        key = (key + (key << 31)) & mask;
+        return key;
+}
+
+
+pub fn update_window(q: &mut VecDeque<u64>, q_pos: &mut VecDeque<usize>, q_min_val: u64, q_min_pos: i32, new_strobe_hashval: u64, i: usize, new_minimizer: bool) -> (u64, i32, bool) {
+    q.pop_front();
+    let popped_index = q_pos.pop_front();
+    q.push_back(new_strobe_hashval);
+    q_pos.push_back(i);
+    let mut min_val = q_min_val;
+    let mut min_pos = q_min_pos;
+    let mut new_minim = new_minimizer;
+    if min_pos == popped_index.unwrap() as i32 {
+        min_val = u64::max_value();
+        min_pos = i as i32;
+        for j in (0..q.len()).rev() {
+            if q[j] < min_val {
+                min_val = q[j];
+                min_pos = q_pos[j] as i32;
+                new_minim = true;
+            }
+        }
+    }
+    else if new_strobe_hashval < min_val { // the new value added to queue is the new minimum
+        min_val = new_strobe_hashval;
+        min_pos = i as i32;
+        new_minim = true;
+    }
+    (min_val, min_pos, new_minim)
+}
+
+
+
 impl Read {
     pub fn extract(inp_id: &str, inp_seq: String, params: &Params, minimizer_to_int: &HashMap<String, u64>, uhs_bloom: &RacyBloom, lcp_bloom: &RacyBloom) -> Self {
         if params.uhs {Read::extract_uhs(inp_id, inp_seq, params, minimizer_to_int, uhs_bloom)}
         else if params.lcp {Read::extract_lcp(inp_id, inp_seq, params, minimizer_to_int, lcp_bloom)}
-        else {Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)}
+        else if params.use_syncmers { Read::extract_syncmers(inp_id, inp_seq, params) }
+	else {Read::extract_density(inp_id, inp_seq, params, minimizer_to_int)}
     }
 
     //delete
@@ -147,6 +213,139 @@ impl Read {
         }
         Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false}
     }
+
+    // copied from hifimap's code
+    pub fn extract_syncmers(inp_id: &str, inp_seq_raw: String, params: &Params) -> Self {
+        let l = params.l;
+	let hash_bound = ((params.density as f64) * 4_usize.pow(l as u32) as f64) as u64;
+
+
+        // boilerplate code for all minimizer schemes
+        let mut tup = (String::new(), Vec::<usize>::new());
+        let seq;
+        if !params.use_hpc {
+            tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
+            seq = tup.0.as_bytes(); //assign new HPCd sequence as input
+        }
+        else {
+            seq = inp_seq_raw.as_bytes(); //already HPCd before so get the raw sequence
+        }
+        if seq.len() < l {
+            let read_minimizers = Vec::<String>::new();
+            let read_minimizers_pos = Vec::<usize>::new();
+            let read_transformed = Vec::<u64>::new();
+            return Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: read_minimizers_pos, transformed: read_transformed, seq: inp_seq_raw, corrected: false};
+        }
+
+	let s = params.s;
+	//let wmin = params.wmin;
+	//let wmax = params.wmax;
+	// using hifimap defaults
+	//let wmin = l/(l-s+1)+2; // actually unused here
+	//let wmax = l/(l-s+1)+10;
+	let smask : u64 = ((1 as u64) << 2*s) - 1;
+	let lmask : u64 = ((1 as u64) << 2*l) - 1;
+	let t = f64::ceil((l - s + 1) as f64 / 2.0) as usize;
+        let mut seq_hashes = Vec::new();
+        let mut pos_to_seq_coord = Vec::new();
+        let mut qs = VecDeque::<u64>::new();
+        let mut qs_pos = VecDeque::<usize>::new();
+        let seq_len = seq.len();
+        let mut qs_size = 0;
+        let mut qs_min_val = u64::max_value();
+        let mut qs_min_pos : i32 = -1;
+        let mut xl : [u64; 2] = [0; 2];
+        let mut xs : [u64; 2] = [0; 2];
+        let mut lp = 0;
+        let lshift : u64 = (l as u64 - 1) * 2;
+        let sshift : u64 = (s as u64 - 1) * 2;
+        for i in 0..seq_len {
+            let c = SEQ_NT4_TABLE[seq[i] as usize];
+            if c < 4 {
+                xl[0] = (xl[0] << 2 | c as u64) & lmask;
+                xl[1] = xl[1] >> 2 | ((3 - c) as u64) << lshift;
+                xs[0] = (xs[0] << 2 | c as u64) & smask;
+                xs[1] = xs[1] >> 2 | ((3 - c) as u64) << sshift;
+                lp += 1;
+                if s != 0 { //ksyncmer or kstrobemer
+                    if lp >= s {
+                        let ys : u64 = match xs[0] < xs[1]{
+                            true => xs[0],
+                            false => xs[1]
+                        };
+                        let hash_s = hash(ys, smask);
+                        if qs_size < l - s {
+                            qs.push_back(hash_s);
+                            qs_pos.push_back(i - s + 1);
+                            qs_size += 1;
+                        }
+                        else if qs_size == l - s {
+                            qs.push_back(hash_s);
+                            qs_pos.push_back(i - s + 1);
+                            qs_size += 1;
+                            for j in 0..qs_size {
+                                if qs[j] < qs_min_val {
+                                    qs_min_val = qs[j];
+                                    qs_min_pos = qs_pos[j] as i32;
+                                }
+                            }
+                            if qs_min_pos == qs_pos[t-1] as i32 {
+                                let yl : u64 = match xl[0] < xl[1]{
+                                    true => xl[0],
+                                    false => xl[1]
+                                };
+                                let hash_l = hash(yl, lmask);
+                                seq_hashes.push(hash_l);
+                                //pos_to_seq_coord.push(i - l + 1);
+                                if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                            }
+                        }
+                        else {
+                            //let mut new_minimizer = false; // is never used
+                            let tuple = update_window(&mut qs, &mut qs_pos, qs_min_val, qs_min_pos, hash_s, i - s + 1, /*new_minimizer*/ false);
+                            qs_min_val = tuple.0; qs_min_pos = tuple.1; 
+                            // new_minimizer = tuple.2;// is never used
+                            if qs_min_pos == qs_pos[t-1] as i32 {
+                                let yl : u64 = match xl[0] < xl[1] {
+                                    true => xl[0],
+                                    false => xl[1]
+                                };
+                                let hash_l = hash(yl, lmask);
+                                seq_hashes.push(hash_l);
+                                //pos_to_seq_coord.push(i - l + 1);
+                                if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                            }
+                        }
+                    }
+                }
+                else { //kminmer
+                    let yl : u64 = match xl[0] < xl[1] {
+                        true => xl[0],
+                        false => xl[1]
+                    };
+                    let hash_l = hash(yl, lmask);
+                    if hash_l <= hash_bound {
+                        seq_hashes.push(hash_l);
+
+                        if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                        else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                        //pos_to_seq_coord.push(i - l + 1);
+                    }
+                }
+            } else {
+                qs_min_val = u64::max_value();
+                qs_min_pos = -1;
+                lp = 0; xs = [0; 2]; xl = [0; 2];
+                qs_size = 0;
+                qs.clear();
+                qs_pos.clear();
+            }
+        }
+        let read_minimizers = Vec::<String>::new(); // unused everywhere it seems
+        Read {id: inp_id.to_string(), minimizers: read_minimizers, minimizers_pos: pos_to_seq_coord, transformed: seq_hashes, seq: inp_seq_raw, corrected: false}
+    } 
 
     pub fn label(&self, read_seq: String, read_minimizers: Vec<String>, read_minimizers_pos: Vec<usize>, read_transformed: Vec<u64>, corrected_map: &mut CorrMap) {
         corrected_map.insert(self.id.to_string(), (read_seq, read_minimizers, read_minimizers_pos, read_transformed));

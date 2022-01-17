@@ -11,6 +11,7 @@ C=$8
 TH=$9
 start=`date +%s`
 echo "Running reads..."
+start=`date +%s`
 cargo run --manifest-path ../rust-mdbg/Cargo.toml --release -- reads-0.05.fa -k $K -l $L -n $N -t $T --threads $TH --density $DENSITY --minabund $abund --correction-threshold $threshold --distance $distance --levenshtein-minimizers 0 --prefix dmel_chr4_reads-0.05  #--counts reads-0.05.ascii.txt
 end=`date +%s`
 echo "Completing GFA"
