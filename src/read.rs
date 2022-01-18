@@ -218,7 +218,7 @@ impl Read {
     // except that we use down-sampled syncmers here, otherwise we'd get too many minimizers
     pub fn extract_syncmers(inp_id: &str, inp_seq_raw: String, params: &Params) -> Self {
         let l = params.l;
-	let hash_bound = ((params.density as f64) * 4_usize.pow(l as u32) as f64) as u64;
+        let hash_bound = ((params.density as f64) * 4_usize.pow(l as u32) as f64) as u64;
 
 
         // boilerplate code for all minimizer schemes
@@ -326,17 +326,20 @@ impl Read {
                     }
                 }
                 else { //kminmer
-                    let yl : u64 = match xl[0] < xl[1] {
-                        true => xl[0],
-                        false => xl[1]
-                    };
-                    let hash_l = hash(yl, lmask);
-                    if hash_l <= hash_bound {
-                        seq_hashes.push(hash_l);
+                    if lp >= l
+                    {
+                        let yl : u64 = match xl[0] < xl[1] {
+                            true => xl[0],
+                            false => xl[1]
+                        };
+                        let hash_l = hash(yl, lmask);
+                        if hash_l <= hash_bound {
+                            seq_hashes.push(hash_l);
 
-                        if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
-                        else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
-                        //pos_to_seq_coord.push(i - l + 1);
+                            if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                            else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
+                            //pos_to_seq_coord.push(i - l + 1);
+                        }
                     }
                 }
             } else {
