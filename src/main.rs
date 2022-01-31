@@ -108,6 +108,7 @@ pub struct Params {
     use_hpc: bool,
     use_syncmers: bool,
     s: usize,
+    no_basespace: bool,
     debug: bool,
 }
 
@@ -355,6 +356,10 @@ struct Opt {
     /// for transformation into base-space.
     #[structopt(long)]
     hpc: bool,
+    /// to save disk space, don't write the sequences in base-space
+    /// corresponding to each k-min-mer
+    #[structopt(long)]
+    no_basespace: bool,
     /// use syncmers instead of universe minimizers
     #[structopt(long)]
     syncmers: bool,
@@ -424,6 +429,7 @@ fn main() {
     let mut use_bf : bool = false;
     let mut use_hpc : bool = false;
     let mut use_syncmers : bool = false;
+    let mut no_basespace : bool = false;
     let mut threads : usize = 8;
     if opt.error_correct {error_correct = true;}
     if opt.reference {reference = true; error_correct = false;}
@@ -465,6 +471,7 @@ fn main() {
     {
         if opt.s.is_some() {s = opt.s.unwrap()} else {println!("Warning: Using default s value ({}).", s);}
     }
+    if opt.no_basespace {no_basespace = true;}
     output_prefix = PathBuf::from(format!("graph-k{}-d{}-l{}", k, density, l));
     if opt.lmer_counts.is_some() { 
         has_lmer_counts = true;
@@ -502,6 +509,7 @@ fn main() {
         use_hpc,
         use_syncmers,
         s,
+        no_basespace,
         debug,
     };
     // init some useful objects
@@ -543,9 +551,13 @@ fn main() {
         int_to_minimizer = res.1;
     }
     let (_mean_length, _max_length) = read_first_n_reads(&filename, fasta_reads, 10);
-    let queue_len = 200; // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
-                             // also: controls how many reads objects are buffered during fasta/fastq
-                             // parsing
+
+    // queue_len:
+    // https://doc.rust-lang.org/std/sync/mpsc/fn.sync_channel.html
+    // also: controls how many reads objects are buffered during fasta/fastq
+    // parsing
+    let queue_len = if _mean_length >= 1000000
+                    {2} else {200}; // not too many seqs in cache if we're parsing reference genomes
 
     let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
     let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
@@ -665,7 +677,10 @@ fn main() {
                 let seq = match seq {Some(read) => read, None => &read_seq.unwrap()[read_offsets.unwrap().0..read_offsets.unwrap().1]};
                 let seq = if *seq_reversed {utils::revcomp(&seq)} else {seq.to_string()};
                 let seq_line = format!("{}\t{}\t{}\t{}\t{}\t{:?}",cur_node_index, node.print_as_string(), seq, "*", origin, shift);
-                seq_write(sequences_file, format!("{}\n", seq_line));
+                if !params.no_basespace
+                {
+                    seq_write(sequences_file, format!("{}\n", seq_line));
+                }
             }
         }
     };
