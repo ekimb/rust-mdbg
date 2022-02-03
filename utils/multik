@@ -36,6 +36,7 @@ then
     max_k=$(LC_NUMERIC="en_US.UTF-8" printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
 fi
 
+set -e # abort if any program fails
 echo "avg readlen: $avg_readlen, max k: $max_k"
 
 function assemble {
