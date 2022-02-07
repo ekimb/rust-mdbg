@@ -36,6 +36,7 @@ then
     max_k=$(LC_NUMERIC="en_US.UTF-8" printf "%.0f" $(echo 0.95*$avg_readlen*$density | bc))
 fi
 
+set -e # abort if any program fails
 echo "avg readlen: $avg_readlen, max k: $max_k"
 
 function assemble {
@@ -68,10 +69,10 @@ fi
 last_k=5
 for k in $(seq $start_k 5 $max_k)
 do
-    zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa |seqtk seq -A -L 100000 > multik_reads.fa
-    zcat -f $reads  |seqtk seq -A >> multik_reads.fa
+    zcat -f $tprefix.msimpl.fa $tprefix.msimpl.fa |seqtk seq -A -L 100000 > $prefix.multik_reads.fa
+    zcat -f $reads  |seqtk seq -A >> $prefix.multik_reads.fa
     tprefix=$prefix-k$k
-    assemble $PWD/multik_reads.fa $k $l $density $tprefix $threads $DIR
+    assemble $prefix.multik_reads.fa $k $l $density $tprefix $threads $DIR
     last_k=$k
     rm -f *.sequences
 done
