@@ -207,7 +207,7 @@ fn main() {
         Err(why) => panic!("Couldn't create {}: {}.", path, why.description()),
         Ok(file) => file,
     };
-    write!(complete_gfa_file, "H\tVN:Z:1\n").expect("Error writing GFA header.");
+    write!(complete_gfa_file, "H\tVN:Z:1.0\n").expect("Error writing GFA header.");
     let reconstruct_seq = |unitig_name: &String| -> String {
         let mut res = String::new();
         //println!("reconstructing unitig {}",unitig_name);

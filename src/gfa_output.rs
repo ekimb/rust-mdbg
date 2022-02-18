@@ -103,7 +103,7 @@ use crate::utils::revcomp;*/
         Err(why) => panic!("Couldn't create {}: {}", path, why.description()),
         Ok(file) => file,
     };
-    write!(file, "H\tVN:Z:1\n").expect("Error writing GFA header.");
+    write!(file, "H\tVN:Z:1.0\n").expect("Error writing GFA header.");
     for index in gr.node_indices() {
         let idx = index.index();
         node_indices.insert(nodes_vect[idx].clone(), idx);
