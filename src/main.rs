@@ -112,6 +112,7 @@ pub struct Params {
     debug: bool,
 }
 
+
 /*fn debug_output_read_minimizers(seq_str: &String, read_minimizers: &Vec<String>, read_minimizers_pos: &Vec<u32>) {
     println!("\nseq: {}", seq_str);
     print!("min: ");
@@ -897,7 +898,7 @@ fn main() {
         Err(why) => panic!("Couldn't create {}: {}.", path, why.to_string()),
         Ok(file) => file,
     };
-    writeln!(gfa_file, "H\tVN:Z:1").expect("Error writing GFA header.");
+    writeln!(gfa_file, "H\tVN:Z:1.0").expect("Error writing GFA header.");
     // index k-1-mers
     let dbg_nodes_view = Arc::try_unwrap(dbg_nodes).unwrap().into_read_only();
     let mut km_index : HashMap<Overlap, Vec<&Kmer>> = HashMap::new(); 

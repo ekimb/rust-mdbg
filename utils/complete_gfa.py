@@ -13,7 +13,7 @@ def find_overlap(source, sink):
 
 output_filename = '.'.join(sys.argv[1].split('.')[:-1])+".complete.gfa"
 output = open(output_filename,'w')
-output.write("H\tVN:Z:1\n")
+output.write("H\tVN:Z:1.0\n")
 for line in open(sys.argv[2]):
     if line.startswith('S'):
         #S       217     *       LN:i:1  KC:i:137
