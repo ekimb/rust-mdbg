@@ -887,7 +887,10 @@ fn main() {
         }
     }
 
-    for mut sequences_file in sequences_files.iter_mut() {sequences_file.flush().unwrap();}
+    // so, I dunno if this line is useful. But when I commented it, suddently my issue with having
+    // corrupt last line in the last sequences file disappeared. So i'm going to leave it commented
+    // for now until more investigation
+    //for mut sequences_file in sequences_files.iter_mut() {sequences_file.flush().unwrap();}
 
     // now DBG creation can start
     println!("Number of nodes before abundance filter: {}", dbg_nodes.len());
