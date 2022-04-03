@@ -70,14 +70,14 @@ fn main() {
     let opt = Opt::from_args();      
     let mut gfa_file;
     let mut sequences_file;
-    if !opt.gfa.is_none()       {gfa_file       = opt.gfa.unwrap();} 	   else {panic!("please specify an input GFA file (output of `gfatools asm [..] -u`).");} 
-    if !opt.sequences.is_none() {sequences_file = opt.sequences.unwrap();} else {panic!("Please specify the prefix of [prefix].*.sequences files.");} 
+    if !opt.gfa.is_none()       {gfa_file       = opt.gfa.unwrap();} 	   else {panic!("please specify an input unitig GFA file (output of `gfatools asm [..] -u`).");} 
+    if !opt.sequences.is_none() {sequences_file = opt.sequences.unwrap();} else {panic!("Please specify the prefix of rust-mdbg, i.e. with [prefix].*.sequences files and the original GFA [prefix].gfa");} 
 
     let debug = opt.debug;
     //let mut pb = ProgressBar::on(stderr(),file_size);
     // Step 1 : read the simplified GFA file
     //
-    // we record which sequence we will need lin full and which we only need some extremity of
+    // we record which sequence we will need in full and which we only need some extremity of
     let mut unitigs : HashMap<String, Vec<(u64, bool)>> = HashMap::new();
     let mut node2unitig : HashMap<u64, String> = HashMap::new();
     let mut unitig_name = String::new();
@@ -86,7 +86,7 @@ fn main() {
         let is_S = line.starts_with('S');
         let is_L = line.starts_with('L');
         if is_S || is_L {
-            //S       49194   *       LN:i:1  KC:i:157
+            //S       utg0000001l     *       LN:i:7291       RC:i:7  lc:i:7291
             let mut v : Vec<String> = line.split('\t').map(|s| s.to_string()).collect();
             unitig_name = v[1].clone();
             if current_unitig.1.len() > 0 {
@@ -124,7 +124,7 @@ fn main() {
             unitigs.insert(current_unitig.0.clone(), current_unitig.1.to_vec());
         }
     }
-    println!("Done parsing GFA, got {} unitigs.", unitigs.len());
+    println!("Done parsing unitigs GFA, got {} unitigs.", unitigs.len());
 
     // Step 1.5:
     // determine, for each node, whether to load its whole sequence or just the end
@@ -152,6 +152,48 @@ fn main() {
         }
     }
     //println!("Marked {} mDBG nodes to load sequences", load_node.len());
+    
+    // Step 1.75 : read the original uncompressed GFA file and record node abundances
+    let mut unitig_abundance : HashMap<String, u64> = HashMap::new();
+    let mut nb_kminmers = 0;
+    let mut process_orig_gfa_line = | line :&str | -> bool {
+        //println!("line: {}", line);
+        let is_S = line.starts_with('S');
+        if is_S {
+            //S       5346069 *       LN:i:6104       KC:i:17
+            let mut v : Vec<String> = line.split('\t').map(|s| s.to_string()).collect();
+            let kminmer_id = v[1].clone().parse::<u64>().unwrap();
+            let mut abundance = 0;
+            for elt in v.iter()
+            {   
+                if elt.starts_with("KC:")
+                {
+                    abundance = elt.split(':').collect::<Vec<&str>>()[2].parse::<u64>().unwrap();
+                }
+            }
+            let unitig_name = node2unitig.get(&kminmer_id);
+            if !unitig_name.is_some() {return true ;}  // that node isn't used in a unitig.. weird.
+            let unitig_name = unitig_name.unwrap().clone();
+            let prev_abundance = unitig_abundance.get(&unitig_name).unwrap_or(&0);
+            unitig_abundance.insert(unitig_name, prev_abundance + abundance);
+            nb_kminmers += 1
+        }
+        return true;
+    };
+ 
+    if let Ok(lines) = read_lines(&format!("{}.gfa", &sequences_file.to_str().unwrap())) {
+	// Consumes the iterator, returns an (Optional) String
+        let mut current_unitig : (String, Vec<(u64, bool)>) = ("".to_string(), Vec::new());
+	    for line in lines {
+	        if let Ok(line_contents) = line {
+		        if !process_orig_gfa_line(&line_contents) {break;}
+	        }
+	    }
+    }
+    println!("Done parsing original GFA, with {} k-min-mers.", nb_kminmers);
+
+
+
     // Step 2 : read the sequences file
     // we record in memory only the parts of the sequences we will need to fill in the complete GFA
 
@@ -220,6 +262,12 @@ fn main() {
     };
     let mut seq_lens : HashMap<String, usize> = HashMap::new();
 
+    let get_mean_abundance =  |unitig_name: &String| -> f64 {
+        let total_abundance = unitig_abundance.get(unitig_name).unwrap().clone() as f64;
+        let unitig = unitigs.get(unitig_name).unwrap();
+        total_abundance / unitig.len() as f64
+    };
+
     let mut process_gfa_line2 = |line: &str| {
         //println!("line: {}", line);
         let is_S = line.starts_with('S');
@@ -232,13 +280,14 @@ fn main() {
             let unitig_name = v[1].clone();
             let seq = reconstruct_seq(&unitig_name);
             v[2]= seq.clone();
-            //v[3] = String::from(format!("LN:i:{}",seq.len())); // should already be there
+            //v[3] = String::from(format!("LN:i:{}",seq.len())); // field should already be there
             v[3] = String::from(format!("LN:i:{}", seq.len())); // but actually we want to fix it given that overlaps 
                                                                // were very approximately calculated. then gfatools complains
                                                                // and might even crash
+            v.resize(5,"".to_string()); // deletes the RC/lc fields but add mean k-min-mer count as field "mc" (lowercase because not standard)
+            v[4] = String::from(format!("mc:f:{:.1}", get_mean_abundance(&unitig_name)));
             seq_lens.insert(unitig_name, seq.len());
             let s_line = v.join("\t");
-            let s_line = v[..4].join("\t"); // deletes the RC/lc fields
             write!(complete_gfa_file, "{}\n", s_line).expect("Error writing S line.");
         }
         if is_L {
