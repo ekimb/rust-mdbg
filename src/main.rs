@@ -336,11 +336,13 @@ struct Opt {
     /// can be used as input.
     #[structopt(long)]
     restart_from_postcor: bool,
-    /// Reference genome input
+    /// Input is reference genome(s)
     ///
     /// Indicates that the input is a (single or a set of) 
-    /// genome(s), not reads. Allows multi-line FASTA and
-    /// doesn't filter any kminmers
+    /// genome(s), not reads. Allows multi-line FASTA,
+    /// doesn't filter any kminmers, and saves all
+    /// kminmer sequences in .sequences file (including
+    /// those seen only once)
     #[structopt(long)]
     reference: bool,
     /// Enable Bloom filters
@@ -893,9 +895,18 @@ fn main() {
     //for mut sequences_file in sequences_files.iter_mut() {sequences_file.flush().unwrap();}
 
     // now DBG creation can start
-    println!("Number of nodes before abundance filter: {}", dbg_nodes.len());
-    dbg_nodes.retain(|_x, c| c.abundance >= (min_kmer_abundance as DbgAbundance));
-    println!("Number of nodes after abundance filter: {}", dbg_nodes.len());
+    if min_kmer_abundance > 1 { // why we need this conditional: 
+                                  //some kminmers seen once have abundance=0 due to technicality, 
+                                  //we want to keep them in the special case of min_kmer_abundance=1
+
+            println!("Number of nodes before abundance filter: {}", dbg_nodes.len());
+            dbg_nodes.retain(|_x, c| c.abundance >= (min_kmer_abundance as DbgAbundance));
+            println!("Number of nodes after abundance filter: {}", dbg_nodes.len());
+    }
+    else
+    {
+            println!("Number of mdBG nodes: {}", dbg_nodes.len());
+    }
     let path = format!("{}{}", output_prefix.to_str().unwrap(),".gfa");
     let mut gfa_file = match File::create(&path) {
         Err(why) => panic!("Couldn't create {}: {}.", path, why.to_string()),
@@ -1007,7 +1018,7 @@ fn main() {
             nb_edges += 1;
         }
     }
-    println!("Number of edges: {}", nb_edges);
+    println!("Number of mdBG edges: {}", nb_edges);
     if presimp > 0.0 {
         println!("Pre-simp = {}: {} edges removed.",presimp,presimp_removed);
     }
