@@ -1,0 +1,5 @@
+# this script takes a GFA as input and removes all the sequences from the nodes, replacing them by '*'
+
+awk -F"\t" '{if(/^S/) $3 = "*";  OFS="\t"; print}'  $1
+
+echo "to further make it bandage-compatible with depths: sed -i "s/mc/KC/g" $1"

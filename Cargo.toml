@@ -9,7 +9,6 @@ default-run = "rust-mdbg"
 
 [dependencies]
 bio = "*"
-fasthash = "0.4.0"
 petgraph = "0.4.13"
 petgraph-graphml = "1.0.2"
 adler32 = "1.0.3"

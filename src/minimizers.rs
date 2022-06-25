@@ -7,7 +7,6 @@ use std::collections::HashSet;
 //use pbr::ProgressBar;
 //use bio::io::fasta;
 //use std::path::PathBuf;
-//use fasthash::city;
 use itertools::Itertools;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
