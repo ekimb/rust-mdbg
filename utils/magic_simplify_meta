@@ -1,0 +1,51 @@
+#!/bin/bash
+# this script simplifies a gfa graph using gfaview (tip, bubbles)
+# **meta**: this version does very basic simplifications to avoid removing low-coverage genomes
+#
+# it takes as input a GFA file that doesn't have any sequences, along with the .sequences file that do contain them
+# it will output a simplified GFA file that contains sequences
+# the trick is that sequences will be incorporated after the first round of simplifications
+
+# boilerplate code for finding folder where this script really resides
+# from https://stackoverflow.com/questions/59895/get-the-source-directory-of-a-bash-script-from-within-the-script-itself
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # for relative symlink
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
+base="$1"
+
+set -x
+
+if ! command -v gfatools &> /dev/null
+then
+echo "please install gfatools"
+    exit
+fi
+
+
+/usr/bin/time gfatools asm $base.gfa       -t 10,50000 -t 10,50000 -b 100000 -b 100000 -t 10,50000 -b 100000 -b 100000 -b 100000 -t 10,50000 -b 100000 -t 10,50000 -b 1000000 -t 10,150000 -b 1000000 -u > $base.tmp1.gfa
+python $DIR/gfa_break_loops.py $base.tmp1.gfa > $base.tmp2.gfa
+
+# reincorporation of sequences into the gfa
+# except if you pass --old-behavior, for usage with complete_gfa.py
+if [[ ! "$*" == *--old-behavior* ]]
+then
+    cargo run --manifest-path $DIR/../Cargo.toml --release --bin to_basespace -- --gfa $base.tmp2.gfa --sequences $base
+    mv $base.tmp2.gfa.complete.gfa $base.tmp2.gfa
+fi
+
+current_graph=$base.tmp2.gfa
+
+mv $current_graph  $base.msimpl.gfa
+
+if [[ $@ != *'--keep'* ]]
+then
+    rm -rf $base.tmp*.gfa
+fi
+
+
+bash $DIR/gfa2fasta.sh $base.msimpl
