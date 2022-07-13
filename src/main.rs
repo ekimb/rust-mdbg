@@ -560,7 +560,7 @@ fn main() {
     // also: controls how many reads objects are buffered during fasta/fastq
     // parsing
     let queue_len = if _mean_length >= 1000000
-                    {2} else {200}; // not too many seqs in cache if we're parsing reference genomes
+                    {20} else {200}; // not too many seqs in cache if we're parsing reference genomes
 
     let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
     let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
@@ -787,13 +787,17 @@ fn main() {
             }
             else if error_correct || reference {
                 let (_vec, read_obj) = found.as_ref().unwrap();
-                reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                if error_correct {
+                    reads_by_id.insert(read_obj.id.to_string(), read_obj.clone());
+                }
                 if read_obj.transformed.len() >= n {
                     ec_reads::record(&mut ec_file, &read_obj.id.to_string(), &read_obj.seq, &read_obj.transformed.to_vec(), &read_obj.minimizers, &read_obj.minimizers_pos);
-                    for i in 0..read_obj.transformed.len()-n+1 {
-                        let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
-                        let _entry = buckets.entry(n_mer).or_insert_with(Vec::<String>::new);
-                        //entry.push(read_obj.id.to_string());
+                    if error_correct {
+                        for i in 0..read_obj.transformed.len()-n+1 {
+                            let n_mer = utils::normalize_vec(&read_obj.transformed[i..i+n].to_vec());
+                            let _entry = buckets.entry(n_mer).or_insert_with(Vec::<String>::new);
+                            //entry.push(read_obj.id.to_string());
+                        }
                     }
                 }
             }
