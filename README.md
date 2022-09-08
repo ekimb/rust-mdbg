@@ -142,7 +142,7 @@ To convert an assembly to base-space without performing any graph simplification
 
 ```
 gfatools asm -u  example.gfa > example.unitigs.gfa
-target/release/to_basespace --gfa example.unitigs.gfa --sequences example.sequences
+target/release/to_basespace --gfa example.unitigs.gfa --sequences example
 ```
 
 * without `gfatools` (slower, but the code is more straightforward to understand)
