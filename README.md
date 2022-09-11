@@ -147,7 +147,7 @@ target/release/to_basespace --gfa example.unitigs.gfa --sequences example
 
 * without `gfatools` (slower, but the code is more straightforward to understand)
 
-`utils/complete_gfa.py example.sequences example.gfa`
+`utils/complete_gfa.py example example.gfa`
 
 In both cases, this will create an `example.complete.gfa` file that you can convert to FASTA with
 

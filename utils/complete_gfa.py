@@ -11,7 +11,7 @@ def find_overlap(source, sink):
     return shift
 
 
-output_filename = '.'.join(sys.argv[1].split('.')[:-1])+".complete.gfa"
+output_filename = sys.argv[1]+".complete.gfa"
 output = open(output_filename,'w')
 output.write("H\tVN:Z:1.0\n")
 for line in open(sys.argv[2]):
@@ -39,3 +39,4 @@ for line in open(sys.argv[2]):
     output.write("S\t%s\t%s\tLN:i:%d\tKC:i:%d\n" % (source[0], source[2], len(source[2]), int(kmer_abundance[source[0]])))
     output.write("S\t%s\t%s\tLN:i:%d\tKC:i:%d\n" % (sink[0], sink[2], len(sink[2]), int(kmer_abundance[sink[0]])))
     output.write("L\t%s\t%s\t%s\t%s\t%dM\n"% (source[0], source[1], sink[0], sink[1], int(overlap_length)))
+output.close()
