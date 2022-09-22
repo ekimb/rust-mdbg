@@ -153,6 +153,10 @@ In both cases, this will create an `example.complete.gfa` file that you can conv
 
 `bash utils/gfa2fasta.sh example.complete`
 
+## Metagenome assembly
+
+Please refer to issue https://github.com/ekimb/rust-mdbg/issues/30. In a nutshell, you may try parameters `-k 21 -l 14 --density 0.003` as in the paper, and make sure to use the `magic_simplify_meta` script.
+
 ## License
 
 `rust-mdbg` is freely available under the [MIT License](https://opensource.org/licenses/MIT).
