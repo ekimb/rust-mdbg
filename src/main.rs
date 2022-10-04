@@ -45,6 +45,7 @@ mod kmer_vec;
 mod poa;
 mod read;
 mod pairwise;
+mod read_stats;
 
 const REVCOMP_AWARE: bool = true; // shouldn't be set to false except for strand-directed data or for debugging
 type Kmer = kmer_vec::KmerVec;
@@ -363,10 +364,18 @@ struct Opt {
     /// corresponding to each k-min-mer
     #[structopt(long)]
     no_basespace: bool,
-    /// use syncmers instead of universe minimizers
+    /// Write the [abundance in FILE1] of each [k-minmer from FILE2] 
+    /// to FILE2.read_stats file
+    ///
+    /// How to run: give FILE1 as a normal input to rust-mdbg and then
+    /// pass parameter --read_stats FILE2
+    /// (It is also fine to have FILE1==FILE2)
+    #[structopt(long)]
+    read_stats: Option<PathBuf>,
+    /// Use syncmers instead of universe minimizers
     #[structopt(long)]
     syncmers: bool,
-    /// syncmer substring length
+    /// Syncmer substring length
     #[structopt(short, long)]
     s: Option<usize>,
     /// l-mer counts (enables downweighting of frequent l-mers)
@@ -433,6 +442,7 @@ fn main() {
     let mut use_hpc : bool = false;
     let mut use_syncmers : bool = false;
     let mut no_basespace : bool = false;
+    let mut read_stats = PathBuf::new();
     let mut threads : usize = 8;
     if opt.error_correct {error_correct = true;}
     if opt.reference {reference = true; error_correct = false;}
@@ -474,6 +484,7 @@ fn main() {
     {
         if opt.s.is_some() {s = opt.s.unwrap()} else {println!("Warning: Using default s value ({}).", s);}
     }
+    if opt.read_stats.is_some() { read_stats = opt.read_stats.unwrap(); }
     if opt.no_basespace {no_basespace = true;}
     output_prefix = PathBuf::from(format!("graph-k{}-d{}-l{}", k, density, l));
     if opt.lmer_counts.is_some() { 
@@ -610,7 +621,7 @@ fn main() {
     let add_kminmer =|node: &Kmer, seq: Option<&str>, seq_reversed: &bool, origin: &str, shift: &(usize, usize), sequences_file: &mut SeqFileType, thread_id: usize, read_seq: Option<&str>, read_offsets: Option<(usize, usize, usize)>|
     {
         let mut previous_abundance; // for convenience, is the abundance of the kmer _before_ it was seen now
-        let mut cur_node_index: DbgIndex = 0 as DbgIndex;
+        let mut cur_node_index;
         let mut contains_key;
 
         // this code takes care of kminmers having abundances 1 and 2
@@ -648,26 +659,24 @@ fn main() {
             }
         }
         //println!("abundance: {}",abundance);
-        if params.reference || previous_abundance >= 1 {
-            // now record what we will save
-            // or, record in the hash table anyway to save later
-            let lowprec_shift = (shift.0 as u16, shift.1 as u16);
-            if contains_key {
-                let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
-                cur_node_index = entry_mut.index;
-                previous_abundance = entry_mut.abundance;
-                if previous_abundance == min_kmer_abundance - 1 {
-                    let seqlen = match seq {Some(read) => read.len() as u32, None => read_offsets.unwrap().2 as u32};
-                    entry_mut.seqlen = seqlen;
-                    entry_mut.shift = lowprec_shift;
-                }
-                entry_mut.abundance += 1;
+        // now record what we will save
+        // or, record in the hash table anyway to save later
+        let lowprec_shift = (shift.0 as u16, shift.1 as u16);
+        if contains_key {
+            let mut entry_mut = dbg_nodes.get_mut(node).unwrap();
+            cur_node_index = entry_mut.index;
+            previous_abundance = entry_mut.abundance;
+            if previous_abundance == min_kmer_abundance - 1 {
+                let seqlen = match seq {Some(read) => read.len() as u32, None => read_offsets.unwrap().2 as u32};
+                entry_mut.seqlen = seqlen;
+                entry_mut.shift = lowprec_shift;
             }
-            else { 
-                cur_node_index = NODE_INDEX.fetch_add(1, Ordering::Relaxed) as DbgIndex;
-                let seqlen = match seq {Some(read) => read.len() as u32, None => read_offsets.unwrap().2 as u32 };
-                dbg_nodes.insert(node.clone(), DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen, shift: lowprec_shift}); 
-            }
+            entry_mut.abundance += 1;
+        }
+        else { 
+            cur_node_index = NODE_INDEX.fetch_add(1, Ordering::Relaxed) as DbgIndex;
+            let seqlen = match seq {Some(read) => read.len() as u32, None => read_offsets.unwrap().2 as u32 };
+            dbg_nodes.insert(node.clone(), DbgEntry{index: cur_node_index, abundance: previous_abundance+1, seqlen, shift: lowprec_shift}); 
         }
 
         if params.reference || previous_abundance >= 1 || min_kmer_abundance == 1 {
@@ -911,6 +920,70 @@ fn main() {
     {
             println!("Number of mdBG nodes: {}", dbg_nodes.len());
     }
+
+    // at this point the nodes of the mdbg are constructed in-memory (but not yet written to gfa)
+
+
+    // optionally output read statistics (abundance of each kminmer in each read)
+    if !read_stats.as_os_str().is_empty()
+    {
+        // worker thread
+        let read_stats_process_read_aux = |seq_str: &[u8], seq_id: &str| {
+            let seq = std::str::from_utf8(seq_str).unwrap();
+            let seq_for_ref = if reference  {seq.replace("\n", "").replace("\r", "")
+            } else {String::new()};
+            let seq = if reference {seq_for_ref} else {seq.to_string()};
+            let read_obj = Read::extract(&seq_id, seq, &params, &minimizer_to_int, &uhs_bloom, &lcp_bloom);
+            let mut read_stats = crate::read_stats::ReadStats::new(&seq_id);
+            if read_obj.transformed.len() > k {
+                for i in 0..(read_obj.transformed.len() - k + 1) {
+                    let mut node : Kmer = Kmer::make_from(&read_obj.transformed[i..i+k]);
+                    if REVCOMP_AWARE {
+                        let (node_norm, _reversed) = node.normalize();
+                        node = node_norm;
+                    }
+                    if let Some(entry) = dbg_nodes.get(&node)  {
+                        read_stats.add(entry.abundance as u32);
+                    }
+                    else {
+                        read_stats.add(0u32);
+                    }
+                }
+            }
+            read_stats.finalize();
+        };
+        let read_stats_process_read_fasta = |record: seq_io::fasta::RefRecord, _found: &mut Found| {
+            let seq_str = record.seq();
+            let seq_id = record.id().unwrap().to_string();
+            read_stats_process_read_aux(&seq_str, &seq_id);
+        };
+        let read_stats_process_read_fastq = |record: seq_io::fastq::RefRecord, _found: &mut Found| {
+            let seq_str = record.seq();
+            let seq_id = record.id().unwrap().to_string();
+            read_stats_process_read_aux(&seq_str, &seq_id);
+        };
+
+        // parallel fasta parsing, with a main thread that writes to disk and populates hash tables
+        let mut read_stats_main_thread = || { // runs in main thread
+            nb_reads += 1;
+            None::<()>
+        };
+
+
+        crate::read_stats::ReadStats::init(&read_stats.clone().into_os_string().into_string().unwrap());
+        let buf = get_reader(&read_stats);
+        println!("Parsing sequences from {:?}...",&read_stats);
+        if fasta_reads {
+            let reader = seq_io::fasta::Reader::new(buf);
+            let _res = read_process_fasta_records(reader, threads as u32, queue_len, read_stats_process_read_fasta, |_record, _found| {read_stats_main_thread()});
+        }
+        else {
+            let reader = seq_io::fastq::Reader::new(buf);
+            let _res = read_process_fastq_records(reader, threads as u32, queue_len, read_stats_process_read_fastq, |_record, _found| {read_stats_main_thread()});
+        }
+        println!("Read stats written, exiting.");
+    }
+
     let path = format!("{}{}", output_prefix.to_str().unwrap(),".gfa");
     let mut gfa_file = match File::create(&path) {
         Err(why) => panic!("Couldn't create {}: {}.", path, why.to_string()),
@@ -918,6 +991,7 @@ fn main() {
     };
     writeln!(gfa_file, "H\tVN:Z:1.0").expect("Error writing GFA header.");
     // index k-1-mers
+    // and simultaneously write the mdbg nodes to gfa
     let dbg_nodes_view = Arc::try_unwrap(dbg_nodes).unwrap().into_read_only();
     let mut km_index : HashMap<Overlap, Vec<&Kmer>> = HashMap::new(); 
     for (node, entry) in dbg_nodes_view.iter() {
