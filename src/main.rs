@@ -973,7 +973,14 @@ fn main() {
         crate::read_stats::ReadStats::init(&read_stats.clone().into_os_string().into_string().unwrap());
         let buf = get_reader(&read_stats);
         println!("Parsing sequences from {:?}...",&read_stats);
-        if fasta_reads {
+        let mut read_stats_fasta_reads : bool = false;
+        let read_stats_filename_str = read_stats.to_str().unwrap();
+            if read_stats_filename_str.contains(".fasta.") || read_stats_filename_str.contains(".fa.") || read_stats_filename_str.ends_with(".fa") || read_stats_filename_str.ends_with(".fasta") { // not so robust but will have to do for now
+                read_stats_fasta_reads = true;
+                println!("Format: FASTA");
+        }
+        else { println!("Format: FASTQ"); }
+        if read_stats_fasta_reads {
             let reader = seq_io::fasta::Reader::new(buf);
             let _res = read_process_fasta_records(reader, threads as u32, queue_len, read_stats_process_read_fasta, |_record, _found| {read_stats_main_thread()});
         }
@@ -982,6 +989,7 @@ fn main() {
             let _res = read_process_fastq_records(reader, threads as u32, queue_len, read_stats_process_read_fastq, |_record, _found| {read_stats_main_thread()});
         }
         println!("Read stats written, exiting.");
+        return;
     }
 
     let path = format!("{}{}", output_prefix.to_str().unwrap(),".gfa");
