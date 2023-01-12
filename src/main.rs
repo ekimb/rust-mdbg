@@ -571,7 +571,9 @@ fn main() {
     // also: controls how many reads objects are buffered during fasta/fastq
     // parsing
     let queue_len = if _mean_length >= 1000000
-                    {20} else {200}; // not too many seqs in cache if we're parsing reference genomes
+                    {32} else {200}; // not too many seqs in cache if we're parsing reference genomes
+                                     // note: this effectively limits fasta parsing of long
+                                     // sequences to 32 threads, which should be fine for human
 
     let mut uhs_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
     let mut lcp_bloom : RacyBloom = RacyBloom::new(Bloom::new(if use_bf {500_000_000} else {1}, 1_000_000_000_000_000));
