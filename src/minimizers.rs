@@ -58,16 +58,24 @@ pub fn minimizers_preparation(params: &mut Params, lmer_counts: &HashMap<String,
     let max_threshold = params.lmer_counts_max;
     let min_threshold = params.lmer_counts_min;
     let mut skip : HashSet<String> = HashSet::new();
-    // the following code replaces what i had before:
-    // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
-    let multi_prod = (0..l).map(|_i| vec!('A', 'C', 'T', 'G')).multi_cartesian_product();
-    for lmer_vec in multi_prod {
-        let lmer : String = lmer_vec.into_iter().collect();
-        if REVCOMP_AWARE {
-            let lmer_rev = utils::revcomp(&lmer);
-            if lmer > lmer_rev {continue;} // skip if not canonical
+    // large l-mer fix: use lmer counts to enumerate them, instead of cartesian product
+    if lmer_counts.len() > 0 {
+        count_vec.iter().map(|tup| tup.0).collect::<Vec<&String>>().iter().for_each(|x| {
+            list_minimizers.push(std::cmp::min(x.to_string(),utils::revcomp(x)))});
+    }
+    else
+    {
+        // the following code replaces what i had before:
+        // https://stackoverflow.com/questions/44139493/in-rust-what-is-the-proper-way-to-replicate-pythons-repeat-parameter-in-iter
+        let multi_prod = (0..l).map(|_i| vec!('A', 'C', 'T', 'G')).multi_cartesian_product();
+        for lmer_vec in multi_prod {
+            let lmer : String = lmer_vec.into_iter().collect();
+            if REVCOMP_AWARE {
+                let lmer_rev = utils::revcomp(&lmer);
+                if lmer > lmer_rev {continue;} // skip if not canonical
+            }
+            list_minimizers.push(lmer.to_string());
         }
-        list_minimizers.push(lmer.to_string());
     }
     count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| {
         skip.insert(x.to_string());
@@ -77,28 +85,28 @@ pub fn minimizers_preparation(params: &mut Params, lmer_counts: &HashMap<String,
     let mut minimizer_to_int : HashMap<String, u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64, String> = HashMap::new();
     let mut skips = 0;
-        // assign numbers to minimizers, the regular way
-        for lmer in list_minimizers {
-            let hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
-            let mut hash_new = hash as f64;
-            hash_new /= u64::max_value() as f64;
-            if skip.contains(&lmer) { 
-                hash_new = 1.0;
-                //println!("{} skipping lmer", lmer);
-                skips += 1;
-            }
-            if (hash_new as f64) <= (density as f64) {
-                //println!("{} lmer {} hash {} density", lmer,hash_new,density);
-                minimizer_to_int.insert(lmer.to_string(), hash);
-                int_to_minimizer.insert(hash, lmer.to_string());
-                // also insert the info for the revcomp minimizer, will allow to avoid normalizing
-                // later 
-                let lmer_rev = utils::revcomp(&lmer);
-                minimizer_to_int.insert(lmer_rev.to_string(), hash);
-                int_to_minimizer.insert(hash, lmer_rev.to_string());
-            }
+    // assign numbers to minimizers, the regular way
+    for lmer in list_minimizers {
+        let hash = (ntc64(lmer.as_bytes(), 0, l)) as u64;
+        let mut hash_new = hash as f64;
+        hash_new /= u64::max_value() as f64;
+        if skip.contains(&lmer) { 
+            hash_new = 1.0;
+            //println!("{} skipping lmer", lmer);
+            skips += 1;
         }
-    
+        if (hash_new as f64) <= (density as f64) {
+            //println!("{} lmer {} hash {} density", lmer,hash_new,density);
+            minimizer_to_int.insert(lmer.to_string(), hash);
+            int_to_minimizer.insert(hash, lmer.to_string());
+            // also insert the info for the revcomp minimizer, will allow to avoid normalizing
+            // later 
+            let lmer_rev = utils::revcomp(&lmer);
+            minimizer_to_int.insert(lmer_rev.to_string(), hash);
+            int_to_minimizer.insert(hash, lmer_rev.to_string());
+        }
+    }
+
     println!("Selected {} minimizer ID's and {} sequences.",int_to_minimizer.len(), minimizer_to_int.len());
     println!("{} frequent l-mers skipped.", skips);
     (minimizer_to_int, int_to_minimizer)

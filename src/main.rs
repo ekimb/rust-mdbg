@@ -386,6 +386,13 @@ struct Opt {
     /// Frequencies of l-mers in the reads (obtained using k-mer counters)
     /// can be provided in order to downweight frequently-occurring l-mers
     /// and increase contiguity.
+    ///
+    /// To generate lmer counts, you can do this:
+    /// k=16
+    /// kmc  -k$k -ci1 -cs100000 reads.fastq reads.kmc.k$k .
+    /// kmc_dump reads.kmc.k$k reads.kmc.k$k.txt
+    ///
+    /// If you k-mer count non-HPC reads, make sure you pass --skiphpc to rust-mdbg
     #[structopt(parse(from_os_str), long)]
     lmer_counts: Option<PathBuf>,
     /// Minimum l-mer count threshold
