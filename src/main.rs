@@ -545,16 +545,16 @@ fn main() {
         loop {
             let mut line = String::new();
             let new_line = |line: &mut String, br: &mut BufReader<File>| {line.clear(); br.read_line(line).ok();};
-            if let Err(_e) = br.read_line(&mut line) {break;}
+            new_line(&mut line, &mut br);
             if line.is_empty()                    {break;}
             let trimmed = line.trim().to_string();   
-            let vec : Vec<String> = trimmed.split(' ').map(String::from).collect();
+            let vec : Vec<String> = trimmed.split_whitespace().map(String::from).collect();
             let lmer = vec[0].to_string();
             let lmer_rev = utils::revcomp(&lmer);
-            let lmer = if lmer > lmer_rev {lmer} else {lmer_rev}; //don't trust the kmer counter to normalize like we do
+            let lmer = if lmer < lmer_rev {lmer} else {lmer_rev}; //don't trust the kmer counter to normalize like we do
             let count = vec[1].parse::<u32>().unwrap();
+            //println!("inserting lmer {} count {}",lmer,count);
             lmer_counts.insert(lmer, count); 
-            new_line(&mut line, &mut br);
         }
     }
     let mut minimizer_to_int : HashMap<String,u64> = HashMap::new();

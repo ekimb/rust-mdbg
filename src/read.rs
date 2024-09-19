@@ -199,7 +199,7 @@ impl Read {
             let mut hash :u64 = hash;
             if params.error_correct || params.has_lmer_counts {
                 let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
-                println!("lmer {} hash {} res {:?}",lmer,hash,res);
+                //println!("lmer {} hash {} res {:?}",lmer,hash,res);
                 if res.is_none() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
