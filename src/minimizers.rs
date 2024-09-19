@@ -69,7 +69,10 @@ pub fn minimizers_preparation(params: &mut Params, lmer_counts: &HashMap<String,
         }
         list_minimizers.push(lmer.to_string());
     }
-    count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| {skip.insert(x.to_string());});
+    count_vec.iter().filter(|tup| tup.1 >= &max_threshold || tup.1 <= &min_threshold).map(|tup| tup.0.to_string()).collect::<Vec<String>>().iter().for_each(|x| {
+        skip.insert(x.to_string());
+        skip.insert(utils::revcomp(x));
+    });
     
     let mut minimizer_to_int : HashMap<String, u64> = HashMap::new();
     let mut int_to_minimizer : HashMap<u64, String> = HashMap::new();
@@ -80,10 +83,12 @@ pub fn minimizers_preparation(params: &mut Params, lmer_counts: &HashMap<String,
             let mut hash_new = hash as f64;
             hash_new /= u64::max_value() as f64;
             if skip.contains(&lmer) { 
-                hash_new = hash_new.sqrt().sqrt().sqrt();
+                hash_new = 1.0;
+                //println!("{} skipping lmer", lmer);
                 skips += 1;
             }
             if (hash_new as f64) <= (density as f64) {
+                //println!("{} lmer {} hash {} density", lmer,hash_new,density);
                 minimizer_to_int.insert(lmer.to_string(), hash);
                 int_to_minimizer.insert(hash, lmer.to_string());
                 // also insert the info for the revcomp minimizer, will allow to avoid normalizing

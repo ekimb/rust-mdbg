@@ -277,6 +277,7 @@ pub struct Scoring<F: MatchFunc> {
     pub gap_open: i32,
     pub gap_extend: i32,
     pub match_fn: F,
+#[allow(dead_code)]
     pub match_scores: Option<(i32, i32)>,
     pub xclip_prefix: i32,
     pub xclip_suffix: i32,

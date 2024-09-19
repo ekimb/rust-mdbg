@@ -106,7 +106,7 @@ pub struct Params {
     error_correct: bool,
     has_lmer_counts: bool,
     use_bf: bool,
-    use_hpc: bool,
+    reads_already_hpc: bool,
     use_syncmers: bool,
     s: usize,
     no_basespace: bool,
@@ -352,14 +352,17 @@ struct Opt {
     /// but results in slightly less contiguous assemblies.
     #[structopt(long)]
     bf: bool,
-    /// Homopolymer-compressed (HPC) input
+    /// Input is already Homopolymer-compressed (HPC'd)
     ///
-    /// Both raw and homopolymer-compressed (HPC) reads can
-    /// be provided as input. If the reads are not compressed,
-    /// rust-mdbg manually performs HPC, but uses the raw sequences
+    /// Either raw and homopolymer-compressed (HPC) reads can
+    /// be provided as input. If the reads are not HPC,
+    /// rust-mdbg performs HPC automatically, but uses the raw sequences
     /// for transformation into base-space.
+    ///
+    /// This flag signals that rust-mdbg should skip performing HPC, 
+    /// probably because the input reads are already HPC.
     #[structopt(long)]
-    hpc: bool,
+    skiphpc: bool,
     /// to save disk space, don't write the sequences in base-space
     /// corresponding to each k-min-mer
     #[structopt(long)]
@@ -379,7 +382,6 @@ struct Opt {
     #[structopt(short, long)]
     s: Option<usize>,
     /// l-mer counts (enables downweighting of frequent l-mers)
-    /// use syncmers instead of universe minimizers
     ///
     /// Frequencies of l-mers in the reads (obtained using k-mer counters)
     /// can be provided in order to downweight frequently-occurring l-mers
@@ -439,7 +441,7 @@ fn main() {
     let mut lmer_counts_max : u32 = 100000;
     let mut presimp : f32 = 0.01;
     let mut use_bf : bool = false;
-    let mut use_hpc : bool = false;
+    let mut reads_already_hpc : bool = false;
     let mut use_syncmers : bool = false;
     let mut no_basespace : bool = false;
     let mut read_stats = PathBuf::new();
@@ -478,7 +480,7 @@ fn main() {
     if opt.distance.is_none() && error_correct {println!("Warning: Using default distance metric ({}).", distance_type);}
     if opt.restart_from_postcor {restart_from_postcor = true;}
     if opt.bf {use_bf = true;}
-    if opt.hpc {use_hpc = true;}
+    if opt.skiphpc {reads_already_hpc = true;}
     if opt.syncmers {use_syncmers = true;}
     if use_syncmers
     {
@@ -520,7 +522,7 @@ fn main() {
         error_correct,
         has_lmer_counts,
         use_bf,
-        use_hpc,
+        reads_already_hpc,
         use_syncmers,
         s,
         no_basespace,
@@ -551,7 +553,7 @@ fn main() {
             let lmer_rev = utils::revcomp(&lmer);
             let lmer = if lmer > lmer_rev {lmer} else {lmer_rev}; //don't trust the kmer counter to normalize like we do
             let count = vec[1].parse::<u32>().unwrap();
-            lmer_counts.insert(lmer, count);               
+            lmer_counts.insert(lmer, count); 
             new_line(&mut line, &mut br);
         }
     }

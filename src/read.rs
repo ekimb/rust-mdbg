@@ -18,11 +18,6 @@ pub struct Read {
     //pub seq_str: &'a str, // an attempt to avoid copying the string sequence returned by the fasta parser (seems too much effort to implement for now)
     pub corrected: bool
 }
-#[derive(Clone)]
-pub struct Lmer {
-    pub pos: usize,
-    pub hash: u64
-}
 
 
 const SEQ_NT4_TABLE: [u8; 256] =
@@ -104,7 +99,7 @@ impl Read {
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
         let tup;
         let inp_seq;
-        if !params.use_hpc {
+        if !params.reads_already_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
         }
@@ -136,7 +131,7 @@ impl Read {
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
         let tup;
         let inp_seq;
-        if !params.use_hpc {
+        if !params.reads_already_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
         }
@@ -188,7 +183,7 @@ impl Read {
         let hash_bound = ((density as f64) * (u64::max_value() as f64)) as u64;
         let mut tup = (String::new(), Vec::<usize>::new());
         let inp_seq;
-        if !params.use_hpc {
+        if !params.reads_already_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             inp_seq = tup.0; //assign new HPCd sequence as input
         }
@@ -204,10 +199,11 @@ impl Read {
             let mut hash :u64 = hash;
             if params.error_correct || params.has_lmer_counts {
                 let res = minimizer_to_int.get(lmer); // allows to take the 'skip' array into account
+                println!("lmer {} hash {} res {:?}",lmer,hash,res);
                 if res.is_none() {continue;} // possible discrepancy between what's calculated in minimizers_preparation() and here
                 hash = *res.unwrap();
             }
-            if !params.use_hpc {read_minimizers_pos.push(tup.1[i]);} //if not HPCd need raw sequence positions
+            if !params.reads_already_hpc {read_minimizers_pos.push(tup.1[i]);} //if not HPCd need raw sequence positions
             else {read_minimizers_pos.push(i);} //already HPCd so positions are the same
             read_transformed.push(hash);
         }
@@ -224,7 +220,7 @@ impl Read {
         // boilerplate code for all minimizer schemes
         let mut tup = (String::new(), Vec::<usize>::new());
         let seq;
-        if !params.use_hpc {
+        if !params.reads_already_hpc {
             tup = Read::encode_rle(&inp_seq_raw); //get HPC sequence and positions in the raw nonHPCd sequence
             seq = tup.0.as_bytes(); //assign new HPCd sequence as input
         }
@@ -299,7 +295,7 @@ impl Read {
                                 if hash_l <= hash_bound {
                                     seq_hashes.push(hash_l);
                                     //pos_to_seq_coord.push(i - l + 1);
-                                    if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                    if !params.reads_already_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
                                     else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
                                 }
                             }
@@ -318,7 +314,7 @@ impl Read {
                                 if hash_l <= hash_bound {
                                     seq_hashes.push(hash_l);
                                     //pos_to_seq_coord.push(i - l + 1);
-                                    if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                                    if !params.reads_already_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
                                     else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
                                 }
                             }
@@ -336,7 +332,7 @@ impl Read {
                         if hash_l <= hash_bound {
                             seq_hashes.push(hash_l);
 
-                            if !params.use_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
+                            if !params.reads_already_hpc {pos_to_seq_coord.push(tup.1[i-l+1]);} //if not HPCd need raw sequence positions
                             else {pos_to_seq_coord.push(i-l+1);} //already HPCd so positions are the same
                             //pos_to_seq_coord.push(i - l + 1);
                         }

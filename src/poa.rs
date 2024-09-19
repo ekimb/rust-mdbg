@@ -93,6 +93,7 @@ where
 /// Details of scoring are encapsulated in this structure.
 /// An affine gap score model is used so that the gap score for a length 'k' is:
 /// GapScore(k) = gap_open + gap_extend * k
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Scoring<F: MatchFunc> {
     pub gap_open: i32,
