@@ -131,7 +131,7 @@ def align(arg):
     #time.sleep(0.0001)
     #aln=(0,[0],[0],0)
     aln_score = aln[0]
-    # my old identity definiton was:
+    # my old identity definition was:
     #identity = ((100.0*aln_score)/(1.0*len(read)))
     # this is more of a score than an identity.
     # Will now compute BLAST identity, as per
